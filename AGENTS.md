@@ -15,17 +15,17 @@ step. Request only permissions and capabilities actually used. All owned
 collections must be declared in `addon.json`, and DM-only collections require
 API v2 plus `collections.dm` in `capabilities.required`.
 
-The current F2 scope remains limited to the DM-only, list-shaped `scenarios`
-collection plus a minimal transaction smoke case. Do not add scenario UI,
-imports, graph features, dashboard ownership, planners, speculative
-collections, or localization packages until their host contracts land in
-later batches.
+The current F5 scope is limited to the DM-only, list-shaped `scenarios`
+collection, the versioned `scenario-json` provider, and the DM-only
+`#/dm-import` workflow. Its schema and conflict policy live in
+`docs/IMPORTING.md`. Do not add scenario editors, graphs, dashboard ownership,
+planners, generalized mapping, more providers, or speculative collections.
 
 Develop against the sibling host:
 
 ```powershell
 node ..\ttrpg-codex\scripts\dev-install-addon.cjs .
-node --test tests\smoke.mjs
+node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs
 ```
 
 Inspect and preserve existing changes. Do not create branches, stage, commit,

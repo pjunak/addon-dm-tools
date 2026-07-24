@@ -6,12 +6,28 @@ import {
   createMockHost,
   disposeMockHost,
   dryRunRegister,
+  smokeRegistrations,
+  validateAddonCatalogs,
 } from '../../ttrpg-codex/web/js/addon-test-harness.mjs';
 import register from '../entry.js';
 
 const require = createRequire(import.meta.url);
 const { validateManifest } = require('../../ttrpg-codex/server/addons.cjs');
 const manifest = JSON.parse(await readFile(new URL('../addon.json', import.meta.url), 'utf8'));
+const en = JSON.parse(await readFile(new URL('../locales/en.json', import.meta.url), 'utf8'));
+const cs = JSON.parse(await readFile(new URL('../locales/cs.json', import.meta.url), 'utf8'));
+
+const providerFetch = async () => ({
+  ok: true,
+  status: 200,
+  async json() {
+    return {
+      version: 1,
+      providers: [{ addonId: 'dm-tools', id: 'scenario-json' }],
+      limits: { maxInputBytes: 262144 },
+    };
+  },
+});
 
 test('manifest is a valid API-v2 DM collection declaration', () => {
   const result = validateManifest(manifest);
@@ -22,6 +38,13 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   ]);
   assert.ok(manifest.capabilities.required.includes('collections.dm'));
   assert.ok(manifest.capabilities.required.includes('collections.transactions'));
+  assert.ok(manifest.capabilities.required.includes('imports.providers'));
+  assert.ok(manifest.capabilities.required.includes('i18n.catalogs'));
+  assert.deepEqual(manifest.locales, {
+    en: 'locales/en.json',
+    cs: 'locales/cs.json',
+  });
+  assert.ok(validateAddonCatalogs(manifest, { en, cs }).ok);
 });
 
 test('an incapable host rejects the addon instead of widening access', () => {
@@ -34,14 +57,30 @@ test('an incapable host rejects the addon instead of widening access', () => {
   );
 });
 
-test('effective DM registration provides list CRUD and lifecycle cleanup', async () => {
-  const result = dryRunRegister(register, manifest, { isDM: true });
+test('effective DM registration provides Import Center UI and lifecycle cleanup', async () => {
+  const result = dryRunRegister(register, manifest, {
+    isDM: true,
+    catalogs: { en, cs },
+    locale: 'en',
+    fetch: providerFetch,
+  });
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.rec.collections, [
     { name: 'scenarios', keyed: false, access: 'dm' },
   ]);
+  assert.deepEqual(result.rec.routes.map(route => route.segment), ['dm-import']);
+  assert.equal(result.rec.sidebar[0].role, 'dm');
+  assert.ok(result.rec.actions.some(action => action.name === 'commit'));
+  assert.ok(smokeRegistrations(result.rec).ok);
+  assert.deepEqual(result.rec.i18nMissing, []);
+  await disposeMockHost(result.rec);
 
-  const { host, rec } = createMockHost(manifest, { isDM: true });
+  const { host, rec } = createMockHost(manifest, {
+    isDM: true,
+    catalogs: { en, cs },
+    locale: 'en',
+    fetch: providerFetch,
+  });
   host.registerCollection('scenarios');
   const scenarios = host.store.collection('scenarios');
   const saved = scenarios.save({ name: 'Reference scenario' });
@@ -54,18 +93,42 @@ test('effective DM registration provides list CRUD and lifecycle cleanup', async
 test('effective player registration exposes no collection', async () => {
   const result = dryRunRegister(register, manifest, {
     isDM: false,
+    catalogs: { en, cs },
+    locale: 'cs',
+    fetch: providerFetch,
     fixtures: {
       'collection:scenarios': [{ id: 'hidden', name: 'Hidden scenario' }],
     },
   });
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.rec.collections, []);
+  assert.deepEqual(result.rec.routes, []);
+  assert.deepEqual(result.rec.sidebar, []);
+  await disposeMockHost(result.rec);
+});
+
+test('regional locale uses Czech and a partial translation falls back to English', async () => {
+  const partialCs = { 'page.title': 'Centrum importu' };
+  const result = dryRunRegister(register, manifest, {
+    isDM: true,
+    catalogs: { en, cs: partialCs },
+    locale: 'cs-CZ',
+    fetch: providerFetch,
+  });
+  assert.equal(result.ok, true, result.error);
+  const html = result.rec.routes[0].render();
+  assert.match(html, /Centrum importu/);
+  assert.match(html, /Preview and review/);
+  assert.deepEqual(result.rec.i18nMissing, []);
   await disposeMockHost(result.rec);
 });
 
 test('transaction capability commits buffered scenario changes atomically', async () => {
   const { host } = createMockHost(manifest, {
     isDM: true,
+    catalogs: { en, cs },
+    locale: 'en',
+    fetch: providerFetch,
     fixtures: {
       'collection:scenarios': [{ id: 'seed', name: 'Seed scenario' }],
     },
@@ -87,6 +150,9 @@ test('transaction capability commits buffered scenario changes atomically', asyn
 test('transaction callback failure leaves the scenario collection unchanged', async () => {
   const { host } = createMockHost(manifest, {
     isDM: true,
+    catalogs: { en, cs },
+    locale: 'en',
+    fetch: providerFetch,
     fixtures: {
       'collection:scenarios': [{ id: 'seed', name: 'Seed scenario' }],
     },

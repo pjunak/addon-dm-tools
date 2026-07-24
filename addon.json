@@ -1,19 +1,31 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
     "required": [
       "collections.dm",
       "collections.transactions",
-      "lifecycle.dispose"
+      "lifecycle.dispose",
+      "i18n.catalogs",
+      "imports.providers"
     ]
   },
   "entry": "entry.js",
+  "server": "server/index.cjs",
+  "locales": {
+    "en": "locales/en.json",
+    "cs": "locales/cs.json"
+  },
   "permissions": [
-    "data:own"
+    "data:own",
+    "data:import-provider",
+    "server:code",
+    "ui:route",
+    "ui:sidebar",
+    "ui:action"
   ],
   "collections": [
     {
@@ -25,5 +37,5 @@
   "tests": {
     "client": "tests/smoke.mjs"
   },
-  "summary": "Host-managed DM-only scenario storage for future DM Tools features."
+  "summary": "DM-only scenario storage and a reviewed JSON Import Center."
 }
