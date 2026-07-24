@@ -21,6 +21,12 @@ function interpolate(value, params = {}) {
   return String(value).replace(/\{([A-Za-z0-9_]+)\}/g, (_match, key) => String(params[key] ?? `{${key}}`));
 }
 
+function plural(catalog, locale, key, n, params = {}) {
+  const forms = catalog[key] ?? en[key];
+  const bucket = new Intl.PluralRules(locale).select(n);
+  return interpolate(forms?.[bucket] ?? forms?.other ?? key, { ...params, n });
+}
+
 function fixture({
   records = [],
   locale = 'en',
@@ -48,6 +54,7 @@ function fixture({
     role: { isDM: () => state.isDM },
     i18n: {
       t: (key, params) => interpolate(catalog[key] ?? en[key] ?? key, params),
+      plural: (key, n, params) => plural(catalog, locale, key, n, params),
       formatNumber: value => new Intl.NumberFormat(locale).format(value),
     },
     imports: {
@@ -155,6 +162,15 @@ test('live collection reads update counts and announce through the host live reg
     'Scenario dashboard updated. 2 scenarios are available.',
   ]);
   assert.equal(value.state.listCalls, 2);
+
+  const singular = fixture({ records: [] });
+  await singular.dashboard.initialize();
+  singular.dashboard.render();
+  singular.state.records.push(scenarios[0]);
+  singular.dashboard.render();
+  assert.deepEqual(singular.state.announcements, [
+    'Scenario dashboard updated. 1 scenario is available.',
+  ]);
 });
 
 test('missing import and graph capabilities remain useful without dead workflow routes', async () => {

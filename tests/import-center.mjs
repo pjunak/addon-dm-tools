@@ -22,12 +22,19 @@ function interpolate(value, params = {}) {
   return String(value).replace(/\{([A-Za-z0-9_]+)\}/g, (_match, key) => String(params[key] ?? `{${key}}`));
 }
 
+function plural(catalog, locale, key, n, params = {}) {
+  const forms = catalog[key] ?? en[key];
+  const bucket = new Intl.PluralRules(locale).select(n);
+  return interpolate(forms?.[bucket] ?? forms?.other ?? key, { ...params, n });
+}
+
 function hostFixture({ locale = 'en', imports = {}, isDM = true } = {}) {
   const catalog = locale === 'cs' ? cs : en;
   const rec = { rerenders: 0, announces: [], focus: [], commits: 0, cancels: 0 };
   const host = {
     i18n: {
       t: (key, params) => interpolate(catalog[key] ?? en[key] ?? key, params),
+      plural: (key, n, params) => plural(catalog, locale, key, n, params),
       formatNumber: value => String(value),
     },
     h: {
@@ -100,6 +107,7 @@ test('state machine keeps validation, preview, review, commit, and result distin
   assert.equal(fixture.center.getState().step, 'completed');
   assert.equal(fixture.rec.commits, 1);
   assert.ok(fixture.rec.announces.includes(en['announce.completed']));
+  assert.match(fixture.center.render(), /1 scenario operation was committed\./);
 });
 
 test('commit requires confirmation, blocks invalid previews, and prevents double submit', async () => {

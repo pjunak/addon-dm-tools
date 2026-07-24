@@ -381,7 +381,7 @@ export function createImportCenter(host, options = {}) {
     if (state.step === 'completed') {
       return `<section class="settings-panel" id="dm-import-state" tabindex="-1">
         <h2>${esc(t('state.completed.title'))}</h2>
-        <p>${esc(t('state.completed.body', { count: state.result?.operationCount || 0 }))}</p>
+        <p>${esc(host.i18n.plural('state.completed.body', state.result?.operationCount || 0))}</p>
         <p>${esc(t('state.completed.commit', { id: state.result?.commitId || t('state.completed.noCommit') }))}</p>
         <button class="edit-save-btn" type="button"${dataAction(host.action('reset'))}>${esc(t('action.importAnother'))}</button>
       </section>`;

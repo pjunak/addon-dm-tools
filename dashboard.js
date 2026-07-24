@@ -69,7 +69,7 @@ export function createDashboard(host) {
   function announceUpdate(records, summary) {
     const signature = scenarioSignature(records, summary);
     if (lastScenarioSignature && signature !== lastScenarioSignature) {
-      host.ui.announce(t('dashboard.announce.updated', { count: summary.total }));
+      host.ui.announce(host.i18n.plural('dashboard.announce.updated', summary.total));
     }
     lastScenarioSignature = signature;
   }

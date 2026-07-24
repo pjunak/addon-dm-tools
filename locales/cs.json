@@ -2,7 +2,12 @@
   "page.title": "Centrum importu",
   "page.description": "Před změnou dat kampaně zobrazí náhled a kontrolu verzovaného JSON souboru scénářů.",
   "breadcrumb.tools": "Nástroje PJ",
-  "dashboard.announce.updated": "Přehled scénářů byl aktualizován. K dispozici je scénářů: {count}.",
+  "dashboard.announce.updated": {
+    "one": "Přehled scénářů byl aktualizován. K dispozici je {n} scénář.",
+    "few": "Přehled scénářů byl aktualizován. K dispozici jsou {n} scénáře.",
+    "many": "Přehled scénářů byl aktualizován. K dispozici je {n} scénářů.",
+    "other": "Přehled scénářů byl aktualizován. K dispozici je {n} scénářů."
+  },
   "dashboard.description": "Připravujte a kontrolujte existující scénáře pouze pro PJ z jednoho přehledného výchozího místa.",
   "dashboard.empty.action": "Importovat scénáře",
   "dashboard.empty.body": "Zatím nejsou uložené žádné scénáře. První přidejte pomocí kontrolovaného postupu Centra importu.",
@@ -71,7 +76,12 @@
   "state.committing.title": "Ukládám import",
   "state.committing.body": "Schválený náhled se ukládá atomicky.",
   "state.completed.title": "Import dokončen",
-  "state.completed.body": "Bylo uloženo operací scénářů: {count}.",
+  "state.completed.body": {
+    "one": "Byla uložena {n} operace scénáře.",
+    "few": "Byly uloženy {n} operace scénářů.",
+    "many": "Bylo uloženo {n} operací scénářů.",
+    "other": "Bylo uloženo {n} operací scénářů."
+  },
   "state.completed.commit": "Odkaz na zápis: {id}",
   "state.completed.noCommit": "žádné změny dat",
   "state.failed.title": "Import selhal",

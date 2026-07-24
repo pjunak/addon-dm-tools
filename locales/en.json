@@ -2,7 +2,10 @@
   "page.title": "Import Center",
   "page.description": "Preview and review a versioned scenario JSON file before any campaign data changes.",
   "breadcrumb.tools": "DM tools",
-  "dashboard.announce.updated": "Scenario dashboard updated. {count} scenarios are available.",
+  "dashboard.announce.updated": {
+    "one": "Scenario dashboard updated. {n} scenario is available.",
+    "other": "Scenario dashboard updated. {n} scenarios are available."
+  },
   "dashboard.description": "Prepare and review the existing DM-only scenarios from one focused starting point.",
   "dashboard.empty.action": "Import scenarios",
   "dashboard.empty.body": "No scenarios are stored yet. Use the reviewed Import Center workflow to add the first ones.",
@@ -71,7 +74,10 @@
   "state.committing.title": "Committing import",
   "state.committing.body": "The approved preview is being committed atomically.",
   "state.completed.title": "Import completed",
-  "state.completed.body": "{count} scenario operations were committed.",
+  "state.completed.body": {
+    "one": "{n} scenario operation was committed.",
+    "other": "{n} scenario operations were committed."
+  },
   "state.completed.commit": "Commit reference: {id}",
   "state.completed.noCommit": "no data changes",
   "state.failed.title": "Import failed",
