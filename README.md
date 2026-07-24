@@ -2,20 +2,22 @@
 
 DM Tools is an API-v2 addon for
 [ttrpg-codex](https://github.com/pjunak/ttrpg-codex). It owns one
-host-managed, DM-only `scenarios` collection and a DM-only Import Center for
-reviewed scenario JSON imports.
+host-managed, DM-only `scenarios` collection, a DM-only Import Center for
+reviewed scenario JSON imports, and a read-only scenario graph rendered
+through the host's versioned graph facade.
 
 ## Current contract
 
 - Addon id: `dm-tools`
 - Host API: v2
 - Required host capabilities: `collections.dm`, `collections.transactions`,
-  `lifecycle.dispose`, `i18n.catalogs`, `imports.providers`
+  `lifecycle.dispose`, `i18n.catalogs`, `imports.providers`, `graphs.facade`
 - Permissions: `data:own`, `data:import-provider`, `server:code`, `ui:route`,
-  `ui:sidebar`, `ui:action`
+  `ui:sidebar`, `ui:action`, `ui:graph`
 - Collection: `scenarios` (list-shaped, `access: "dm"`)
 - Storage: `data/addon-data/dm-tools/scenarios.json`
 - Route: `#/dm-import`
+- Graph route: `#/dm-scenarios`
 - Provider: `(dm-tools, scenario-json)`, provider API 1, schema version 1
 
 Only an effective DM registers and accesses the collection. A real player,
@@ -34,15 +36,17 @@ The JSON schema and create/update/skip/conflict policy are documented in
 [docs/IMPORTING.md](docs/IMPORTING.md). English is the source UI catalog and
 Czech is supplied in `locales/cs.json`.
 
-Graphs, dashboard ownership, planners, generalized mappings, additional
-providers, and speculative collections remain out of scope.
+The graph mapping and cleanup contract are documented in
+[docs/GRAPH.md](docs/GRAPH.md). Dashboard ownership, planners, generalized
+mappings, additional providers, and speculative collections remain out of
+scope.
 
 ## Test and install
 
 From this repository:
 
 ```powershell
-node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs
+node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs
 ```
 
 From the sibling host repository:

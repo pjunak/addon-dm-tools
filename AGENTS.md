@@ -15,17 +15,18 @@ step. Request only permissions and capabilities actually used. All owned
 collections must be declared in `addon.json`, and DM-only collections require
 API v2 plus `collections.dm` in `capabilities.required`.
 
-The current F5 scope is limited to the DM-only, list-shaped `scenarios`
-collection, the versioned `scenario-json` provider, and the DM-only
-`#/dm-import` workflow. Its schema and conflict policy live in
-`docs/IMPORTING.md`. Do not add scenario editors, graphs, dashboard ownership,
-planners, generalized mapping, more providers, or speculative collections.
+The addon owns the DM-only, list-shaped `scenarios` collection, the versioned
+`scenario-json` provider, the DM-only `#/dm-import` workflow, and the read-only
+`#/dm-scenarios` graph consumer. Import schema and conflict policy live in
+`docs/IMPORTING.md`; graph mapping and lifecycle live in `docs/GRAPH.md`. Do
+not add scenario editors, dashboard ownership, planner workflows, generalized
+mapping, more providers, or speculative collections.
 
 Develop against the sibling host:
 
 ```powershell
 node ..\ttrpg-codex\scripts\dev-install-addon.cjs .
-node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs
+node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs
 ```
 
 Inspect and preserve existing changes. Do not create branches, stage, commit,

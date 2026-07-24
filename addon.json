@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
@@ -10,7 +10,8 @@
       "collections.transactions",
       "lifecycle.dispose",
       "i18n.catalogs",
-      "imports.providers"
+      "imports.providers",
+      "graphs.facade"
     ]
   },
   "entry": "entry.js",
@@ -25,7 +26,8 @@
     "server:code",
     "ui:route",
     "ui:sidebar",
-    "ui:action"
+    "ui:action",
+    "ui:graph"
   ],
   "collections": [
     {
@@ -37,5 +39,5 @@
   "tests": {
     "client": "tests/smoke.mjs"
   },
-  "summary": "DM-only scenario storage and a reviewed JSON Import Center."
+  "summary": "DM-only scenario storage, reviewed JSON imports, and a host-rendered scenario graph."
 }

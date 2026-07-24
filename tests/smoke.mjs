@@ -40,6 +40,8 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   assert.ok(manifest.capabilities.required.includes('collections.transactions'));
   assert.ok(manifest.capabilities.required.includes('imports.providers'));
   assert.ok(manifest.capabilities.required.includes('i18n.catalogs'));
+  assert.ok(manifest.capabilities.required.includes('graphs.facade'));
+  assert.ok(manifest.permissions.includes('ui:graph'));
   assert.deepEqual(manifest.locales, {
     en: 'locales/en.json',
     cs: 'locales/cs.json',
@@ -68,8 +70,9 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
   assert.deepEqual(result.rec.collections, [
     { name: 'scenarios', keyed: false, access: 'dm' },
   ]);
-  assert.deepEqual(result.rec.routes.map(route => route.segment), ['dm-import']);
+  assert.deepEqual(result.rec.routes.map(route => route.segment), ['dm-import', 'dm-scenarios']);
   assert.equal(result.rec.sidebar[0].role, 'dm');
+  assert.equal(result.rec.sidebar[1].role, 'dm');
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
   assert.ok(smokeRegistrations(result.rec).ok);
   assert.deepEqual(result.rec.i18nMissing, []);
