@@ -42,6 +42,7 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   assert.ok(manifest.capabilities.required.includes('i18n.catalogs'));
   assert.ok(manifest.capabilities.required.includes('graphs.facade'));
   assert.ok(manifest.permissions.includes('ui:graph'));
+  assert.ok(manifest.permissions.includes('ui:slot:dm'));
   assert.deepEqual(manifest.locales, {
     en: 'locales/en.json',
     cs: 'locales/cs.json',
@@ -71,6 +72,7 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
     { name: 'scenarios', keyed: false, access: 'dm' },
   ]);
   assert.deepEqual(result.rec.routes.map(route => route.segment), ['dm-import', 'dm-scenarios']);
+  assert.deepEqual(result.rec.slots.map(slot => slot.slotId), ['dm:dashboard']);
   assert.equal(result.rec.sidebar[0].role, 'dm');
   assert.equal(result.rec.sidebar[1].role, 'dm');
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
@@ -107,6 +109,7 @@ test('effective player registration exposes no collection', async () => {
   assert.deepEqual(result.rec.collections, []);
   assert.deepEqual(result.rec.routes, []);
   assert.deepEqual(result.rec.sidebar, []);
+  assert.deepEqual(result.rec.slots, []);
   await disposeMockHost(result.rec);
 });
 

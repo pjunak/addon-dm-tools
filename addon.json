@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
@@ -27,7 +27,8 @@
     "ui:route",
     "ui:sidebar",
     "ui:action",
-    "ui:graph"
+    "ui:graph",
+    "ui:slot:dm"
   ],
   "collections": [
     {
@@ -39,5 +40,5 @@
   "tests": {
     "client": "tests/smoke.mjs"
   },
-  "summary": "DM-only scenario storage, reviewed JSON imports, and a host-rendered scenario graph."
+  "summary": "DM-only scenario workflows, reviewed JSON imports, a read-only graph, and the addon-owned DM dashboard."
 }
