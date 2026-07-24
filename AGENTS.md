@@ -18,9 +18,11 @@ API v2 plus `collections.dm` in `capabilities.required`.
 The addon owns the DM-only, list-shaped `scenarios` collection, the versioned
 `scenario-json` provider, the DM-only `#/dm-import` workflow, and the read-only
 `#/dm-scenarios` graph consumer. Import schema and conflict policy live in
-`docs/IMPORTING.md`; graph mapping and lifecycle live in `docs/GRAPH.md`. Do
-not add scenario editors, dashboard ownership, planner workflows, generalized
-mapping, more providers, or speculative collections.
+`docs/IMPORTING.md`; graph mapping and lifecycle live in `docs/GRAPH.md`. The
+`dm:dashboard` slot supplies the normal scenario dashboard while the host
+retains `/dm` authorization, diagnostics, and recovery fallback. Do not add
+scenario editors, planner workflows, generalized mapping, more providers, or
+speculative collections.
 
 Develop against the sibling host:
 
