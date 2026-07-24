@@ -1,0 +1,28 @@
+{
+  "id": "dm-tools",
+  "name": "DM Tools",
+  "version": "0.1.0",
+  "apiVersion": 2,
+  "hostVersion": ">=1.0.0",
+  "capabilities": {
+    "required": [
+      "collections.dm",
+      "lifecycle.dispose"
+    ]
+  },
+  "entry": "entry.js",
+  "permissions": [
+    "data:own"
+  ],
+  "collections": [
+    {
+      "name": "scenarios",
+      "keyed": false,
+      "access": "dm"
+    }
+  ],
+  "tests": {
+    "client": "tests/smoke.mjs"
+  },
+  "summary": "Host-managed DM-only scenario storage for future DM Tools features."
+}
