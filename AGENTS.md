@@ -15,10 +15,11 @@ step. Request only permissions and capabilities actually used. All owned
 collections must be declared in `addon.json`, and DM-only collections require
 API v2 plus `collections.dm` in `capabilities.required`.
 
-The current F1 scope is intentionally limited to the DM-only, list-shaped
-`scenarios` collection. Do not add scenario UI, imports, graph features,
-dashboard ownership, planners, transactions, or localization packages until
-their host contracts land in later batches.
+The current F2 scope remains limited to the DM-only, list-shaped `scenarios`
+collection plus a minimal transaction smoke case. Do not add scenario UI,
+imports, graph features, dashboard ownership, planners, speculative
+collections, or localization packages until their host contracts land in
+later batches.
 
 Develop against the sibling host:
 

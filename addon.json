@@ -1,12 +1,13 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
     "required": [
       "collections.dm",
+      "collections.transactions",
       "lifecycle.dispose"
     ]
   },
