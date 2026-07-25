@@ -36,7 +36,6 @@ function initialState() {
     confirmed: false,
     ambiguous: false,
     errorCode: '',
-    errorMessage: '',
     result: null,
   };
 }
@@ -80,7 +79,6 @@ export function createImportCenter(host, options = {}) {
 
   function fail(error, fallback = 'failed') {
     state.errorCode = error?.code || 'IMPORT_UNKNOWN';
-    state.errorMessage = error?.message || '';
     state.ambiguous = false;
     if (state.errorCode === 'IMPORT_REVISION_CONFLICT') state.step = 'revision-conflict';
     else if (state.errorCode === 'IMPORT_EXPIRED') state.step = 'expired';
@@ -113,7 +111,6 @@ export function createImportCenter(host, options = {}) {
     state.file = file;
     state.fileName = file && typeof file.name === 'string' ? file.name : '';
     state.errorCode = '';
-    state.errorMessage = '';
     publish('announce.fileSelected', file ? 'dm-import-preview' : 'dm-import-file');
   }
 

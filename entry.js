@@ -73,5 +73,4 @@ export default function register(host) {
   });
   center.initialize();
   dashboard.initialize();
-  return () => {};
 }
