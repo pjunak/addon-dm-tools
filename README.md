@@ -27,8 +27,9 @@ anonymous visitor, or DM using view-as-player receives no collection data or
 collection metadata, and server-side guessed writes are rejected without
 revealing whether the collection exists.
 
-The Import Center uploads through the host's ephemeral F4 job service. Preview
-is read-only, commit uses the exact server-held plan through F2, and one
+The Import Center uploads through the host's ephemeral import-job service.
+Preview is read-only, commit uses the exact server-held plan through the
+atomic collection transaction service, and one
 successful import produces one logical revision/event. Commit requires an
 explicit review checkbox. Conflicts and invalid records block commit; revision
 conflicts require a new preview. If a commit response is lost, the page checks

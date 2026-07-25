@@ -74,6 +74,7 @@ dropped.
 
 Preview performs no writes. Commit accepts only the opaque, single-use token
 for that exact preview. The host rechecks provider/package and collection
-revisions, then publishes the stored `put` operations atomically through F2.
+revisions, then publishes the stored `put` operations through the host's
+atomic collection transaction service.
 A stale revision, provider update/disposal, cancellation, expiry, or failed
 commit leaves the collection unchanged.
