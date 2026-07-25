@@ -28,7 +28,7 @@ Develop against the sibling host:
 
 ```powershell
 node ..\ttrpg-codex\scripts\dev-install-addon.cjs .
-node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs
+node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs tests\dashboard.mjs
 ```
 
 Inspect and preserve existing changes. Do not create branches, stage, commit,

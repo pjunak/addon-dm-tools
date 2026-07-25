@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: addon-dm-tools
+
+      - uses: actions/checkout@v5
+        with:
+          repository: pjunak/ttrpg-codex
+          path: ttrpg-codex
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+
+      - run: node --test tests/smoke.mjs tests/provider.mjs tests/import-center.mjs tests/scenario-graph.mjs tests/dashboard.mjs
+        working-directory: addon-dm-tools

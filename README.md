@@ -48,7 +48,7 @@ providers, and speculative collections remain out of scope.
 From this repository:
 
 ```powershell
-node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs
+node --test tests\smoke.mjs tests\provider.mjs tests\import-center.mjs tests\scenario-graph.mjs tests\dashboard.mjs
 ```
 
 From the sibling host repository:
