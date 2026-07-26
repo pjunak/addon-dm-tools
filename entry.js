@@ -1,5 +1,7 @@
 import { createImportCenter } from './import-center.js';
-import { createScenarioGraphPage } from './scenario-graph.js';
+import { createPlanningGraphPage } from './planning-graph.js';
+import { createPlanningWorkspace } from './planning-workspace.js';
+import { migrateLegacyScenarios } from './planning-migration.js';
 import { createDashboard } from './dashboard.js';
 
 export default function register(host) {
@@ -21,12 +23,23 @@ export default function register(host) {
   if (!host.role.isDM()) return () => {};
 
   host.registerCollection('scenarios');
+  host.registerCollection('planning_items');
+  host.registerCollection('planning_folders');
+  host.registerCollection('planning_links');
   const center = createImportCenter(host);
-  const graph = createScenarioGraphPage(host);
+  const graph = createPlanningGraphPage(host);
+  const workspace = createPlanningWorkspace(host);
   const dashboard = createDashboard(host);
   host.registerSlot('dm:dashboard', () => dashboard.render());
   host.registerRoute('dm-import', () => center.render());
+  host.registerRoute('dm-plans', () => workspace.render());
   host.registerRoute('dm-scenarios', () => graph.render());
+  host.registerSidebarPage({
+    route: '/dm-plans',
+    label: host.i18n.t('planning.page.title'),
+    icon: '✦',
+    role: 'dm',
+  });
   host.registerSidebarPage({
     route: '/dm-import',
     label: host.i18n.t('page.title'),
@@ -49,6 +62,20 @@ export default function register(host) {
   host.registerAction('reset', () => center.reset());
   host.registerAction('graphFocus', id => graph.focus(id));
   host.registerAction('graphFit', () => graph.fit());
+  host.registerAction('graphToggleExpand', id => graph.toggleExpand(id));
+  host.registerAction('selectItem', id => workspace.selectItem(id));
+  host.registerAction('createItem', kind => workspace.createItem(kind));
+  host.registerAction('saveItem', event => workspace.saveItem(event));
+  host.registerAction('addSection', event => workspace.addSection(event));
+  host.registerAction('removeSection', (event, id) => workspace.removeSection(event, id));
+  host.registerAction('deleteItem', id => workspace.deleteItem(id));
+  host.registerAction('saveFolder', (event, id) => workspace.saveFolder(event, id));
+  host.registerAction('deleteFolder', id => workspace.deleteFolder(id));
+  host.registerAction('saveEntityLink', event => workspace.saveEntityLink(event));
+  host.registerAction('saveItemLink', event => workspace.saveItemLink(event));
+  host.registerAction('saveExternalLink', event => workspace.saveExternalLink(event));
+  host.registerAction('updateLink', (event, id) => workspace.updateLink(event, id));
+  host.registerAction('deleteLink', id => workspace.deleteLink(id));
 
   const routeChanged = () => {
     if (typeof window === 'undefined') return;
@@ -73,4 +100,13 @@ export default function register(host) {
   });
   center.initialize();
   dashboard.initialize();
+  migrateLegacyScenarios(host).then(result => {
+    if (result.migrated) {
+      host.ui.announce(host.i18n.plural('planning.migration.completed', result.migrated));
+      host.ui.rerender();
+    }
+    if (result.conflicts.length) host.ui.toast(host.i18n.t('planning.migration.conflict'));
+  }).catch(() => {
+    host.ui.toast(host.i18n.t('planning.migration.failed'));
+  });
 }

@@ -1,36 +1,46 @@
-# Scenario graph
+# Planning graph
 
-DM Tools registers the effective-DM-only route `#/dm-scenarios`. It consumes
-the host's `graphs.facade` API version 1 with permission `ui:graph`; it never
-imports Cytoscape or reads a browser graph-library global.
+DM Tools registers the effective-DM-only route `#/dm-scenarios`. The stable
+route is retained from the earlier scenario graph, but the page now projects
+the complete planning model through host `graphs.facade` API version 1.
+DM Tools never imports Cytoscape or exposes raw graph-library objects.
 
-## Mapping
+## Projection
 
-The stored scenario schema has no relationship field. The graph therefore
-uses the smallest deterministic mapping that does not invent campaign
-semantics:
+- Every planning item becomes a node whose kind reflects `thread`, `quest`,
+  `scenario`, `encounter`, or `note`.
+- Collapsed items hide their section nodes.
+- Expanded items add their named sections and explicit item-to-section
+  containment edges.
+- Core and external-addon nodes appear only when a stored link references
+  them.
+- Every `planning_links` record becomes exactly one edge. Its custom `name` is the edge
+  label; its fixed relation `type` remains available in stored data.
+- No edges are inferred from folders, tags, state, time, prose, or proximity.
 
-- each valid scenario becomes one node with `id`, `name` as its label, and
-  `status` as its kind;
-- nodes sort by `planned`, `active`, `completed`, then English name and id;
-- the edge list is empty;
-- the host `grid` layout arranges the independent nodes.
+A section endpoint is resolved according to view state:
 
-The view does not persist graph positions, create planner state, infer edges
-from tags or timestamps, or modify scenarios. If a later schema explicitly
-defines relationships, that is a separate versioned data-model change.
+```text
+NPC ──"Requests a discreet investigation"──> Quest / Audience with the Duke
+```
 
-## Rendering and lifecycle
+When the quest is collapsed, the same stored edge targets the quest node. When
+expanded, it targets the named section node. The label and link identity do not
+change.
 
-The page renders accessible loading, empty, unavailable-facade, adapter-error,
-and effective-player-denial states in English and Czech. The scenario list is
-the keyboard-accessible companion to the interactive canvas. Dynamic scenario
-names and summaries pass through `host.h.esc`; graph labels remain plain text
-inside the host adapter.
+The adapter uses `dagre` when links exist and `grid` for independent nodes.
+Element ids are deterministic hashes of stable domain identities, keeping them
+within the graph facade's length limits without exposing graph implementation
+details.
 
-Mount is scheduled only after the addon-owned route subtree exists. Repeated
-render cancels pending work and destroys the previous handle. Navigation away,
-view-as transitions, addon reload/update/disable, failed late mounts, and addon
-disposal all destroy the owned graph idempotently. The host facade performs a
-second ownership and lifecycle check, so stale scheduled work cannot revive a
-disposed graph.
+## Accessible fallback and lifecycle
+
+The route always renders a keyboard-accessible list of planning items and
+named links. It remains available when the graph facade is missing or the
+adapter fails. Item controls can focus nodes and expand or collapse section
+detail.
+
+Mount is scheduled only after the addon-owned route subtree exists. Re-render,
+navigation, role transition, addon reload/update/disable, failed late mount,
+and disposal cancel pending work and destroy the owned graph idempotently.
+Generation checks prevent stale mounts from reviving disposed state.

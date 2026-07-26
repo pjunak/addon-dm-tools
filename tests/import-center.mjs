@@ -52,15 +52,19 @@ function hostFixture({ locale = 'en', imports = {}, isDM = true } = {}) {
       announce: message => { rec.announces.push(message); },
     },
     imports: {
-      listProviders: async () => ({ providers: [{ id: 'scenario-json' }] }),
+      listProviders: async () => ({ providers: [{ id: 'planning-json' }] }),
       createJob: async () => ({ id: 'job-1', state: 'created' }),
       preview: async () => ({
         id: 'job-1',
         state: 'preview-ready',
         previewToken: 'token',
         committable: true,
-        plan: plan([{ severity: 'info', code: 'SCENARIO_CREATE', path: ['scenarios', 0] }], [
-          { id: 'first', value: { name: 'First', status: 'planned' } },
+        plan: plan([{ severity: 'info', code: 'PLANNING_CREATE', path: ['items', 0] }], [
+          {
+            id: 'first',
+            target: { collection: 'planning_items' },
+            value: { title: 'First', kind: 'quest' },
+          },
         ]),
       }),
       commit: async () => {
@@ -81,7 +85,7 @@ function hostFixture({ locale = 'en', imports = {}, isDM = true } = {}) {
 
 async function readyCenter(fixture, previewResult) {
   await fixture.center.initialize();
-  fixture.center.selectFile({ files: [{ name: 'scenarios.json', size: 2 }] });
+  fixture.center.selectFile({ files: [{ name: 'planning.json', size: 2 }] });
   if (previewResult) fixture.host.imports.preview = async () => previewResult;
   await fixture.center.requestPreview();
 }
@@ -92,7 +96,7 @@ test('state machine keeps validation, preview, review, commit, and result distin
     imports: { createJob: () => validation.promise },
   });
   await fixture.center.initialize();
-  fixture.center.selectFile({ files: [{ name: 'scenarios.json', size: 2 }] });
+  fixture.center.selectFile({ files: [{ name: 'planning.json', size: 2 }] });
   const previewing = fixture.center.requestPreview();
   assert.equal(fixture.center.getState().step, 'validating');
   validation.resolve({ id: 'job-1' });
@@ -107,7 +111,7 @@ test('state machine keeps validation, preview, review, commit, and result distin
   assert.equal(fixture.center.getState().step, 'completed');
   assert.equal(fixture.rec.commits, 1);
   assert.ok(fixture.rec.announces.includes(en['announce.completed']));
-  assert.match(fixture.center.render(), /1 scenario operation was committed\./);
+  assert.match(fixture.center.render(), /1 planning record was committed\./);
 });
 
 test('commit requires confirmation, blocks invalid previews, and prevents double submit', async () => {
@@ -136,7 +140,7 @@ test('commit requires confirmation, blocks invalid previews, and prevents double
     id: 'job-1',
     previewToken: 'token',
     committable: false,
-    plan: plan([{ severity: 'error', code: 'SCENARIO_CONFLICT', path: ['scenarios', 0] }]),
+    plan: plan([{ severity: 'error', code: 'PLANNING_CONFLICT', path: ['items', 0] }]),
   });
   invalid.center.review();
   invalid.center.confirm(true);
@@ -238,8 +242,12 @@ test('locale rendering, escaping, focus, live announcements, and player denial a
     previewToken: 'token',
     committable: true,
     plan: plan(
-      [{ severity: 'warning', code: 'HOSTILE_CODE', message: '<svg onload=alert(1)>', path: ['scenarios', 0] }],
-      [{ id: '<script>alert(1)</script>', value: { name: '<img onerror=alert(1)>', status: 'planned' } }],
+      [{ severity: 'warning', code: 'HOSTILE_CODE', message: '<svg onload=alert(1)>', path: ['items', 0] }],
+      [{
+        id: '<script>alert(1)</script>',
+        target: { collection: 'planning_items' },
+        value: { title: '<img onerror=alert(1)>', kind: 'quest' },
+      }],
     ),
   });
   await fixture.center.requestPreview();

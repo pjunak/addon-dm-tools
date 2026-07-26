@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
@@ -28,17 +28,38 @@
     "ui:sidebar",
     "ui:action",
     "ui:graph",
-    "ui:slot:dm"
+    "ui:slot:dm",
+    "data:read:characters",
+    "data:read:factions",
+    "data:read:locations",
+    "data:read:mysteries",
+    "data:read:artifacts",
+    "data:read:events"
   ],
   "collections": [
     {
       "name": "scenarios",
       "keyed": false,
       "access": "dm"
+    },
+    {
+      "name": "planning_items",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
+      "name": "planning_folders",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
+      "name": "planning_links",
+      "keyed": true,
+      "access": "dm"
     }
   ],
   "tests": {
     "client": "tests/smoke.mjs"
   },
-  "summary": "DM-only scenario workflows, reviewed JSON imports, a read-only graph, and the addon-owned DM dashboard."
+  "summary": "DM-only planning and world-building workspace with reviewed bulk imports, named semantic links, and an interactive graph."
 }

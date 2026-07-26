@@ -1,80 +1,79 @@
-# Scenario JSON import
+# Planning import
 
-DM Tools registers provider `(dm-tools, scenario-json)` using provider API 1
-and schema version 1. It accepts UTF-8 JSON only and writes only the addon's
-DM-only, list-shaped `scenarios` collection.
+DM Tools registers `(dm-tools, planning-json)` using provider API 1 and planning
+schema version 1. It accepts strict UTF-8 JSON and can atomically write the
+keyed DM-only collections `planning_folders`, `planning_items`, and
+`planning_links`.
 
-## Document shape
+The full record schema, examples, batching rules, and agent workflow live in
+[`AGENT_GENERATION.md`](AGENT_GENERATION.md). This file documents runtime
+behavior.
+
+## Boundary
+
+The root document is:
 
 ```json
 {
-  "format": "dm-tools-scenarios",
+  "format": "dm-tools-planning",
   "schemaVersion": 1,
-  "scenarios": [
-    {
-      "id": "opening-scene",
-      "operation": "create",
-      "name": "Opening scene",
-      "summary": "Meet at the inn.",
-      "status": "planned",
-      "tags": ["intro"],
-      "updatedAt": "2026-07-24T10:00:00.000Z"
-    },
-    {
-      "id": "return-to-town",
-      "operation": "update",
-      "name": "Return to town",
-      "summary": "Debrief the mayor.",
-      "status": "active",
-      "tags": ["town"],
-      "updatedAt": "2026-07-24T11:00:00.000Z",
-      "expectedUpdatedAt": "2026-07-23T09:00:00.000Z"
-    }
-  ]
+  "generatedAt": 1785024000000,
+  "folders": [],
+  "items": [],
+  "links": []
 }
 ```
 
-Only `format`, `schemaVersion`, and `scenarios` are accepted at the document
-root. Scenario records accept only the fields shown above.
+Every record declares `operation: "create" | "update"`. Updates also require
+the exact current `expectedUpdatedAt`; creates must omit it. `generatedAt`
+becomes the stored `updatedAt` for changed records.
 
-- `id`: 1–120 lowercase letters, digits, dots, underscores, or hyphens.
-- `operation`: `create` or `update`.
-- `name`: 1–120 characters after trimming.
-- `summary`: optional, at most 4,000 characters after trimming.
-- `status`: `planned`, `active`, or `completed`.
-- `tags`: optional list of at most 20 unique strings, each 1–40 characters.
-  Tags are trimmed and sorted deterministically.
-- `updatedAt`: required ISO timestamp, normalized to UTC.
-- `expectedUpdatedAt`: required for `update`, forbidden for `create`.
+Before provider code runs, the host rejects duplicate JSON keys, invalid
+UTF-8, prototype keys, malformed input, and configured byte, depth, string,
+node, and record limits.
 
-Each entry is a complete scenario replacement. Omitting optional `summary` or
-`tags` deterministically normalizes that field to an empty string or empty
-list; it does not preserve an older local value.
+The provider then:
 
-Unknown fields, malformed values, duplicate input ids, and unsupported schema
-versions are error diagnostics with stable codes and record/field paths.
-The host independently rejects duplicate raw JSON keys, excessive size/depth,
-prototype keys, and other parser/job-limit violations before provider code.
+1. normalizes every record through `planning-contract.js`;
+2. reads one consistent snapshot of all three planning collections and allowed
+   core reference collections;
+3. applies create/update/skip/conflict reconciliation in memory;
+4. validates the complete candidate folder graph and every planning/core
+   endpoint;
+5. returns at most 256 exact `put` operations.
 
-## Reconciliation policy
+External-addon endpoints are not existence-checked so addons remain optional.
+Their identity and fallback label are still schema-validated.
 
-- `create` + missing local id: create.
-- `create` + byte-equivalent normalized local record: skip.
-- `create` + different existing record: conflict.
-- `update` + missing local id: conflict.
-- `update` + equivalent normalized record: skip.
-- `update` + changed record and matching `expectedUpdatedAt`: update.
-- `update` + changed record and mismatched local `updatedAt`: conflict.
+## Reconciliation
 
-Conflicts are error diagnostics and block the entire commit. Resolving one
-means correcting the source document and creating a new preview; the Import
-Center never mutates the server-held plan. Local scenario records outside this
-schema are rejected for update rather than having unknown data silently
-dropped.
+- `create` with a missing id creates the record.
+- `create` with equivalent existing content skips it.
+- `create` with different existing content conflicts.
+- `update` with a missing id conflicts.
+- `update` with equivalent content skips it.
+- `update` with changed content and matching `expectedUpdatedAt` updates it.
+- `update` with a stale `expectedUpdatedAt` conflicts.
+- a changed update whose `generatedAt` is not later than the current
+  `updatedAt` conflicts.
 
-Preview performs no writes. Commit accepts only the opaque, single-use token
-for that exact preview. The host rechecks provider/package and collection
-revisions, then publishes the stored `put` operations through the host's
-atomic collection transaction service.
-A stale revision, provider update/disposal, cancellation, expiry, or failed
-commit leaves the collection unchanged.
+Equivalence ignores `updatedAt`; generation time alone never causes a write.
+Any error diagnostic blocks the whole commit. Imports do not delete.
+Core ids are existence-checked for links present in the import. A core record
+deleted after an older link was saved does not block unrelated planning edits;
+the graph renders that older endpoint by id until the DM removes or replaces
+the link.
+
+Preview is read-only and holds the normalized plan server-side. Commit consumes
+its opaque single-use token, rechecks provider/package and participating
+collection revisions, and publishes the exact stored operations through one
+durable host transaction. A stale revision, cancellation, expiry, provider
+change, or failed commit leaves all three collections unchanged.
+
+## Legacy provider
+
+`(dm-tools, scenario-json)` remains registered temporarily for compatibility
+with existing scenario files. The normal Import Center selects
+`planning-json`. On addon startup, valid legacy scenarios are copied
+non-destructively into `planning_items` as `scenario` items when their ids do not
+conflict. Original scenario records are retained.

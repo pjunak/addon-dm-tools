@@ -1,95 +1,101 @@
 # AGENTS.md — dm-tools
 
-This repository contains the API-v2 `dm-tools` addon for the sibling
-`ttrpg-codex` host. The manifest ID is the permanent collection namespace.
+DM Tools is the API-v2 planning and world-building addon for the sibling
+`ttrpg-codex` host. Its manifest id is the permanent storage namespace.
 
-DM Tools deliberately has one small domain: DM-only scenarios. It supplies the
-normal scenario content for the host-owned `/dm` shell, a reviewed JSON import
-workflow, and a read-only graph view. Do not turn it into a second host core.
+## Start here
 
-## Read before editing
+Read only the references relevant to the task:
 
-1. [`README.md`](README.md) for the current product surface.
-2. [`docs/IMPORTING.md`](docs/IMPORTING.md) before changing scenario data or
-   imports.
-3. [`docs/GRAPH.md`](docs/GRAPH.md) before changing graph mapping/lifecycle.
-4. `../ttrpg-codex/examples/addons/AGENTS.md` for the host contract.
-5. `../ttrpg-codex/docs/reference/addons.md` for host internals only when the
-   public authoring contract is insufficient.
+1. [`README.md`](README.md) for product scope and current surfaces.
+2. [`planning-contract.js`](planning-contract.js) before changing stored data.
+3. [`docs/IMPORTING.md`](docs/IMPORTING.md) before changing import behavior.
+4. [`docs/GRAPH.md`](docs/GRAPH.md) before changing graph projection/lifecycle.
+5. [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) before generating or
+   changing the LLM interchange format.
+6. `../ttrpg-codex/examples/addons/AGENTS.md` for the public host contract.
+   Read host internals only when the public contract is insufficient.
 
-## Architecture
+## Module ownership
 
 ```text
-addon.json                  API-v2 authority and scenarios declaration
-entry.js                    composition root and role-conditioned registration
-dashboard.js                live scenario contribution to dm:dashboard
-import-center.js            DM-only import workflow state machine and UI
-scenario-graph.js           read-only graph/list projection and cleanup
-server/index.cjs            server composition root
-server/scenario-provider.cjs deterministic provider validation/planning
-locales/en.json             complete English source catalog
-locales/cs.json             Czech translation catalog
-tests/                      registration, provider, import, graph, dashboard
+addon.json                   capabilities, permissions, collections
+entry.js                     composition and role-conditioned registration
+planning-contract.js         shared pure schema and dataset validation
+planning-migration.js        non-destructive legacy scenario copy
+planning-workspace.js        manual item/folder/section/link editor
+planning-graph.js            pure graph projection and route lifecycle
+dashboard.js                 live dm:dashboard planning overview
+import-center.js             reviewed import state machine and UI
+server/index.cjs             server composition
+server/planning-provider.cjs multi-collection schema-v1 provider
+server/scenario-provider.cjs retained legacy provider
+locales/                     English source and Czech translation
+tests/                       contract, provider, UI, graph, dashboard
 ```
 
-## Non-negotiable boundaries
+## Product boundaries
 
-- The only collection is list-shaped `scenarios` with `access: "dm"`.
-- Register collection access, routes, sidebar entries, actions, dashboard
-  content, and graph UI only for an effective DM.
-- The host retains `/dm`, authorization, addon diagnostics, and recovery
-  fallback. DM Tools owns only the `dm:dashboard` contribution.
+- Build rich forward-looking D&D plans and world relationships. Do not make
+  session scripts, automatic progress tracking, or extensive retrospective
+  bookkeeping mandatory.
+- Folders are navigation. Story meaning lives in planning items, stable named
+  sections, and named semantic links.
+- A link uses one fixed relation type plus a custom edge name. NPCs and other
+  core entities may target an entire item or a specific section.
+- `planning-contract.js` is the single validation contract for manual edits,
+  migration, import, and tests. Do not create a parallel schema.
+- Manual editing and imported structures must remain interchangeable.
+- Keep Character Sheets, compendiums, and future homebrew addons optional.
+  External endpoints store identity and a fallback label without requiring the
+  referenced addon.
+- The host owns `/dm`, authorization, diagnostics, persistence, transactions,
+  import jobs, and the graph implementation. DM Tools owns only its
+  contributions.
+
+## Correctness boundaries
+
+- Register DM-only collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
-  plan through the host transaction service.
-- Conflicts never overwrite. A corrected source and new preview are required.
-- Scenario JSON is a versioned replacement schema, not a permissive patch
-  format. Preserve diagnostic codes and paths as user-visible contracts.
-- Import state explicitly represents validation, preview, review, commit,
-  completion, failure, cancellation, expiry, and revision conflict.
-- A lost commit response is recovered through job status; never resubmit it
-  automatically.
-- The graph reflects only stored facts. Because scenarios have no relationship
-  field, it has no edges and must not infer them from tags, order, or time.
-- Every scheduled mount, request, timer, and graph handle has idempotent
-  cleanup. Role changes, navigation, disposal, and late responses must not
-  revive stale UI.
-- Escape dynamic and translated strings at HTML boundaries. Use host actions,
+  plan. Conflicts require a corrected source and a new preview.
+- Updates use epoch-millisecond `expectedUpdatedAt`; never silently merge or
+  overwrite newer records.
+- Legacy migration is copy-only. Do not delete `scenarios` without explicit
+  maintainer approval after verifying the new records.
+- The graph reflects stored links only. Never infer edges from tags, folders,
+  timestamps, or prose.
+- Collapsed section links must retain their named edge on the parent item;
+  expanded views must target the exact section node.
+- Clean up every scheduled mount, request, timer, subscription, and graph
+  handle on navigation, role change, disposal, and late completion.
+- Escape dynamic and translated text at every HTML boundary. Use host actions,
   announcements, component classes, and design tokens.
-- English is the source catalog; Czech must preserve value shapes and
+- English is authoritative. Czech must preserve catalog value shapes and
   placeholders.
-
-## Optional-addon posture
-
-DM Tools depends on host capabilities, not on sheets or the compendium. It must
-remain useful when neither D&D addon is installed. Conversely, those addons
-must not depend on DM Tools.
-
-Keep scenario editors, inferred planning, additional collections/providers,
-and generalized graph mappings out of scope until a concrete versioned domain
-requirement justifies them.
+- Write self-documenting code. Comments explain only non-obvious constraints
+  or why an obvious approach is unsafe.
 
 ## Working loop
 
-Run from this repository in PowerShell:
+Run in PowerShell from this repository:
 
 ```text
-node --test tests/smoke.mjs tests/provider.mjs tests/import-center.mjs tests/scenario-graph.mjs tests/dashboard.mjs
+node --test tests/*.mjs
 ```
 
-From the host repository:
+Then from the host:
 
 ```text
 node scripts/dev-install-addon.cjs ../dm-tools
 ```
 
-Server-provider changes require reinstall, host restart, and browser refresh.
-Test effective-DM behavior plus real player, anonymous, and view-as-player
-denial. Run relevant host import, transaction, lifecycle, graph, slot, and
-authorization tests when those contracts change.
+Server-provider changes require reinstall, restart, and refresh. Permission
+additions require the per-addon production wizard. Run relevant host import,
+transaction, lifecycle, graph, slot, authorization, and visibility tests when
+their contracts change.
 
-Development happens on `main`. Do not create branches, stage, commit, release,
-or push unless the maintainer asks. The only durable suite backlog is
+Do not create branches, stage, commit, push, release, or deploy unless the
+maintainer asks. The only durable suite backlog is
 [`../ttrpg-codex/docs/BACKLOG.md`](../ttrpg-codex/docs/BACKLOG.md). Temporary
-implementation plans belong only in the host repository's ignored
-`docs/plans/` directory and must be deleted when the task closes. Do not create
-repo-local TODO, roadmap, or planning files.
+implementation plans belong only in the host's ignored `docs/plans/` directory
+and must be deleted when the task closes.

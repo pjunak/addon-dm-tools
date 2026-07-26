@@ -1,26 +1,18 @@
-const PROVIDER_ID = 'scenario-json';
+const PROVIDER_ID = 'planning-json';
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'expired', 'revision-conflict']);
 const DIAGNOSTIC_KEYS = {
-  SCENARIO_CREATE: 'diagnostic.create',
-  SCENARIO_UPDATE: 'diagnostic.update',
-  SCENARIO_SKIP: 'diagnostic.skip',
-  SCENARIO_CONFLICT: 'diagnostic.conflict',
-  SCENARIO_DOCUMENT_TYPE: 'diagnostic.documentType',
-  SCENARIO_FORMAT_UNSUPPORTED: 'diagnostic.format',
-  SCENARIO_SCHEMA_UNSUPPORTED: 'diagnostic.schema',
-  SCENARIO_RECORDS_TYPE: 'diagnostic.recordsType',
-  SCENARIO_RECORD_TYPE: 'diagnostic.recordType',
-  SCENARIO_UNKNOWN_FIELD: 'diagnostic.unknownField',
-  SCENARIO_FIELD_TYPE: 'diagnostic.fieldType',
-  SCENARIO_FIELD_LENGTH: 'diagnostic.fieldLength',
-  SCENARIO_TIMESTAMP_INVALID: 'diagnostic.timestamp',
-  SCENARIO_ID_INVALID: 'diagnostic.id',
-  SCENARIO_ID_DUPLICATE: 'diagnostic.duplicateId',
-  SCENARIO_OPERATION_INVALID: 'diagnostic.operation',
-  SCENARIO_STATUS_INVALID: 'diagnostic.status',
-  SCENARIO_TAGS_INVALID: 'diagnostic.tags',
-  SCENARIO_TAG_DUPLICATE: 'diagnostic.duplicateTag',
-  SCENARIO_LOCAL_INVALID: 'diagnostic.localInvalid',
+  PLANNING_DOCUMENT_TYPE: 'diagnostic.documentType',
+  PLANNING_FORMAT_UNSUPPORTED: 'diagnostic.format',
+  PLANNING_SCHEMA_UNSUPPORTED: 'diagnostic.schema',
+  PLANNING_RECORDS_TYPE: 'diagnostic.recordsType',
+  PLANNING_RECORD_TYPE: 'diagnostic.recordType',
+  PLANNING_UNKNOWN_FIELD: 'diagnostic.unknownField',
+  PLANNING_TIMESTAMP_INVALID: 'diagnostic.timestamp',
+  PLANNING_ID_INVALID: 'diagnostic.id',
+  PLANNING_DUPLICATE_ID: 'diagnostic.duplicateId',
+  PLANNING_OPERATION_INVALID: 'diagnostic.operation',
+  PLANNING_LOCAL_INVALID: 'diagnostic.localInvalid',
+  PLANNING_CONFLICT: 'diagnostic.conflict',
 };
 
 function initialState() {
@@ -41,12 +33,14 @@ function initialState() {
 }
 
 function counts(plan) {
-  const result = { creates: 0, updates: 0, skips: 0, conflicts: 0, warnings: 0, errors: 0 };
+  const result = {
+    writes: plan?.operations?.length || 0,
+    conflicts: 0,
+    warnings: 0,
+    errors: 0,
+  };
   for (const item of plan?.diagnostics || []) {
-    if (item.code === 'SCENARIO_CREATE') result.creates++;
-    else if (item.code === 'SCENARIO_UPDATE') result.updates++;
-    else if (item.code === 'SCENARIO_SKIP') result.skips++;
-    else if (item.code === 'SCENARIO_CONFLICT') result.conflicts++;
+    if (item.code === 'PLANNING_CONFLICT') result.conflicts++;
     if (item.severity === 'warning') result.warnings++;
     if (item.severity === 'error') result.errors++;
   }
@@ -283,18 +277,16 @@ export function createImportCenter(host, options = {}) {
       <article class="codex-link-row">
         <div>
           <strong>${esc(operation.id)}</strong>
-          <div>${esc(operation.value?.name || '')}</div>
+          <div>${esc(operation.value?.title || operation.value?.name || '')}</div>
         </div>
-        <span class="codex-badge">${esc(operation.value?.status || '')}</span>
+        <span class="codex-badge">${esc(operation.target?.collection || '')}</span>
       </article>`).join('')}</div>`;
   }
 
   function summaryHtml() {
     const value = counts(state.plan);
     return `<dl>
-      <div><dt>${esc(t('summary.creates'))}</dt><dd>${esc(host.i18n.formatNumber(value.creates))}</dd></div>
-      <div><dt>${esc(t('summary.updates'))}</dt><dd>${esc(host.i18n.formatNumber(value.updates))}</dd></div>
-      <div><dt>${esc(t('summary.skips'))}</dt><dd>${esc(host.i18n.formatNumber(value.skips))}</dd></div>
+      <div><dt>${esc(t('summary.writes'))}</dt><dd>${esc(host.i18n.formatNumber(value.writes))}</dd></div>
       <div><dt>${esc(t('summary.conflicts'))}</dt><dd>${esc(host.i18n.formatNumber(value.conflicts))}</dd></div>
       <div><dt>${esc(t('summary.warnings'))}</dt><dd>${esc(host.i18n.formatNumber(value.warnings))}</dd></div>
       <div><dt>${esc(t('summary.errors'))}</dt><dd>${esc(host.i18n.formatNumber(value.errors))}</dd></div>

@@ -23,7 +23,7 @@ const providerFetch = async () => ({
   async json() {
     return {
       version: 1,
-      providers: [{ addonId: 'dm-tools', id: 'scenario-json' }],
+      providers: [{ addonId: 'dm-tools', id: 'planning-json' }],
       limits: { maxInputBytes: 262144 },
     };
   },
@@ -35,6 +35,9 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   assert.equal(manifest.id, 'dm-tools');
   assert.deepEqual(manifest.collections, [
     { name: 'scenarios', keyed: false, access: 'dm' },
+    { name: 'planning_items', keyed: true, access: 'dm' },
+    { name: 'planning_folders', keyed: true, access: 'dm' },
+    { name: 'planning_links', keyed: true, access: 'dm' },
   ]);
   assert.ok(manifest.capabilities.required.includes('collections.dm'));
   assert.ok(manifest.capabilities.required.includes('collections.transactions'));
@@ -70,11 +73,19 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.rec.collections, [
     { name: 'scenarios', keyed: false, access: 'dm' },
+    { name: 'planning_items', keyed: true, access: 'dm' },
+    { name: 'planning_folders', keyed: true, access: 'dm' },
+    { name: 'planning_links', keyed: true, access: 'dm' },
   ]);
-  assert.deepEqual(result.rec.routes.map(route => route.segment), ['dm-import', 'dm-scenarios']);
+  assert.deepEqual(result.rec.routes.map(route => route.segment), [
+    'dm-import',
+    'dm-plans',
+    'dm-scenarios',
+  ]);
   assert.deepEqual(result.rec.slots.map(slot => slot.slotId), ['dm:dashboard']);
   assert.equal(result.rec.sidebar[0].role, 'dm');
   assert.equal(result.rec.sidebar[1].role, 'dm');
+  assert.equal(result.rec.sidebar[2].role, 'dm');
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
   assert.ok(smokeRegistrations(result.rec).ok);
   assert.deepEqual(result.rec.i18nMissing, []);
@@ -124,54 +135,58 @@ test('regional locale uses Czech and a partial translation falls back to English
   assert.equal(result.ok, true, result.error);
   const html = result.rec.routes[0].render();
   assert.match(html, /Centrum importu/);
-  assert.match(html, /Preview and review/);
+  assert.match(html, /Preview and atomically import/);
   assert.deepEqual(result.rec.i18nMissing, []);
   await disposeMockHost(result.rec);
 });
 
-test('transaction capability commits buffered scenario changes atomically', async () => {
+test('transaction capability commits buffered planning changes atomically', async () => {
   const { host } = createMockHost(manifest, {
     isDM: true,
     catalogs: { en, cs },
     locale: 'en',
     fetch: providerFetch,
     fixtures: {
-      'collection:scenarios': [{ id: 'seed', name: 'Seed scenario' }],
+      'collection:planning_items': {
+        seed: { title: 'Seed', kind: 'quest' },
+      },
     },
   });
-  host.registerCollection('scenarios');
-  const result = await host.store.transaction(['scenarios'], async tx => {
-    const scenarios = tx.collection('scenarios');
-    assert.equal(scenarios.get('seed').name, 'Seed scenario');
-    scenarios.put({ id: 'replacement', name: 'Replacement scenario' });
-    scenarios.remove('seed');
+  host.registerCollection('planning_items');
+  const result = await host.store.transaction(['planning_items'], async tx => {
+    const planning = tx.collection('planning_items');
+    assert.equal(planning.get('seed').title, 'Seed');
+    planning.put({ id: 'replacement', title: 'Replacement', kind: 'quest' });
+    planning.remove('seed');
     return 'reference-result';
   });
   assert.equal(result.value, 'reference-result');
-  assert.deepEqual(host.store.collection('scenarios').list(), [
-    { id: 'replacement', name: 'Replacement scenario' },
+  assert.deepEqual(host.store.collection('planning_items').list(), [
+    { id: 'replacement', title: 'Replacement', kind: 'quest' },
   ]);
 });
 
-test('transaction callback failure leaves the scenario collection unchanged', async () => {
+test('transaction callback failure leaves the planning collection unchanged', async () => {
   const { host } = createMockHost(manifest, {
     isDM: true,
     catalogs: { en, cs },
     locale: 'en',
     fetch: providerFetch,
     fixtures: {
-      'collection:scenarios': [{ id: 'seed', name: 'Seed scenario' }],
+      'collection:planning_items': {
+        seed: { title: 'Seed', kind: 'quest' },
+      },
     },
   });
-  host.registerCollection('scenarios');
+  host.registerCollection('planning_items');
   await assert.rejects(
-    host.store.transaction(['scenarios'], tx => {
-      tx.collection('scenarios').put({ id: 'ghost', name: 'Must not commit' });
+    host.store.transaction(['planning_items'], tx => {
+      tx.collection('planning_items').put({ id: 'ghost', title: 'Must not commit' });
       throw new Error('expected callback failure');
     }),
     /expected callback failure/,
   );
-  assert.deepEqual(host.store.collection('scenarios').list(), [
-    { id: 'seed', name: 'Seed scenario' },
+  assert.deepEqual(host.store.collection('planning_items').list(), [
+    { id: 'seed', title: 'Seed', kind: 'quest' },
   ]);
 });

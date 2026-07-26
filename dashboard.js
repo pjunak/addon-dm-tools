@@ -1,4 +1,4 @@
-const STATUSES = ['planned', 'active', 'completed'];
+const PROVIDER_ID = 'planning-json';
 
 export function createDashboard(host) {
   const { esc } = host.h;
@@ -7,7 +7,7 @@ export function createDashboard(host) {
   let providerError = '';
   let generation = 0;
   let disposed = false;
-  let lastScenarioSignature = '';
+  let lastSignature = '';
 
   async function initialize() {
     if (disposed || !host.role.isDM()) return;
@@ -17,7 +17,7 @@ export function createDashboard(host) {
     try {
       const listed = await host.imports.listProviders();
       if (disposed || current !== generation || !host.role.isDM()) return;
-      providerStatus = listed.providers.some(provider => provider.id === 'scenario-json')
+      providerStatus = listed.providers.some(provider => provider.id === PROVIDER_ID)
         ? 'ready'
         : 'missing';
     } catch (error) {
@@ -32,7 +32,7 @@ export function createDashboard(host) {
     ++generation;
     providerStatus = 'loading';
     providerError = '';
-    lastScenarioSignature = '';
+    lastSignature = '';
   }
 
   function dispose() {
@@ -41,103 +41,94 @@ export function createDashboard(host) {
     leave();
   }
 
-  function readScenarios() {
-    const handle = host.store.collection('scenarios');
-    const records = handle.list();
-    if (!Array.isArray(records)) throw new Error('Scenario collection is unavailable.');
-    return records.filter(record => record && typeof record === 'object');
+  function readItems() {
+    const result = host.store.collection('planning_items').list();
+    if (!Array.isArray(result)) throw new Error('Planning collection is unavailable.');
+    return result.filter(record => record && typeof record === 'object');
   }
 
-  function statusOf(record) {
-    return STATUSES.includes(record?.status) ? record.status : 'unknown';
+  function summarize(items) {
+    return {
+      total: items.length,
+      active: items.filter(item => item.state === 'active').length,
+      ready: items.filter(item => item.state === 'ready').length,
+      encounters: items.filter(item => item.kind === 'encounter').length,
+      pinned: items.filter(item => item.pinned).length,
+    };
   }
 
-  function counts(records) {
-    const result = { total: records.length, planned: 0, active: 0, completed: 0, unknown: 0 };
-    for (const record of records) result[statusOf(record)]++;
-    return result;
-  }
-
-  function scenarioSignature(records, summary) {
-    const newest = records.reduce((value, record) => {
-      const stamp = typeof record.updatedAt === 'string' ? record.updatedAt : '';
-      return stamp > value ? stamp : value;
-    }, '');
-    return `${summary.total}:${summary.planned}:${summary.active}:${summary.completed}:${summary.unknown}:${newest}`;
-  }
-
-  function announceUpdate(records, summary) {
-    const signature = scenarioSignature(records, summary);
-    if (lastScenarioSignature && signature !== lastScenarioSignature) {
+  function announceUpdate(items, summary) {
+    const newest = items.reduce((value, item) => Math.max(value, item.updatedAt || 0), 0);
+    const signature = `${summary.total}:${summary.active}:${summary.ready}:${summary.pinned}:${newest}`;
+    if (lastSignature && signature !== lastSignature) {
       host.ui.announce(host.i18n.plural('dashboard.announce.updated', summary.total));
     }
-    lastScenarioSignature = signature;
+    lastSignature = signature;
   }
 
-  function statusTile(status, value, accent = false) {
+  function tile(key, value, accent = false) {
     return `<div class="codex-tile${accent ? ' codex-tile-accent' : ''}">
-      <div class="codex-tile-label">${esc(t(`dashboard.status.${status}`))}</div>
+      <div class="codex-tile-label">${esc(t(`dashboard.status.${key}`))}</div>
       <div class="codex-tile-value">${esc(host.i18n.formatNumber(value))}</div>
     </div>`;
   }
 
   function workflowHtml() {
-    const graphAvailable = host.graphs.available();
     const providerWarning = providerStatus === 'missing'
       ? `<p class="codex-warnings">${esc(t('dashboard.importMissing'))}</p>`
       : providerStatus === 'error'
-        ? `<p class="codex-warnings">${esc(t('dashboard.importError', { code: providerError || t('dashboard.unknownError') }))}</p>`
+        ? `<p class="codex-warnings">${esc(t('dashboard.importError', {
+          code: providerError || t('dashboard.unknownError'),
+        }))}</p>`
         : '';
-    const graphWarning = graphAvailable
+    const graphWarning = host.graphs.available()
       ? ''
       : `<p class="codex-warnings">${esc(t('dashboard.graphUnavailable'))}</p>`;
+    const cards = [
+      ['#/dm-plans', 'dashboard.planning.title', 'dashboard.planning.body'],
+      ['#/dm-scenarios', 'dashboard.graph.title', 'dashboard.graph.body'],
+      ['#/dm-import', 'dashboard.import.title', 'dashboard.import.body'],
+    ];
     return `<section class="settings-panel" aria-labelledby="dm-tools-workflow-title">
       <h3 id="dm-tools-workflow-title">${esc(t('dashboard.workflow.title'))}</h3>
       <p class="settings-hint">${esc(t('dashboard.workflow.body'))}</p>
-      ${providerWarning}
-      ${graphWarning}
+      ${providerWarning}${graphWarning}
       <nav aria-label="${esc(t('dashboard.workflow.label'))}"
-        style="display:flex;flex-wrap:wrap;gap:var(--space-3)">
-        <a class="codex-link-tile" href="#/dm-import" style="flex:1">
-          <strong>${esc(t('dashboard.import.title'))}</strong>
-          <span class="settings-hint">${esc(t('dashboard.import.body'))}</span>
-        </a>
-        <a class="codex-link-tile" href="#/dm-scenarios" style="flex:1">
-          <strong>${esc(t('dashboard.graph.title'))}</strong>
-          <span class="settings-hint">${esc(t('dashboard.graph.body'))}</span>
-        </a>
+        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:var(--space-3)">
+        ${cards.map(([href, title, body]) => `<a class="codex-link-tile" href="${href}">
+          <strong>${esc(t(title))}</strong>
+          <span class="settings-hint">${esc(t(body))}</span>
+        </a>`).join('')}
       </nav>
     </section>`;
   }
 
-  function scenarioListHtml(records) {
-    if (!records.length) {
-      return `<section class="settings-panel" aria-labelledby="dm-tools-scenarios-title">
-        <h3 id="dm-tools-scenarios-title">${esc(t('dashboard.scenarios.title'))}</h3>
+  function itemListHtml(items) {
+    const prioritized = items.slice().sort((left, right) => (
+      Number(right.pinned) - Number(left.pinned)
+      || Number(right.updatedAt || 0) - Number(left.updatedAt || 0)
+      || left.title.localeCompare(right.title)
+    )).slice(0, 12);
+    if (!prioritized.length) {
+      return `<section class="settings-panel">
+        <h3>${esc(t('dashboard.items.title'))}</h3>
         <p>${esc(t('dashboard.empty.body'))}</p>
-        <a class="inline-create-btn" href="#/dm-import">${esc(t('dashboard.empty.action'))}</a>
+        <a class="inline-create-btn" href="#/dm-plans">${esc(t('dashboard.empty.action'))}</a>
       </section>`;
     }
-    const ordered = records.slice().sort((left, right) => {
-      const leftStamp = typeof left.updatedAt === 'string' ? left.updatedAt : '';
-      const rightStamp = typeof right.updatedAt === 'string' ? right.updatedAt : '';
-      return rightStamp.localeCompare(leftStamp) || String(left.id || '').localeCompare(String(right.id || ''));
-    });
-    return `<section class="settings-panel" aria-labelledby="dm-tools-scenarios-title">
-      <h3 id="dm-tools-scenarios-title">${esc(t('dashboard.scenarios.title'))}</h3>
+    return `<section class="settings-panel">
+      <h3>${esc(t('dashboard.items.title'))}</h3>
       <div style="display:grid;gap:var(--space-2)">
-        ${ordered.map(record => {
-          const name = record.name || record.id || t('dashboard.unnamed');
-          const summary = typeof record.summary === 'string' ? record.summary : '';
-          const status = statusOf(record);
-          return `<article class="codex-link-row">
-            <div>
-              <strong>${esc(name)}</strong>
-              ${summary ? `<div class="settings-hint">${esc(summary)}</div>` : ''}
-            </div>
-            <span class="codex-badge${status === 'active' ? ' codex-badge-accent' : ''}">${esc(t(`dashboard.status.${status}`))}</span>
-          </article>`;
-        }).join('')}
+        ${prioritized.map(item => `<article class="codex-link-row">
+          <div>
+            <strong>${esc(item.title || t('dashboard.unnamed'))}</strong>
+            ${item.summary ? `<div class="settings-hint">${esc(item.summary)}</div>` : ''}
+          </div>
+          <div>
+            ${item.pinned ? `<span class="codex-badge codex-badge-accent">${esc(t('dashboard.pinned'))}</span>` : ''}
+            <span class="codex-badge">${esc(t(`planning.kind.${item.kind}`))}</span>
+          </div>
+        </article>`).join('')}
       </div>
     </section>`;
   }
@@ -147,53 +138,51 @@ export function createDashboard(host) {
       return `<section class="settings-panel" role="alert">${esc(t('dashboard.forbidden'))}</section>`;
     }
     if (providerStatus === 'loading') {
-      return `<section class="addon-dm-tools-dashboard settings-panel" aria-busy="true" aria-labelledby="dm-tools-dashboard-title">
-        <h2 id="dm-tools-dashboard-title" tabindex="-1">${esc(t('dashboard.title'))}</h2>
+      return `<section class="addon-dm-tools-dashboard settings-panel" aria-busy="true">
+        <h2>${esc(t('dashboard.title'))}</h2>
         <p>${esc(t('dashboard.loading'))}</p>
       </section>`;
     }
-
-    let records;
+    let items;
     try {
-      records = readScenarios();
+      items = readItems();
     } catch (error) {
-      const message = error?.code || error?.message || t('dashboard.unknownError');
-      return `<section class="addon-dm-tools-dashboard settings-panel" role="alert" aria-labelledby="dm-tools-dashboard-title">
-        <h2 id="dm-tools-dashboard-title" tabindex="-1">${esc(t('dashboard.title'))}</h2>
+      return `<section class="addon-dm-tools-dashboard settings-panel" role="alert">
+        <h2>${esc(t('dashboard.title'))}</h2>
         <h3>${esc(t('dashboard.error.title'))}</h3>
-        <p>${esc(t('dashboard.error.body', { code: message }))}</p>
+        <p>${esc(t('dashboard.error.body', { code: error?.code || t('dashboard.unknownError') }))}</p>
         ${workflowHtml()}
       </section>`;
     }
-
-    const summary = counts(records);
-    announceUpdate(records, summary);
-    return `<div class="addon-dm-tools-dashboard" aria-labelledby="dm-tools-dashboard-title"
-      style="display:grid;gap:var(--space-5)">
+    const summary = summarize(items);
+    announceUpdate(items, summary);
+    return `<div class="addon-dm-tools-dashboard" style="display:grid;gap:var(--space-5)">
       <section class="settings-panel">
-        <h2 id="dm-tools-dashboard-title" tabindex="-1">${esc(t('dashboard.title'))}</h2>
+        <h2>${esc(t('dashboard.title'))}</h2>
         <p class="settings-hint">${esc(t('dashboard.description'))}</p>
         <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
-          ${statusTile('total', summary.total, true)}
-          ${statusTile('planned', summary.planned)}
-          ${statusTile('active', summary.active, summary.active > 0)}
-          ${statusTile('completed', summary.completed)}
-          ${summary.unknown ? statusTile('unknown', summary.unknown) : ''}
+          ${tile('total', summary.total, true)}
+          ${tile('active', summary.active, summary.active > 0)}
+          ${tile('ready', summary.ready)}
+          ${tile('encounters', summary.encounters)}
+          ${tile('pinned', summary.pinned)}
         </div>
       </section>
       ${workflowHtml()}
-      ${scenarioListHtml(records)}
+      ${itemListHtml(items)}
     </div>`;
   }
 
-  function getState() {
-    return {
+  return {
+    initialize,
+    leave,
+    dispose,
+    render,
+    getState: () => ({
       providerStatus,
       providerError,
       disposed,
-      hasScenarioSignature: !!lastScenarioSignature,
-    };
-  }
-
-  return { initialize, leave, dispose, render, getState };
+      hasSignature: !!lastSignature,
+    }),
+  };
 }
