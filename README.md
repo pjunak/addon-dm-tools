@@ -57,3 +57,8 @@ From the sibling host repository:
 ```powershell
 node scripts\dev-install-addon.cjs ..\dm-tools
 ```
+
+## License
+
+The original software and documentation in this repository are licensed under
+the [MIT License](LICENSE).
