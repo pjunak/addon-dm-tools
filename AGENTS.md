@@ -88,5 +88,8 @@ denial. Run relevant host import, transaction, lifecycle, graph, slot, and
 authorization tests when those contracts change.
 
 Development happens on `main`. Do not create branches, stage, commit, release,
-or push unless the maintainer asks. Planning notes are local-only and must not
-be committed.
+or push unless the maintainer asks. The only durable suite backlog is
+[`../ttrpg-codex/docs/BACKLOG.md`](../ttrpg-codex/docs/BACKLOG.md). Temporary
+implementation plans belong only in the host repository's ignored
+`docs/plans/` directory and must be deleted when the task closes. Do not create
+repo-local TODO, roadmap, or planning files.
