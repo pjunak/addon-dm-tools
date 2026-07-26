@@ -64,6 +64,7 @@ function fixture({ available = true, isDM = true, mountError = null } = {}) {
   const calls = [];
   const handlers = new Map();
   const announcements = [];
+  const views = new Map();
   const host = {
     h: {
       esc: value => String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -78,9 +79,17 @@ function fixture({ available = true, isDM = true, mountError = null } = {}) {
     store: {
       collection(name) {
         if (name === 'planning_items') return { list: () => [quest] };
+        if (name === 'planning_folders') return { list: () => [] };
         if (name === 'planning_links') return { list: () => [npcLink] };
+        if (name === 'planning_views') return {
+          list: () => [...views.values()],
+          get: id => views.get(id),
+          async save(record) { views.set(record.id, structuredClone(record)); },
+          async remove(id) { views.delete(id); },
+        };
         throw new Error(`unexpected collection ${name}`);
       },
+      generateId: () => 'new-link',
       getCharacters: () => core.characters,
       getFactions: () => ({}),
       getLocations: () => [],
@@ -91,13 +100,19 @@ function fixture({ available = true, isDM = true, mountError = null } = {}) {
     ui: {
       rerender: () => calls.push(['rerender']),
       announce: message => announcements.push(message),
+      toast: message => calls.push(['toast', message]),
     },
     graphs: {
       available: () => available,
+      status: () => ({
+        features: ['node-position', 'node-drag'],
+        layouts: ['preset'],
+      }),
       async mount(container, spec) {
         calls.push(['mount', container, spec]);
         if (mountError) throw mountError;
         return {
+          select: ids => calls.push(['select', ids]),
           focus: (ids, options) => calls.push(['focus', ids, options]),
           fit: (ids, options) => calls.push(['fit', ids, options]),
           on(event, handler) {
@@ -124,6 +139,7 @@ function fixture({ available = true, isDM = true, mountError = null } = {}) {
     calls,
     handlers,
     announcements,
+    views,
     async runScheduled() {
       for (const callback of scheduled.splice(0)) callback?.();
       await Promise.resolve();
@@ -140,8 +156,19 @@ test('page mounts through the facade, expands sections, and retains an accessibl
   assert.match(html, /aria-busy="true"/);
   await value.runScheduled();
   const mounted = value.calls.find(call => call[0] === 'mount');
-  assert.equal(mounted[2].layout, 'dagre');
+  assert.equal(mounted[2].layout, 'preset');
+  assert.deepEqual(Object.keys(mounted[2].nodes[0].position).sort(), ['x', 'y']);
   assert.equal(mounted[2].edges[0].label, npcLink.name);
+  value.handlers.get('move')({
+    nodeId: mounted[2].nodes.find(node => node.label === quest.title).id,
+    position: { x: 25, y: 75 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(
+    value.views.get('campaign-map').positions['planning:quest-sigil'],
+    { x: 25, y: 75 },
+  );
   value.page.toggleExpand('quest-sigil');
   assert.deepEqual(value.page.getState().expandedItems, ['quest-sigil']);
   assert.ok(value.calls.some(call => call[0] === 'rerender'));

@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
@@ -56,10 +56,18 @@
       "name": "planning_links",
       "keyed": true,
       "access": "dm"
+    },
+    {
+      "name": "planning_views",
+      "keyed": true,
+      "access": "dm"
     }
   ],
   "tests": {
-    "client": "tests/smoke.mjs"
+    "client": [
+      "tests/smoke.mjs",
+      "tests/planning-graph.mjs"
+    ]
   },
   "summary": "DM-only planning and world-building workspace with reviewed bulk imports, named semantic links, and an interactive graph."
 }

@@ -28,17 +28,48 @@ When the quest is collapsed, the same stored edge targets the quest node. When
 expanded, it targets the named section node. The label and link identity do not
 change.
 
-The adapter uses `dagre` when links exist and `grid` for independent nodes.
-Element ids are deterministic hashes of stable domain identities, keeping them
-within the graph facade's length limits without exposing graph implementation
-details.
+The workbench uses the facade's validated `preset` layout when the host
+advertises `node-position` and `node-drag`. New or unplaced nodes receive a
+deterministic three-lane arrangement: world references, planning items, and
+expanded sections. Element ids are deterministic hashes of stable domain
+identities, keeping them within the graph facade's length limits without
+exposing graph implementation details.
+
+## Editing and view state
+
+Selecting a node opens a persistent inspector. Planning items and sections can
+create explicit named connections to another planning item or section from
+that inspector; the full planning workspace remains the edit surface for item
+prose and world/external references. Existing related links can be reviewed
+and deleted in either surface.
+
+Drag completion stores a bounded `{x,y}` value under the stable endpoint
+identity in the keyed DM-only `planning_views` collection. The single
+`campaign-map` record is presentation state only:
+
+```json
+{
+  "id": "campaign-map",
+  "schemaVersion": 1,
+  "positions": {
+    "planning:quest-sigil": { "x": 120, "y": 80 }
+  },
+  "updatedAt": 1785000000000
+}
+```
+
+It is deliberately outside `planning_items`, `planning_links`, and the import
+schema. Auto-arrange deletes this view record and cannot change campaign
+meaning. An older compatible graph implementation without the optional drag
+features remains a read-only dagre/grid projection.
 
 ## Accessible fallback and lifecycle
 
-The route always renders a keyboard-accessible list of planning items and
-named links. It remains available when the graph facade is missing or the
-adapter fails. Item controls can focus nodes and expand or collapse section
-detail.
+The route always renders a keyboard-accessible list of planning items. It
+remains available when the graph facade is missing or the adapter fails. Item
+controls can focus nodes and expand or collapse section detail. The selected
+node inspector and connection form use labelled native controls and do not
+depend on pointer dragging.
 
 Mount is scheduled only after the addon-owned route subtree exists. Re-render,
 navigation, role transition, addon reload/update/disable, failed late mount,

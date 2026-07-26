@@ -38,6 +38,7 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
     { name: 'planning_items', keyed: true, access: 'dm' },
     { name: 'planning_folders', keyed: true, access: 'dm' },
     { name: 'planning_links', keyed: true, access: 'dm' },
+    { name: 'planning_views', keyed: true, access: 'dm' },
   ]);
   assert.ok(manifest.capabilities.required.includes('collections.dm'));
   assert.ok(manifest.capabilities.required.includes('collections.transactions'));
@@ -76,6 +77,7 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
     { name: 'planning_items', keyed: true, access: 'dm' },
     { name: 'planning_folders', keyed: true, access: 'dm' },
     { name: 'planning_links', keyed: true, access: 'dm' },
+    { name: 'planning_views', keyed: true, access: 'dm' },
   ]);
   assert.deepEqual(result.rec.routes.map(route => route.segment), [
     'dm-import',

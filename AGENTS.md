@@ -24,7 +24,8 @@ entry.js                     composition and role-conditioned registration
 planning-contract.js         shared pure schema and dataset validation
 planning-migration.js        non-destructive legacy scenario copy
 planning-workspace.js        manual item/folder/section/link editor
-planning-graph.js            pure graph projection and route lifecycle
+planning-graph-model.js      pure projection, identities, and fallback positions
+planning-graph.js            graph workbench, inspector, persistence, lifecycle
 dashboard.js                 live dm:dashboard planning overview
 import-center.js             reviewed import state machine and UI
 server/index.cjs             server composition
@@ -64,6 +65,8 @@ tests/                       contract, provider, UI, graph, dashboard
   maintainer approval after verifying the new records.
 - The graph reflects stored links only. Never infer edges from tags, folders,
   timestamps, or prose.
+- Keep graph presentation state in `planning_views`; positions must never
+  become planning semantics or enter the import format.
 - Collapsed section links must retain their named edge on the parent item;
   expanded views must target the exact section node.
 - Clean up every scheduled mount, request, timer, subscription, and graph

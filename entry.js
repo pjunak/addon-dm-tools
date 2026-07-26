@@ -26,6 +26,7 @@ export default function register(host) {
   host.registerCollection('planning_items');
   host.registerCollection('planning_folders');
   host.registerCollection('planning_links');
+  host.registerCollection('planning_views');
   const center = createImportCenter(host);
   const graph = createPlanningGraphPage(host);
   const workspace = createPlanningWorkspace(host);
@@ -63,6 +64,13 @@ export default function register(host) {
   host.registerAction('graphFocus', id => graph.focus(id));
   host.registerAction('graphFit', () => graph.fit());
   host.registerAction('graphToggleExpand', id => graph.toggleExpand(id));
+  host.registerAction('graphResetLayout', () => graph.resetLayout());
+  host.registerAction('graphCreateLink', event => graph.createLink(event));
+  host.registerAction('graphDeleteLink', id => graph.deleteLink(id));
+  host.registerAction('graphEditPlanning', id => {
+    workspace.selectItem(id);
+    if (typeof window !== 'undefined') window.location.hash = '#/dm-plans';
+  });
   host.registerAction('selectItem', id => workspace.selectItem(id));
   host.registerAction('createItem', kind => workspace.createItem(kind));
   host.registerAction('saveItem', event => workspace.saveItem(event));
