@@ -128,7 +128,7 @@ test('missing capabilities and collection failures keep recovery routes usable',
   await failed.dashboard.initialize();
   const failedHtml = failed.dashboard.render();
   assert.match(failedHtml, /Planning data is unavailable/);
-  assert.match(failedHtml, /COLLECTION_UNAVAILABLE/);
+  assert.doesNotMatch(failedHtml, /COLLECTION_UNAVAILABLE/);
   assert.doesNotMatch(failedHtml, /sensitive detail/);
 });
 

@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {

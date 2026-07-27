@@ -64,6 +64,8 @@ export default function register(host) {
   host.registerAction('graphFocus', id => graph.focus(id));
   host.registerAction('graphFit', () => graph.fit());
   host.registerAction('graphToggleExpand', id => graph.toggleExpand(id));
+  host.registerAction('graphExpandAll', () => graph.expandAll());
+  host.registerAction('graphCollapseAll', () => graph.collapseAll());
   host.registerAction('graphResetLayout', () => graph.resetLayout());
   host.registerAction('graphCreateLink', event => graph.createLink(event));
   host.registerAction('graphDeleteLink', id => graph.deleteLink(id));
@@ -72,6 +74,7 @@ export default function register(host) {
     if (typeof window !== 'undefined') window.location.hash = '#/dm-plans';
   });
   host.registerAction('selectItem', id => workspace.selectItem(id));
+  host.registerAction('filterItems', value => workspace.filterItems(value));
   host.registerAction('createItem', kind => workspace.createItem(kind));
   host.registerAction('saveItem', event => workspace.saveItem(event));
   host.registerAction('addSection', event => workspace.addSection(event));

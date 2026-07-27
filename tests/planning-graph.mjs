@@ -74,7 +74,10 @@ function fixture({ available = true, isDM = true, mountError = null } = {}) {
       breadcrumb: () => '',
     },
     action: name => `dm-tools:${name}`,
-    i18n: { t: (key, params) => interpolate(en[key] ?? key, params) },
+    i18n: {
+      t: (key, params) => interpolate(en[key] ?? key, params),
+      plural: (key, n) => interpolate(en[key]?.[n === 1 ? 'one' : 'other'] ?? key, { n }),
+    },
     role: { isDM: () => isDM },
     store: {
       collection(name) {
@@ -184,7 +187,7 @@ test('unavailable, failed, denied, and disposal states remain bounded', async ()
   failed.page.render();
   await failed.runScheduled();
   assert.equal(failed.page.getState().state, 'error');
-  assert.match(failed.page.render(), /GRAPH_ADAPTER_FAILED/);
+  assert.doesNotMatch(failed.page.render(), /GRAPH_ADAPTER_FAILED/);
   assert.doesNotMatch(failed.page.render(), /adapter detail/);
 
   const disposed = fixture();

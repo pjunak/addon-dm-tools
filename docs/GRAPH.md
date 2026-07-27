@@ -69,7 +69,10 @@ The route always renders a keyboard-accessible list of planning items. It
 remains available when the graph facade is missing or the adapter fails. Item
 controls can focus nodes and expand or collapse section detail. The selected
 node inspector and connection form use labelled native controls and do not
-depend on pointer dragging.
+depend on pointer dragging. The toolbar reports the current node and connection
+counts, can reveal or hide every named section, and links directly to the manual
+editor. The fallback list opens automatically on small screens and whenever
+interactive rendering is unavailable.
 
 Mount is scheduled only after the addon-owned route subtree exists. Re-render,
 navigation, role transition, addon reload/update/disable, failed late mount,

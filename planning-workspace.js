@@ -52,6 +52,7 @@ export function createPlanningWorkspace(host) {
   let selectedId = '';
   let draft = null;
   let errors = [];
+  let itemFilter = '';
 
   const collection = key => host.store.collection(COLLECTIONS[key]);
   const items = () => collection('items').list();
@@ -101,6 +102,17 @@ export function createPlanningWorkspace(host) {
     draft = null;
     errors = [];
     host.ui.rerender();
+  }
+
+  function filterItems(value) {
+    itemFilter = String(value || '').trimStart();
+    host.ui.rerender();
+    if (typeof document !== 'undefined' && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => {
+      const input = document.getElementById('dm-planning-filter');
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange?.(input.value.length, input.value.length);
+    });
   }
 
   function createItem(kind) {
@@ -419,12 +431,12 @@ export function createPlanningWorkspace(host) {
 
   function folderHtml() {
     const existing = folders().sort((left, right) => left.name.localeCompare(right.name));
-    return `<section class="settings-panel">
-      <h2>${esc(t('planning.folder.title'))}</h2>
+    return `<details class="settings-panel dmt-folder-manager">
+      <summary><strong>${esc(t('planning.folder.title'))}</strong> <span class="codex-badge">${esc(String(existing.length))}</span></summary>
       <form${dataOn('submit', host.action('saveFolder'), '$ev')}>
-        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:var(--space-2)">
-          <input class="edit-input" name="name" required maxlength="160" placeholder="${esc(t('planning.folder.name'))}">
-          <select class="edit-input" name="parentId">${folderOptions('')}</select>
+        <div class="dmt-folder-create">
+          <input class="edit-input" name="name" required maxlength="160" placeholder="${esc(t('planning.folder.name'))}" aria-label="${esc(t('planning.folder.name'))}">
+          <select class="edit-input" name="parentId" aria-label="${esc(t('planning.folder.parent'))}">${folderOptions('')}</select>
           <button class="inline-create-btn" type="submit">${esc(t('planning.action.add'))}</button>
         </div>
       </form>
@@ -433,15 +445,24 @@ export function createPlanningWorkspace(host) {
           <input class="edit-input" name="name" required maxlength="160" value="${esc(folder.name)}" aria-label="${esc(t('planning.folder.name'))}">
           <select class="edit-input" name="parentId" aria-label="${esc(t('planning.folder.parent'))}">${folderOptions(folder.parentId, folder.id)}</select>
           <button class="inline-create-btn" type="submit">${esc(t('planning.action.save'))}</button>
-          <button class="edit-delete-btn" type="button"${dataAction(host.action('deleteFolder'), folder.id)}>${esc(t('planning.action.delete'))}</button>
+          <button class="edit-delete-btn" type="button" aria-label="${esc(t('planning.folder.deleteLabel', { name: folder.name }))}"${dataAction(host.action('deleteFolder'), folder.id)}>${esc(t('planning.action.delete'))}</button>
         </form>`).join('')}
       </div>
-    </section>`;
+    </details>`;
   }
 
   function navigationHtml() {
     const byFolder = new Map();
-    for (const item of items()) {
+    const allItems = items();
+    const query = itemFilter.trim().toLocaleLowerCase();
+    const visibleItems = query
+      ? allItems.filter(item => [
+          item.title,
+          item.summary,
+          ...(item.tags || []),
+        ].some(value => String(value || '').toLocaleLowerCase().includes(query)))
+      : allItems;
+    for (const item of visibleItems) {
       const key = item.folderId || '';
       if (!byFolder.has(key)) byFolder.set(key, []);
       byFolder.get(key).push(item);
@@ -451,7 +472,13 @@ export function createPlanningWorkspace(host) {
       ...folders().sort((left, right) => left.name.localeCompare(right.name)),
     ];
     return `<section class="settings-panel">
-      <h2>${esc(t('planning.items.title'))}</h2>
+      <div class="page-header">
+        <h2>${esc(t('planning.items.title'))}</h2>
+        <span class="codex-badge">${esc(query ? `${visibleItems.length} / ${allItems.length}` : String(allItems.length))}</span>
+      </div>
+      <input id="dm-planning-filter" class="edit-input" type="search" value="${esc(itemFilter)}"
+        placeholder="${esc(t('planning.items.search'))}" aria-label="${esc(t('planning.items.search'))}"
+        ${dataOn('input', host.action('filterItems'), '$value')}>
       <div style="display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-3)">
         ${PLANNING_KINDS.map(kind => `<button class="inline-create-btn" type="button"${dataAction(host.action('createItem'), kind)}>+ ${esc(t(`planning.kind.${kind}`))}</button>`).join('')}
       </div>
@@ -463,10 +490,10 @@ export function createPlanningWorkspace(host) {
         if (!groupItems.length && group.id) return '';
         return `<div style="margin-top:var(--space-3)">
           <h3>${esc(group.name)}</h3>
-          ${groupItems.length ? groupItems.map(item => `<button type="button" class="codex-link-row${item.id === selectedId ? ' is-active' : ''}" style="width:100%;text-align:left"${dataAction(host.action('selectItem'), item.id)}>
+          ${groupItems.length ? groupItems.map(item => `<button type="button" class="codex-link-row${item.id === selectedId ? ' is-active' : ''}" style="width:100%;text-align:left"${item.id === selectedId ? ' aria-current="true"' : ''}${dataAction(host.action('selectItem'), item.id)}>
             <span><strong>${esc(item.title)}</strong><span class="settings-hint">${esc(item.summary || '')}</span></span>
             <span class="codex-badge">${esc(t(`planning.kind.${item.kind}`))}</span>
-          </button>`).join('') : `<p class="settings-hint">${esc(t('planning.items.empty'))}</p>`}
+          </button>`).join('') : (!query || group.id === '' ? `<p class="settings-hint">${esc(t(query ? 'planning.items.noMatch' : 'planning.items.empty'))}</p>` : '')}
         </div>`;
       }).join('')}
     </section>`;
@@ -492,9 +519,15 @@ export function createPlanningWorkspace(host) {
   }
 
   function linkFormFields(link = {}) {
-    return `<input class="edit-input" name="name" required maxlength="200" value="${esc(link.name || '')}" placeholder="${esc(t('planning.link.name'))}">
-      <select class="edit-input" name="type">${options(PLANNING_RELATIONS, link.type || 'related', 'planning.relation')}</select>
-      <input class="edit-input" name="notes" maxlength="2000" value="${esc(link.notes || '')}" placeholder="${esc(t('planning.link.notes'))}">`;
+    return `<label>${esc(t('planning.link.name'))}
+        <input class="edit-input" name="name" required maxlength="200" value="${esc(link.name || '')}">
+      </label>
+      <label>${esc(t('graph.connect.relation'))}
+        <select class="edit-input" name="type">${options(PLANNING_RELATIONS, link.type || 'related', 'planning.relation')}</select>
+      </label>
+      <label>${esc(t('planning.link.notes'))}
+        <input class="edit-input" name="notes" maxlength="2000" value="${esc(link.notes || '')}">
+      </label>`;
   }
 
   function relationshipsHtml(item) {
@@ -516,14 +549,14 @@ export function createPlanningWorkspace(host) {
         label: `${value.title} / ${section.title}`,
       })),
     ]);
-    return `<section class="settings-panel">
+    return `<section class="settings-panel dmt-planning-links">
       <h2>${esc(t('planning.links.title'))}</h2>
       <p class="settings-hint">${esc(t('planning.links.help'))}</p>
       <details>
         <summary>${esc(t('planning.link.entity'))}</summary>
         <form style="display:grid;gap:var(--space-2);margin-top:var(--space-2)"${dataOn('submit', host.action('saveEntityLink'), '$ev')}>
-          <select class="edit-input" name="entity" required><option value="">${esc(t('planning.link.chooseEntity'))}</option>${entityOptions.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('')}</select>
-          <select class="edit-input" name="sectionId">${sectionOptions(item)}</select>
+          <label>${esc(t('planning.link.chooseEntity'))}<select class="edit-input" name="entity" required><option value="">${esc(t('planning.link.chooseEntity'))}</option>${entityOptions.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('')}</select></label>
+          <label>${esc(t('planning.sections.title'))}<select class="edit-input" name="sectionId">${sectionOptions(item)}</select></label>
           ${linkFormFields()}
           <button class="inline-create-btn" type="submit">${esc(t('planning.action.add'))}</button>
         </form>
@@ -531,7 +564,7 @@ export function createPlanningWorkspace(host) {
       <details>
         <summary>${esc(t('planning.link.item'))}</summary>
         <form style="display:grid;gap:var(--space-2);margin-top:var(--space-2)"${dataOn('submit', host.action('saveItemLink'), '$ev')}>
-          <select class="edit-input" name="target" required><option value="">${esc(t('planning.link.chooseItem'))}</option>${planningTargets.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('')}</select>
+          <label>${esc(t('planning.link.chooseItem'))}<select class="edit-input" name="target" required><option value="">${esc(t('planning.link.chooseItem'))}</option>${planningTargets.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('')}</select></label>
           ${linkFormFields()}
           <button class="inline-create-btn" type="submit">${esc(t('planning.action.add'))}</button>
         </form>
@@ -539,11 +572,11 @@ export function createPlanningWorkspace(host) {
       <details>
         <summary>${esc(t('planning.link.external'))}</summary>
         <form style="display:grid;gap:var(--space-2);margin-top:var(--space-2)"${dataOn('submit', host.action('saveExternalLink'), '$ev')}>
-          <input class="edit-input" name="addonId" required maxlength="39" placeholder="${esc(t('planning.link.addonId'))}">
-          <input class="edit-input" name="kind" required maxlength="80" placeholder="${esc(t('planning.link.kind'))}">
-          <input class="edit-input" name="recordId" required maxlength="120" placeholder="${esc(t('planning.link.recordId'))}">
-          <input class="edit-input" name="label" required maxlength="200" placeholder="${esc(t('planning.link.label'))}">
-          <select class="edit-input" name="sectionId">${sectionOptions(item)}</select>
+          <label>${esc(t('planning.link.addonId'))}<input class="edit-input" name="addonId" required maxlength="39"></label>
+          <label>${esc(t('planning.link.kind'))}<input class="edit-input" name="kind" required maxlength="80"></label>
+          <label>${esc(t('planning.link.recordId'))}<input class="edit-input" name="recordId" required maxlength="120"></label>
+          <label>${esc(t('planning.link.label'))}<input class="edit-input" name="label" required maxlength="200"></label>
+          <label>${esc(t('planning.sections.title'))}<select class="edit-input" name="sectionId">${sectionOptions(item)}</select></label>
           ${linkFormFields()}
           <button class="inline-create-btn" type="submit">${esc(t('planning.action.add'))}</button>
         </form>
@@ -556,7 +589,7 @@ export function createPlanningWorkspace(host) {
           </div>
           <div>
             <button class="inline-create-btn" type="submit">${esc(t('planning.action.save'))}</button>
-            <button class="edit-delete-btn" type="button"${dataAction(host.action('deleteLink'), link.id)}>${esc(t('planning.action.delete'))}</button>
+            <button class="edit-delete-btn" type="button" aria-label="${esc(t('planning.link.deleteLabel', { name: link.name }))}"${dataAction(host.action('deleteLink'), link.id)}>${esc(t('planning.action.delete'))}</button>
           </div>
         </form>`).join('') : `<p class="settings-hint">${esc(t('planning.links.empty'))}</p>`}
       </div>
@@ -564,11 +597,11 @@ export function createPlanningWorkspace(host) {
   }
 
   function editorHtml(item) {
-    return `<div style="display:grid;gap:var(--space-4)">
+    return `<div class="dmt-planning-editor">
       <form class="settings-panel"${dataOn('submit', host.action('saveItem'), '$ev')}>
         <div class="page-header">
           <h2>${esc(item.title || t('planning.item.new'))}</h2>
-          <button class="edit-delete-btn" type="button"${dataAction(host.action('deleteItem'), item.id)}>${esc(t('planning.action.delete'))}</button>
+          <button class="edit-delete-btn" type="button" aria-label="${esc(t('planning.item.deleteLabel', { name: item.title || t('planning.item.new') }))}"${dataAction(host.action('deleteItem'), item.id)}>${esc(t('planning.action.delete'))}</button>
         </div>
         <div style="display:grid;gap:var(--space-3)">
           <label>${esc(t('planning.item.kind'))}<select class="edit-input" name="kind">${options(PLANNING_KINDS, item.kind, 'planning.kind')}</select></label>
@@ -589,7 +622,7 @@ export function createPlanningWorkspace(host) {
               <input type="hidden" name="section-id" value="${esc(section.id)}">
               <label>${esc(t('planning.section.title'))}<input class="edit-input" name="section-title" required maxlength="160" value="${esc(section.title)}"></label>
               <label>${esc(t('planning.section.body'))}<textarea class="edit-input" name="section-body" maxlength="30000" rows="5">${esc(section.body)}</textarea></label>
-              <button class="edit-delete-btn" type="button"${dataAction(host.action('removeSection'), '$ev', section.id)}>${esc(t('planning.action.delete'))}</button>
+              <button class="edit-delete-btn" type="button" aria-label="${esc(t('planning.section.deleteLabel', { name: section.title || t('planning.section.title') }))}"${dataAction(host.action('removeSection'), '$ev', section.id)}>${esc(t('planning.action.delete'))}</button>
             </article>`).join('')}
           </section>
           <button class="edit-save-btn" type="submit">${esc(t('planning.action.save'))}</button>
@@ -599,12 +632,31 @@ export function createPlanningWorkspace(host) {
     </div>`;
   }
 
+  function styleHtml() {
+    return `<style>
+      .addon-dm-tools .dmt-planning-layout{display:grid;grid-template-columns:minmax(18rem,24rem) minmax(0,1fr);gap:var(--space-4);align-items:start}
+      .addon-dm-tools .dmt-planning-sidebar,.addon-dm-tools .dmt-planning-editor{display:grid;gap:var(--space-4);min-width:0}
+      .addon-dm-tools .dmt-planning-sidebar{position:sticky;top:var(--space-3)}
+      .addon-dm-tools #dm-planning-filter{margin-bottom:var(--space-3)}
+      .addon-dm-tools .dmt-folder-manager>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);cursor:pointer}
+      .addon-dm-tools .dmt-folder-manager>form{margin-top:var(--space-3)}
+      .addon-dm-tools .dmt-folder-create{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:var(--space-2)}
+      .addon-dm-tools .dmt-folder-manager .codex-link-row{display:grid;grid-template-columns:minmax(8rem,1fr) minmax(8rem,1fr) auto auto}
+      .addon-dm-tools .dmt-planning-editor label,.addon-dm-tools .dmt-planning-links label{display:grid;gap:var(--space-1);color:var(--text-muted);font-size:var(--text-sm)}
+      .addon-dm-tools .dmt-planning-links details{padding-block:var(--space-2)}
+      .addon-dm-tools .dmt-planning-links details>summary{min-height:2.75rem;color:var(--accent-gold);font-weight:700;cursor:pointer}
+      @media(max-width:1100px){.addon-dm-tools .dmt-planning-layout{grid-template-columns:1fr}.addon-dm-tools .dmt-planning-sidebar{position:static}}
+      @media(max-width:768px){.addon-dm-tools .dmt-folder-create,.addon-dm-tools .dmt-folder-manager .codex-link-row{grid-template-columns:1fr}.addon-dm-tools .dmt-planning-editor .page-header{align-items:flex-start;gap:var(--space-2)}}
+    </style>`;
+  }
+
   function render() {
     if (!host.role.isDM()) {
       return `<section class="settings-panel" role="alert">${esc(t('planning.forbidden'))}</section>`;
     }
     const item = currentItem();
     return `<main class="addon-dm-tools">
+      ${styleHtml()}
       ${host.h.breadcrumb([
         { label: t('breadcrumb.tools'), href: '#/dm' },
         { label: t('planning.page.title') },
@@ -612,8 +664,8 @@ export function createPlanningWorkspace(host) {
       <div class="page-header"><h1>${esc(t('planning.page.title'))}</h1></div>
       <p class="settings-hint">${esc(t('planning.page.description'))}</p>
       ${errorHtml()}
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:var(--space-4);align-items:start">
-        <div style="display:grid;gap:var(--space-4)">${navigationHtml()}${folderHtml()}</div>
+      <div class="dmt-planning-layout">
+        <div class="dmt-planning-sidebar">${navigationHtml()}${folderHtml()}</div>
         ${item ? editorHtml(item) : `<section class="settings-panel"><h2>${esc(t('planning.welcome.title'))}</h2><p>${esc(t('planning.welcome.body'))}</p></section>`}
       </div>
     </main>`;
@@ -622,6 +674,7 @@ export function createPlanningWorkspace(host) {
   return Object.freeze({
     render,
     selectItem,
+    filterItems,
     createItem,
     saveItem,
     addSection,

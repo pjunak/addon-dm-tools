@@ -243,7 +243,7 @@ export function createPlanningGraphPage(host, options = {}) {
             <strong>${esc(link.name)}</strong>
             <span>${esc(endpointLabel(link.source))} → ${esc(endpointLabel(link.target))}</span>
           </div>
-          <button class="edit-delete-btn" type="button"${dataAction(host.action('graphDeleteLink'), link.id)}>
+          <button class="edit-delete-btn" type="button" aria-label="${esc(t('graph.link.deleteLabel', { name: link.name }))}"${dataAction(host.action('graphDeleteLink'), link.id)}>
             ${esc(t('planning.action.delete'))}
           </button>
         </article>`).join('') : `<p class="settings-hint">${esc(t('graph.links.empty'))}</p>`}
@@ -355,7 +355,6 @@ export function createPlanningGraphPage(host, options = {}) {
       return `<section class="settings-panel" role="alert">
         <h2>${esc(t('graph.error.title'))}</h2>
         <p class="settings-hint">${esc(t('graph.error.body'))}</p>
-        ${errorCode ? `<span class="codex-badge">${esc(errorCode)}</span>` : ''}
       </section>`;
     }
     state = 'loading';
@@ -371,11 +370,21 @@ export function createPlanningGraphPage(host, options = {}) {
     return `<section class="dmt-graph-workbench">
       <div class="dmt-graph-stage">
         <div class="dmt-graph-toolbar" aria-label="${esc(t('graph.toolbar.label'))}">
-          <span>${esc(draggable ? t('graph.toolbar.dragHint') : t('graph.toolbar.readOnly'))}</span>
+          <div class="dmt-graph-toolbar-copy">
+            <span>${esc(draggable ? t('graph.toolbar.dragHint') : t('graph.toolbar.readOnly'))}</span>
+            <span>${esc(host.i18n.plural('graph.toolbar.nodes', currentGraph.nodes.length))} · ${esc(host.i18n.plural('graph.toolbar.links', currentGraph.edges.length))}</span>
+          </div>
           <div>
+            <a class="inline-create-btn" href="#/dm-plans">${esc(t('graph.action.openPlans'))}</a>
             <button class="inline-create-btn" type="button"${dataAction(host.action('graphFit'))}>
               ${esc(t('graph.action.fit'))}
             </button>
+            <button class="inline-create-btn" type="button"${dataAction(host.action('graphExpandAll'))}>
+              ${esc(t('graph.action.expandAll'))}
+            </button>
+            ${expandedItems.size ? `<button class="inline-create-btn" type="button"${dataAction(host.action('graphCollapseAll'))}>
+              ${esc(t('graph.action.collapseAll'))}
+            </button>` : ''}
             ${draggable ? `<button class="inline-create-btn" type="button"${dataAction(host.action('graphResetLayout'))}>
               ${esc(t('graph.action.resetLayout'))}
             </button>` : ''}
@@ -392,7 +401,9 @@ export function createPlanningGraphPage(host, options = {}) {
   }
 
   function listPanel(data) {
-    return `<details class="settings-panel dmt-graph-fallback">
+    const open = !host.graphs.available() || state === 'unavailable' || state === 'error'
+      || globalThis.matchMedia?.('(max-width: 768px)').matches;
+    return `<details class="settings-panel dmt-graph-fallback"${open ? ' open' : ''}>
       <summary><strong>${esc(t('graph.list.title'))}</strong></summary>
       <div class="dmt-graph-list">
         ${data.items.map(item => `<article class="codex-link-row">
@@ -425,6 +436,7 @@ export function createPlanningGraphPage(host, options = {}) {
       .addon-dm-tools .dmt-graph-stage{display:grid;grid-template-rows:auto minmax(32rem,70vh);min-width:0;background:var(--bg-dark)}
       .addon-dm-tools .dmt-graph-toolbar{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:var(--text-xs)}
       .addon-dm-tools .dmt-graph-toolbar>div{display:flex;flex-wrap:wrap;gap:var(--space-1)}
+      .addon-dm-tools .dmt-graph-toolbar .dmt-graph-toolbar-copy{display:grid;gap:2px}
       .addon-dm-tools .dmt-graph-canvas{height:100%;min-height:32rem;border:0;border-radius:0;touch-action:none}
       .addon-dm-tools .dmt-graph-inspector{overflow:auto;padding:var(--space-4);background:var(--bg-surface);border-left:1px solid var(--border-subtle)}
       .addon-dm-tools .dmt-graph-eyebrow{margin:0;color:var(--accent-gold);font-size:var(--text-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -501,6 +513,18 @@ export function createPlanningGraphPage(host, options = {}) {
     host.ui.rerender();
   }
 
+  function expandAll() {
+    for (const item of currentData?.items || []) {
+      if (item.sections?.length) expandedItems.add(item.id);
+    }
+    host.ui.rerender();
+  }
+
+  function collapseAll() {
+    expandedItems.clear();
+    host.ui.rerender();
+  }
+
   async function createLink(event) {
     event?.preventDefault();
     const meta = selectedMeta();
@@ -561,6 +585,8 @@ export function createPlanningGraphPage(host, options = {}) {
     fit,
     resetLayout,
     toggleExpand,
+    expandAll,
+    collapseAll,
     createLink,
     deleteLink,
     leave,

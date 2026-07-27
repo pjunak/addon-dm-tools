@@ -47,6 +47,11 @@ must follow [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md).
 Only an effective DM registers these surfaces. Player, anonymous, and
 DM-view-as-player payloads do not expose the collections or addon UI.
 
+The planning workspace keeps item selection and editing separate: the
+filterable folder list remains a compact navigation column, while folder
+administration is collapsed until needed. All planning and connection fields
+remain native labelled controls so the same workflow works without the graph.
+
 ## Import and graph guarantees
 
 The provider `(dm-tools, planning-json)` uses provider API 1 and planning schema

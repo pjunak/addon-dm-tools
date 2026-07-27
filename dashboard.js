@@ -4,7 +4,6 @@ export function createDashboard(host) {
   const { esc } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
   let providerStatus = 'loading';
-  let providerError = '';
   let generation = 0;
   let disposed = false;
   let lastSignature = '';
@@ -13,17 +12,15 @@ export function createDashboard(host) {
     if (disposed || !host.role.isDM()) return;
     const current = ++generation;
     providerStatus = 'loading';
-    providerError = '';
     try {
       const listed = await host.imports.listProviders();
       if (disposed || current !== generation || !host.role.isDM()) return;
       providerStatus = listed.providers.some(provider => provider.id === PROVIDER_ID)
         ? 'ready'
         : 'missing';
-    } catch (error) {
+    } catch {
       if (disposed || current !== generation || !host.role.isDM()) return;
       providerStatus = 'error';
-      providerError = error?.code || error?.message || '';
     }
     host.ui.rerender();
   }
@@ -31,7 +28,6 @@ export function createDashboard(host) {
   function leave() {
     ++generation;
     providerStatus = 'loading';
-    providerError = '';
     lastSignature = '';
   }
 
@@ -77,9 +73,7 @@ export function createDashboard(host) {
     const providerWarning = providerStatus === 'missing'
       ? `<p class="codex-warnings">${esc(t('dashboard.importMissing'))}</p>`
       : providerStatus === 'error'
-        ? `<p class="codex-warnings">${esc(t('dashboard.importError', {
-          code: providerError || t('dashboard.unknownError'),
-        }))}</p>`
+        ? `<p class="codex-warnings">${esc(t('dashboard.importError'))}</p>`
         : '';
     const graphWarning = host.graphs.available()
       ? ''
@@ -146,11 +140,11 @@ export function createDashboard(host) {
     let items;
     try {
       items = readItems();
-    } catch (error) {
+    } catch {
       return `<section class="addon-dm-tools-dashboard settings-panel" role="alert">
         <h2>${esc(t('dashboard.title'))}</h2>
         <h3>${esc(t('dashboard.error.title'))}</h3>
-        <p>${esc(t('dashboard.error.body', { code: error?.code || t('dashboard.unknownError') }))}</p>
+        <p>${esc(t('dashboard.error.body'))}</p>
         ${workflowHtml()}
       </section>`;
     }
@@ -180,7 +174,6 @@ export function createDashboard(host) {
     render,
     getState: () => ({
       providerStatus,
-      providerError,
       disposed,
       hasSignature: !!lastSignature,
     }),
