@@ -59,6 +59,13 @@ version 1. Preview is read-only. Commit uses the exact server-held plan and
 publishes at most 256 writes through one atomic host transaction. Updates
 require the current `updatedAt`; conflicts never overwrite.
 
+The same provider is registered as the restricted campaign-bundle contributor
+`(dm-tools, planning)`. A host campaign bundle can therefore create core NPCs
+or locations and DM-only planning records in one reviewed publication. Exact
+`{"$ref":"..."}` objects inside the nested planning document resolve to IDs
+reserved by the host preview; DM Tools still returns writes only for its own
+planning collections and never receives core-write authority.
+
 The graph is a projection of stored records only. A link's fixed type supports
 consistent semantics and its custom name is the visible edge label. A link to
 a named section rolls up to the parent item while collapsed and resolves to

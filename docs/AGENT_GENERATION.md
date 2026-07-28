@@ -8,6 +8,13 @@ The same records power the manual Planning Workspace, the Import Center, and
 the Planning Graph. A structure imported from an agent remains fully editable
 by the DM afterward.
 
+When planning ships inside a host campaign bundle, place this document under
+an `addonImports` entry with `addonId:"dm-tools"` and
+`contributorId:"planning"`. A core endpoint `id` may then be the exact object
+`{"$ref":"npc.local-name"}` to reference a character or location created by
+the same campaign bundle. Standalone `dm-tools-planning` files must keep using
+the concrete string IDs described below.
+
 ## Safe workflow
 
 1. Ask the DM what part of the campaign to model and which existing records may

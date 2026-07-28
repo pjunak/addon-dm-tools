@@ -87,15 +87,23 @@ async function preview(instance, value) {
 
 test('server composition registers the planning and retained legacy providers', async () => {
   const providers = [];
+  const contributors = [];
   await serverEntry.init({
     registerImportProvider(value) {
       providers.push(value);
+    },
+    registerCampaignBundleContributor(value) {
+      contributors.push(value);
     },
   });
   assert.deepEqual(providers.map(provider => provider.id), [
     'planning-json',
     'scenario-json',
   ]);
+  assert.deepEqual(contributors, [{
+    id: 'planning',
+    providerId: 'planning-json',
+  }]);
 });
 
 test('valid multi-collection preview is read-only and commits one atomic event', async () => {

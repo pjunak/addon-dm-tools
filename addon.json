@@ -11,6 +11,7 @@
       "lifecycle.dispose",
       "i18n.catalogs",
       "imports.providers",
+      "imports.bundle-contributors",
       "graphs.facade"
     ]
   },

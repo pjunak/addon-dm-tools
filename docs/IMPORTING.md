@@ -28,6 +28,33 @@ Every record declares `operation: "create" | "update"`. Updates also require
 the exact current `expectedUpdatedAt`; creates must omit it. `generatedAt`
 becomes the stored `updatedAt` for changed records.
 
+The provider also registers as the host campaign-bundle contributor
+`(dm-tools, planning)`. Its envelope is:
+
+```json
+{
+  "addonId": "dm-tools",
+  "contributorId": "planning",
+  "document": {
+    "format": "dm-tools-planning",
+    "schemaVersion": 1,
+    "generatedAt": 1785024000000,
+    "folders": [],
+    "items": [],
+    "links": []
+  }
+}
+```
+
+The nested `document` is otherwise the same schema. Before the planning
+provider runs, the host replaces any exact `{"$ref":"local.name"}` object with
+the persistent core ID reserved by that campaign preview. This is intended for
+`id` inside a `scope:"core"` link endpoint. It is not accepted by the
+standalone planning import, which continues to require a concrete string ID.
+The host validates the provider output against its existing declaration and
+journal-publishes the reviewed core and DM Tools writes together. Contributor
+code is not rerun during commit.
+
 Before provider code runs, the host rejects duplicate JSON keys, invalid
 UTF-8, prototype keys, malformed input, and configured byte, depth, string,
 node, and record limits.

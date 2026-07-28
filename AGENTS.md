@@ -59,6 +59,9 @@ tests/                       contract, provider, UI, graph, dashboard
 - Register DM-only collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
+- The planning provider is also the `planning` campaign-bundle contributor.
+  It may resolve host-reserved core references during preview, but its returned
+  operations remain confined to the three DM-only planning collections.
 - Updates use epoch-millisecond `expectedUpdatedAt`; never silently merge or
   overwrite newer records.
 - Legacy migration is copy-only. Do not delete `scenarios` without explicit
