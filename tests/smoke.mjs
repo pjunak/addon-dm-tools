@@ -38,14 +38,18 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
     { name: 'planning_items', keyed: true, access: 'dm' },
     { name: 'planning_folders', keyed: true, access: 'dm' },
     { name: 'planning_links', keyed: true, access: 'dm' },
+    { name: 'planning_flow_links', keyed: true, access: 'dm' },
+    { name: 'planning_references', keyed: true, access: 'dm' },
+    { name: 'planning_consequences', keyed: true, access: 'dm' },
+    { name: 'dm_notes', keyed: true, access: 'dm' },
     { name: 'planning_views', keyed: true, access: 'dm' },
   ]);
   assert.ok(manifest.capabilities.required.includes('collections.dm'));
   assert.ok(manifest.capabilities.required.includes('collections.transactions'));
   assert.ok(manifest.capabilities.required.includes('imports.providers'));
   assert.ok(manifest.capabilities.required.includes('i18n.catalogs'));
-  assert.ok(manifest.capabilities.required.includes('graphs.facade'));
-  assert.ok(manifest.permissions.includes('ui:graph'));
+  assert.ok(!manifest.capabilities.required.includes('graphs.facade'));
+  assert.ok(!manifest.permissions.includes('ui:graph'));
   assert.ok(manifest.permissions.includes('ui:slot:dm'));
   assert.deepEqual(manifest.locales, {
     en: 'locales/en.json',
@@ -77,35 +81,24 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
     { name: 'planning_items', keyed: true, access: 'dm' },
     { name: 'planning_folders', keyed: true, access: 'dm' },
     { name: 'planning_links', keyed: true, access: 'dm' },
+    { name: 'planning_flow_links', keyed: true, access: 'dm' },
+    { name: 'planning_references', keyed: true, access: 'dm' },
+    { name: 'planning_consequences', keyed: true, access: 'dm' },
+    { name: 'dm_notes', keyed: true, access: 'dm' },
     { name: 'planning_views', keyed: true, access: 'dm' },
   ]);
   assert.deepEqual(result.rec.routes.map(route => route.segment), [
-    'dm-import',
     'dm-plans',
-    'dm-scenarios',
+    'dm-import',
   ]);
   assert.deepEqual(result.rec.slots.map(slot => slot.slotId), ['dm:dashboard']);
   assert.equal(result.rec.sidebar[0].role, 'dm');
   assert.equal(result.rec.sidebar[1].role, 'dm');
-  assert.equal(result.rec.sidebar[2].role, 'dm');
+  assert.equal(result.rec.sidebar.length, 2);
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
   assert.ok(smokeRegistrations(result.rec).ok);
   assert.deepEqual(result.rec.i18nMissing, []);
   await disposeMockHost(result.rec);
-
-  const { host, rec } = createMockHost(manifest, {
-    isDM: true,
-    catalogs: { en, cs },
-    locale: 'en',
-    fetch: providerFetch,
-  });
-  host.registerCollection('scenarios');
-  const scenarios = host.store.collection('scenarios');
-  const saved = scenarios.save({ name: 'Reference scenario' });
-  assert.equal(scenarios.get(saved.id).name, 'Reference scenario');
-  scenarios.remove(saved.id);
-  assert.deepEqual(scenarios.list(), []);
-  assert.equal((await disposeMockHost(rec)).started, true);
 });
 
 test('effective player registration exposes no collection', async () => {
@@ -135,7 +128,7 @@ test('regional locale uses Czech and a partial translation falls back to English
     fetch: providerFetch,
   });
   assert.equal(result.ok, true, result.error);
-  const html = result.rec.routes[0].render();
+  const html = result.rec.routes.find(route => route.segment === 'dm-import').render();
   assert.match(html, /Centrum importu/);
   assert.match(html, /Preview and atomically import/);
   assert.deepEqual(result.rec.i18nMissing, []);

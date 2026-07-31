@@ -1,6 +1,5 @@
 'use strict';
 
-const { descriptor: scenarioDescriptor } = require('./scenario-provider.cjs');
 const { descriptor: planningDescriptor } = require('./planning-provider.cjs');
 
 module.exports.init = async host => {
@@ -10,5 +9,4 @@ module.exports.init = async host => {
     id: 'planning',
     providerId: 'planning-json',
   });
-  host.registerImportProvider(scenarioDescriptor());
 };

@@ -1,7 +1,7 @@
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
 import * as contract from '../planning-contract.js';
 
@@ -19,39 +19,85 @@ const generatedAt = 1785024000000;
 function document(overrides = {}) {
   return {
     format: 'dm-tools-planning',
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt,
-    folders: [{
-      id: 'arc-court',
-      schemaVersion: 1,
-      operation: 'create',
-      name: 'Court',
-      parentId: null,
-      order: 0,
-    }],
     items: [{
-      id: 'quest-sigil',
-      schemaVersion: 1,
+      id: 'plotline-dragons',
+      schemaVersion: 2,
+      operation: 'create',
+      kind: 'plotline',
+      parentId: null,
+      title: 'The Waking Dragons',
+      summary: 'Ancient dragons stir.',
+      body: '',
+      objective: 'Discover who is breaking the seals.',
+      setup: '',
+      resolution: '',
+      tags: ['dragons'],
+    }, {
+      id: 'quest-earthquake',
+      schemaVersion: 2,
       operation: 'create',
       kind: 'quest',
-      title: 'Recover the Sigil',
-      summary: 'Court investigation',
+      parentId: 'plotline-dragons',
+      title: 'Investigate the Earthquake',
+      summary: '',
       body: '',
-      folderId: 'arc-court',
-      tags: ['court'],
-      state: 'ready',
-      pinned: true,
-      sections: [{ id: 'audience', title: 'Audience with the Duke', body: '' }],
-    }],
-    links: [{
-      id: 'link-mira-audience',
-      schemaVersion: 1,
+      objective: '',
+      setup: '',
+      resolution: '',
+      tags: [],
+    }, {
+      id: 'event-tremor',
+      schemaVersion: 2,
       operation: 'create',
-      name: 'Requests a discreet investigation',
-      type: 'involves',
-      source: { scope: 'core', collection: 'characters', id: 'mira' },
-      target: { scope: 'planning', itemId: 'quest-sigil', sectionId: 'audience' },
+      kind: 'event',
+      parentId: 'plotline-dragons',
+      eventType: 'story',
+      title: 'The Earth Shakes',
+      summary: '',
+      body: '',
+      objective: '',
+      setup: '',
+      resolution: '',
+      tags: [],
+    }],
+    flowLinks: [{
+      id: 'flow-investigate',
+      schemaVersion: 2,
+      operation: 'create',
+      sourceId: 'event-tremor',
+      targetId: 'quest-earthquake',
+      kind: 'continues',
+      label: 'The tremor draws attention',
+    }],
+    references: [{
+      id: 'reference-mira',
+      schemaVersion: 2,
+      operation: 'create',
+      itemId: 'quest-earthquake',
+      name: 'Asks the party to investigate',
+      relation: 'involves',
+      target: { scope: 'core', collection: 'characters', id: 'mira' },
+      quantity: 1,
       notes: '',
+    }],
+    consequences: [{
+      id: 'consequence-town',
+      schemaVersion: 2,
+      operation: 'create',
+      anchor: { scope: 'item', itemId: 'quest-earthquake' },
+      kind: 'world',
+      title: 'The town becomes friendly',
+      body: '',
+    }],
+    notes: [{
+      id: 'note-duke',
+      schemaVersion: 2,
+      operation: 'create',
+      title: 'The duke distrusts the party',
+      body: 'Observed during play.',
+      anchorIds: ['quest-earthquake'],
     }],
     ...overrides,
   };
@@ -64,7 +110,7 @@ function harness(collections = {}) {
     capabilities: manifest.capabilities,
     permissions: manifest.permissions,
     collections: manifest.collections,
-    contentRevision: 'dm-tools-planning-test',
+    contentRevision: 'dm-tools-planning-v2-test',
   }, {
     collections,
     coreCollections: {
@@ -85,7 +131,7 @@ async function preview(instance, value) {
   return instance.manager.preview(job.id, 'mock-session');
 }
 
-test('server composition registers the planning and retained legacy providers', async () => {
+test('server composition registers only the v2 planner and its bundle contribution', async () => {
   const providers = [];
   const contributors = [];
   await serverEntry.init({
@@ -96,47 +142,38 @@ test('server composition registers the planning and retained legacy providers', 
       contributors.push(value);
     },
   });
-  assert.deepEqual(providers.map(provider => provider.id), [
-    'planning-json',
-    'scenario-json',
+  assert.deepEqual(providers.map(provider => [provider.id, provider.schemaVersion]), [
+    ['planning-json', 2],
   ]);
-  assert.deepEqual(contributors, [{
-    id: 'planning',
-    providerId: 'planning-json',
-  }]);
+  assert.deepEqual(contributors, [{ id: 'planning', providerId: 'planning-json' }]);
 });
 
-test('valid multi-collection preview is read-only and commits one atomic event', async () => {
+test('v2 preview is read-only and commits the full story structure atomically', async () => {
   const instance = harness();
   const ready = await preview(instance, document());
   assert.equal(ready.committable, true);
-  assert.equal(ready.plan.operations.length, 3);
+  assert.equal(ready.plan.operations.length, 7);
   assert.deepEqual(instance.collection('planning_items'), {});
-  assert.deepEqual(instance.collection('planning_folders'), {});
-  assert.deepEqual(instance.collection('planning_links'), {});
   assert.equal(instance.events(), 0);
 
   const result = await instance.manager.commit(ready.id, 'mock-session', ready.previewToken);
-  assert.equal(result.operationCount, 3);
-  assert.equal(instance.collection('planning_items')['quest-sigil'].updatedAt, generatedAt);
-  assert.equal(instance.collection('planning_links')['link-mira-audience'].name, 'Requests a discreet investigation');
+  assert.equal(result.operationCount, 7);
+  assert.equal(instance.collection('planning_items')['quest-earthquake'].parentId, 'plotline-dragons');
+  assert.equal(instance.collection('planning_references')['reference-mira'].quantity, 1);
+  assert.equal(instance.collection('dm_notes')['note-duke'].body, 'Observed during play.');
   assert.equal(instance.events(), 1);
   await instance.dispose();
 });
 
-test('missing core and section references block the complete import', async () => {
+test('missing ownership and campaign references block the complete import', async () => {
+  const source = document();
+  source.items[1].parentId = 'missing-plotline';
+  source.references[0].target.id = 'missing-character';
   const instance = harness();
-  const invalid = document({
-    links: [{
-      ...document().links[0],
-      source: { scope: 'core', collection: 'characters', id: 'unknown' },
-      target: { scope: 'planning', itemId: 'quest-sigil', sectionId: 'missing' },
-    }],
-  });
-  const ready = await preview(instance, invalid);
+  const ready = await preview(instance, source);
   assert.equal(ready.committable, false);
+  assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_PARENT_MISSING'));
   assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_CORE_REFERENCE_MISSING'));
-  assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_SECTION_REFERENCE_MISSING'));
   await assert.rejects(
     instance.manager.commit(ready.id, 'mock-session', ready.previewToken),
     error => error.code === 'IMPORT_PLAN_INVALID',
@@ -145,112 +182,82 @@ test('missing core and section references block the complete import', async () =
   await instance.dispose();
 });
 
-test('updates require the exact current timestamp and identical content skips', async () => {
+test('updates require the exact local timestamp', async () => {
   const local = {
-    schemaVersion: 1,
-    kind: 'quest',
-    title: 'Recover the Sigil',
-    summary: 'Old summary',
+    schemaVersion: 2,
+    kind: 'plotline',
+    parentId: null,
+    title: 'The Waking Dragons',
+    summary: 'Old',
     body: '',
-    folderId: null,
+    objective: '',
+    setup: '',
+    resolution: '',
     tags: [],
-    state: 'idea',
-    pinned: false,
-    sections: [],
     updatedAt: 100,
   };
-  const instance = harness({ planning_items: { 'quest-sigil': local } });
-  const stale = await preview(instance, document({
-    folders: [],
-    links: [],
+  const instance = harness({ planning_items: { 'plotline-dragons': local } });
+  const source = document({
     items: [{
-      id: 'quest-sigil',
-      schemaVersion: 1,
+      ...document().items[0],
       operation: 'update',
       expectedUpdatedAt: 99,
-      kind: 'quest',
-      title: 'Recover the Sigil',
       summary: 'Changed',
-      body: '',
-      folderId: null,
-      tags: [],
-      state: 'idea',
-      pinned: false,
-      sections: [],
     }],
-  }));
-  assert.equal(stale.committable, false);
-  assert.ok(stale.plan.diagnostics.some(entry => entry.code === 'PLANNING_CONFLICT'));
+    flowLinks: [],
+    references: [],
+    consequences: [],
+    notes: [],
+  });
+  const ready = await preview(instance, source);
+  assert.equal(ready.committable, false);
+  assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_CONFLICT'));
   await instance.dispose();
-
-  const updateInstance = harness({ planning_items: { 'quest-sigil': local } });
-  const ready = await preview(updateInstance, document({
-    folders: [],
-    links: [],
-    items: [{
-      id: 'quest-sigil',
-      schemaVersion: 1,
-      operation: 'update',
-      expectedUpdatedAt: 100,
-      kind: 'quest',
-      title: 'Recover the Sigil',
-      summary: 'Changed',
-      body: '',
-      folderId: null,
-      tags: [],
-      state: 'idea',
-      pinned: false,
-      sections: [],
-    }],
-  }));
-  assert.equal(ready.committable, true);
-  assert.equal(ready.plan.operations.length, 1);
-  await updateInstance.dispose();
 });
 
-test('an older dangling core reference does not block unrelated planning imports', async () => {
-  const existingItem = {
-    schemaVersion: 1,
-    kind: 'note',
-    title: 'Old note',
-    summary: '',
-    body: '',
-    folderId: null,
-    tags: [],
-    state: 'archived',
-    pinned: false,
-    sections: [],
-    updatedAt: 10,
-  };
-  const existingLink = {
-    schemaVersion: 1,
-    name: 'Former contact',
-    type: 'related',
-    source: { scope: 'core', collection: 'characters', id: 'deleted-character' },
-    target: { scope: 'planning', itemId: 'old-note' },
-    notes: '',
-    updatedAt: 10,
-  };
+test('an older dangling core reference does not block an unrelated note import', async () => {
   const instance = harness({
-    planning_items: { 'old-note': existingItem },
-    planning_links: { 'old-link': existingLink },
+    planning_items: {
+      existing: {
+        schemaVersion: 2,
+        kind: 'event',
+        eventType: 'story',
+        parentId: null,
+        title: 'Existing event',
+        summary: '',
+        body: '',
+        objective: '',
+        setup: '',
+        resolution: '',
+        tags: [],
+        updatedAt: 10,
+      },
+    },
+    planning_references: {
+      old: {
+        schemaVersion: 2,
+        itemId: 'existing',
+        name: 'Former contact',
+        relation: 'related',
+        target: { scope: 'core', collection: 'characters', id: 'deleted-character' },
+        quantity: 1,
+        notes: '',
+        updatedAt: 10,
+      },
+    },
   });
   const ready = await preview(instance, document({
-    folders: [],
-    links: [],
-    items: [{
-      id: 'new-note',
-      schemaVersion: 1,
+    items: [],
+    flowLinks: [],
+    references: [],
+    consequences: [],
+    notes: [{
+      id: 'note-new',
+      schemaVersion: 2,
       operation: 'create',
-      kind: 'note',
-      title: 'New note',
-      summary: '',
+      title: 'New observation',
       body: '',
-      folderId: null,
-      tags: [],
-      state: 'idea',
-      pinned: false,
-      sections: [],
+      anchorIds: ['existing'],
     }],
   }));
   assert.equal(ready.committable, true);

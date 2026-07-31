@@ -1,7 +1,7 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "apiVersion": 2,
   "hostVersion": ">=1.0.0",
   "capabilities": {
@@ -11,8 +11,7 @@
       "lifecycle.dispose",
       "i18n.catalogs",
       "imports.providers",
-      "imports.bundle-contributors",
-      "graphs.facade"
+      "imports.bundle-contributors"
     ]
   },
   "entry": "entry.js",
@@ -28,7 +27,6 @@
     "ui:route",
     "ui:sidebar",
     "ui:action",
-    "ui:graph",
     "ui:slot:dm",
     "data:read:characters",
     "data:read:factions",
@@ -59,6 +57,26 @@
       "access": "dm"
     },
     {
+      "name": "planning_flow_links",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
+      "name": "planning_references",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
+      "name": "planning_consequences",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
+      "name": "dm_notes",
+      "keyed": true,
+      "access": "dm"
+    },
+    {
       "name": "planning_views",
       "keyed": true,
       "access": "dm"
@@ -67,8 +85,8 @@
   "tests": {
     "client": [
       "tests/smoke.mjs",
-      "tests/planning-graph.mjs"
+      "tests/story-planner.mjs"
     ]
   },
-  "summary": "DM-only planning and world-building workspace with reviewed bulk imports, named semantic links, and an interactive graph."
+  "summary": "DM-only nested story planner with reviewed bulk imports, named references, marginalia, consequences, and an interactive canvas."
 }

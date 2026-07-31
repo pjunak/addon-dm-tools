@@ -1,35 +1,48 @@
 'use strict';
 
 const PROVIDER_ID = 'planning-json';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const ADDON_ID = 'dm-tools';
 const ROOT_FIELDS = new Set([
   'format',
   'schemaVersion',
   'generatedAt',
-  'folders',
   'items',
-  'links',
+  'flowLinks',
+  'references',
+  'consequences',
+  'notes',
 ]);
 const CONTROL_FIELDS = new Set(['operation', 'expectedUpdatedAt']);
 const RECORD_FIELDS = Object.freeze({
-  folders: new Set([
-    'id', 'schemaVersion', 'name', 'parentId', 'order',
+  items: new Set([
+    'id', 'schemaVersion', 'kind', 'parentId', 'title', 'summary', 'body',
+    'objective', 'setup', 'resolution', 'eventType', 'branchType', 'tags',
     'operation', 'expectedUpdatedAt',
   ]),
-  items: new Set([
-    'id', 'schemaVersion', 'kind', 'title', 'summary', 'body', 'folderId',
-    'tags', 'state', 'pinned', 'sections', 'operation', 'expectedUpdatedAt',
+  flowLinks: new Set([
+    'id', 'schemaVersion', 'sourceId', 'targetId', 'kind', 'label',
+    'operation', 'expectedUpdatedAt',
   ]),
-  links: new Set([
-    'id', 'schemaVersion', 'name', 'type', 'source', 'target', 'notes',
+  references: new Set([
+    'id', 'schemaVersion', 'itemId', 'name', 'relation', 'target', 'quantity',
+    'notes', 'operation', 'expectedUpdatedAt',
+  ]),
+  consequences: new Set([
+    'id', 'schemaVersion', 'anchor', 'kind', 'title', 'body', 'target',
+    'operation', 'expectedUpdatedAt',
+  ]),
+  notes: new Set([
+    'id', 'schemaVersion', 'title', 'body', 'anchorIds',
     'operation', 'expectedUpdatedAt',
   ]),
 });
 const TARGETS = Object.freeze({
-  folders: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_folders' }),
   items: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_items' }),
-  links: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_links' }),
+  flowLinks: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_flow_links' }),
+  references: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_references' }),
+  consequences: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_consequences' }),
+  notes: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'dm_notes' }),
 });
 const CORE_TARGETS = Object.freeze([
   'characters',
@@ -53,9 +66,7 @@ function addDiagnostic(diagnostics, entry) {
 }
 
 function entriesOf(snapshot) {
-  if (Array.isArray(snapshot)) {
-    return snapshot.map(record => [record?.id, record]);
-  }
+  if (Array.isArray(snapshot)) return snapshot.map(record => [record?.id, record]);
   if (!isObject(snapshot)) return [];
   return Object.entries(snapshot).map(([id, value]) => [
     id,
@@ -68,6 +79,12 @@ function withoutControls(record, generatedAt) {
     ...Object.entries(record).filter(([field]) => !CONTROL_FIELDS.has(field)),
     ['updatedAt', generatedAt],
   ]);
+}
+
+function withoutId(record) {
+  const value = { ...record };
+  delete value.id;
+  return value;
 }
 
 function comparable(record) {
@@ -262,12 +279,6 @@ function reconcile({
   }
 }
 
-function withoutId(record) {
-  const value = { ...record };
-  delete value.id;
-  return value;
-}
-
 function coreIds(context) {
   return Object.fromEntries(CORE_TARGETS.map(target => {
     const snapshot = context.read(target);
@@ -287,8 +298,7 @@ function summaryDiagnostics(diagnostics, counts) {
     skip: 'skipped',
   };
   for (const [kind, count] of Object.entries(counts)) {
-    if (kind === 'conflict') continue;
-    if (!count) continue;
+    if (kind === 'conflict' || !count) continue;
     addDiagnostic(diagnostics, diagnostic(
       'info',
       `PLANNING_${kind.toUpperCase()}`,
@@ -298,12 +308,13 @@ function summaryDiagnostics(diagnostics, counts) {
 }
 
 function descriptor(contract) {
-  const {
-    normalizePlanningItem,
-    normalizePlanningFolder,
-    normalizePlanningLink,
-    validatePlanningDataset,
-  } = contract;
+  const normalizers = {
+    items: contract.normalizePlanningItem,
+    flowLinks: contract.normalizePlanningFlow,
+    references: contract.normalizePlanningReference,
+    consequences: contract.normalizePlanningConsequence,
+    notes: contract.normalizeDmNote,
+  };
 
   async function preview(input, context) {
     const diagnostics = [];
@@ -356,98 +367,53 @@ function descriptor(contract) {
       ));
     }
 
-    const folders = normalizeStored(
-      context.read(TARGETS.folders),
-      normalizePlanningFolder,
-      'folders',
-      diagnostics,
-    );
-    const items = normalizeStored(
-      context.read(TARGETS.items),
-      normalizePlanningItem,
-      'items',
-      diagnostics,
-    );
-    const links = normalizeStored(
-      context.read(TARGETS.links),
-      normalizePlanningLink,
-      'links',
-      diagnostics,
-    );
+    const local = Object.fromEntries(Object.entries(normalizers).map(([label, normalize]) => [
+      label,
+      normalizeStored(context.read(TARGETS[label]), normalize, label, diagnostics),
+    ]));
     const generatedAt = Number.isSafeInteger(source.generatedAt) && source.generatedAt >= 0
       ? source.generatedAt
       : 0;
-    const incoming = {
-      folders: normalizeIncoming({
-        records: source.folders,
-        label: 'folders',
+    const incoming = Object.fromEntries(Object.entries(normalizers).map(([label, normalize]) => [
+      label,
+      normalizeIncoming({
+        records: source[label],
+        label,
         generatedAt,
-        normalize: normalizePlanningFolder,
+        normalize,
         diagnostics,
       }),
-      items: normalizeIncoming({
-        records: source.items,
-        label: 'items',
-        generatedAt,
-        normalize: normalizePlanningItem,
-        diagnostics,
-      }),
-      links: normalizeIncoming({
-        records: source.links,
-        label: 'links',
-        generatedAt,
-        normalize: normalizePlanningLink,
-        diagnostics,
-      }),
-    };
+    ]));
     const counts = { create: 0, update: 0, skip: 0, conflict: 0 };
-    reconcile({
-      incoming: incoming.folders,
-      local: folders,
-      target: TARGETS.folders,
-      diagnostics,
-      operations,
-      counts,
-    });
-    reconcile({
-      incoming: incoming.items,
-      local: items,
-      target: TARGETS.items,
-      diagnostics,
-      operations,
-      counts,
-    });
-    reconcile({
-      incoming: incoming.links,
-      local: links,
-      target: TARGETS.links,
-      diagnostics,
-      operations,
-      counts,
-    });
+    for (const label of Object.keys(normalizers)) {
+      reconcile({
+        incoming: incoming[label],
+        local: local[label],
+        target: TARGETS[label],
+        diagnostics,
+        operations,
+        counts,
+      });
+    }
 
-    const candidate = {
-      folders: [...folders.byId.values()],
-      items: [...items.byId.values()],
-      links: [...links.byId.values()],
-    };
-    validatePlanningDataset(candidate).forEach(error => addDiagnostic(diagnostics, diagnostic(
-      'error',
-      error.code,
-      error.message,
-      error.path,
-    )));
-    validatePlanningDataset({
-      folders: candidate.folders,
-      items: candidate.items,
-      links: incoming.links.map(record => record.value),
+    const candidate = Object.fromEntries(Object.keys(normalizers).map(label => [
+      label,
+      [...local[label].byId.values()],
+    ]));
+    contract.validatePlanningDataset(candidate).forEach(error => addDiagnostic(
+      diagnostics,
+      diagnostic('error', error.code, error.message, error.path),
+    ));
+    contract.validatePlanningDataset({
+      ...candidate,
+      references: incoming.references.map(record => record.value),
+      consequences: incoming.consequences.map(record => record.value),
+      notes: incoming.notes.map(record => record.value),
       coreIds: coreIds(context),
-    }).forEach(error => addDiagnostic(diagnostics, diagnostic(
-      'error',
-      error.code,
-      error.message,
-      error.path,
-    )));
+    }).forEach(error => addDiagnostic(
+      diagnostics,
+      diagnostic('error', error.code, error.message, error.path),
+    ));
     if (operations.length > 256) {
       operations.length = 0;
       addDiagnostic(diagnostics, diagnostic(

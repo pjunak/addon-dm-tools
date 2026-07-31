@@ -1,424 +1,556 @@
-# Generating Campaign Plans with an AI Agent
+# Agent guide: generating DM Tools plans
 
-Use this guide when an AI assistant generates a complete or partial campaign
-planning structure for DM Tools. The output is a reviewed import document, not
-an instruction to edit campaign files directly.
+This is the authoritative guide for a person or LLM producing a reviewed
+`dm-tools-planning` document. The format is strict. Do not invent fields,
+workflow state, session tracking, or implied links.
 
-The same records power the manual Planning Workspace, the Import Center, and
-the Planning Graph. A structure imported from an agent remains fully editable
-by the DM afterward.
+## Purpose
 
-When planning ships inside a host campaign bundle, place this document under
-an `addonImports` entry with `addonId:"dm-tools"` and
-`contributorId:"planning"`. A core endpoint `id` may then be the exact object
-`{"$ref":"npc.local-name"}` to reference a character or location created by
-the same campaign bundle. Standalone `dm-tools-planning` files must keep using
-the concrete string IDs described below.
+Generate a forward-looking D&D story plan that a DM can inspect and modify:
 
-## Safe workflow
+- nested plotlines and quests;
+- story events, encounters, and puzzles;
+- explicit decisions, conditions, and random gates;
+- stateless story flow;
+- named links to NPCs, locations, factions, mysteries, artifacts, core events,
+  monsters, rules, and optional-addon records;
+- planned consequences;
+- separate DM marginalia for facts learned at the table.
 
-1. Ask the DM what part of the campaign to model and which existing records may
-   be referenced.
-2. Obtain the current planning ids and `updatedAt` values before proposing
-   updates. Obtain real core entity ids before linking characters, factions,
-   locations, mysteries, artifacts, or events.
-3. Draft folders, then planning items and their named sections, then links.
-4. Validate every reference against the final draft.
-5. Split changes into ordered documents of at most 256 changed records each.
-6. Give the DM the JSON file. The DM uploads it to the Import Center, reviews
-   the exact writes and diagnostics, and explicitly confirms the atomic commit.
+Do not generate:
 
-Never write into `data/`, addon collection files, backups, or transaction
-journals. Never guess an existing record id. If the necessary inventory is not
-available, leave that link out and list it as unresolved for the DM.
+- session scripts or assumed session boundaries;
+- current, unlocked, active, chosen, completed, failed, or resolved state;
+- automatic campaign mutations;
+- inferred links merely because two records mention the same subject;
+- canvas positions or any `planning_views` data;
+- duplicate copies of core or addon records.
 
-## Document envelope
+## Generation workflow
+
+1. Gather the campaign premise, intended tone, known people/places/factions,
+   optional source addons, and the DM’s desired level of detail.
+2. Identify ownership before flow:
+   - use plotlines for broad campaign-scale structures;
+   - use quests for concrete goals and arbitrarily nested subquests;
+   - use events and branches only as leaves.
+3. Assign stable lowercase IDs before writing references.
+4. Draft items in parent-before-child order.
+5. Add only explicit flow links. Prefer links between siblings on the same
+   canvas; cross-scope flow is supported when genuinely needed.
+6. Add named references with fallback labels for optional-addon records.
+7. Add intended consequences as annotations, not state changes.
+8. Put retrospective facts in `notes`, not in the planning item body.
+9. Validate every endpoint and anchor locally.
+10. Split the result into ordered batches when more than 256 records would
+    change. Import parent items before records that anchor to them.
+
+## Root document
+
+Every array is required even when empty.
 
 ```json
 {
   "format": "dm-tools-planning",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": 1785024000000,
-  "folders": [],
   "items": [],
-  "links": []
+  "flowLinks": [],
+  "references": [],
+  "consequences": [],
+  "notes": []
 }
 ```
 
-- `generatedAt` is the generation time as a non-negative Unix epoch integer in
-  milliseconds. It becomes `updatedAt` for every changed record.
-- All three collection arrays are required, even when empty.
-- Unknown fields are rejected.
-- One preview may contain no more than 256 writes and 2 MiB of operation data.
-- A preview never changes data. The commit applies its exact stored operations
-  atomically; provider code is not run again during commit.
+`generatedAt` is a non-negative epoch-millisecond integer. It becomes the
+stored `updatedAt` of every changed record.
 
-## Create and update control fields
-
-Every folder, item, and link has an import-only `operation`.
-
-For a new record:
+Every record includes:
 
 ```json
 {
-  "id": "quest-stolen-sigil",
   "operation": "create"
 }
 ```
 
-For an existing record:
+or:
 
 ```json
 {
-  "id": "quest-stolen-sigil",
   "operation": "update",
-  "expectedUpdatedAt": 1784937600000
+  "expectedUpdatedAt": 1785000000000
 }
 ```
 
-`expectedUpdatedAt` must exactly match the current stored record. It is
-required for `update` and forbidden for `create`. A mismatch blocks the entire
-commit instead of overwriting newer work. An identical record is skipped even
-when the requested operation would otherwise write it.
-For a changed update, `generatedAt` must also be later than
-`expectedUpdatedAt`, so record timestamps remain monotonic.
+Creates must omit `expectedUpdatedAt`. Updates must copy it exactly from the
+current exported record. Never guess a revision.
 
-Imports do not delete records. Deletion remains an explicit manual action.
+## IDs
 
-## Identifiers
+All DM Tools ids:
 
-Planning item and folder ids:
-
-- 1–120 characters;
-- start with a lowercase letter or digit;
+- contain 1–120 characters;
+- start with a lowercase ASCII letter or digit;
 - then use lowercase letters, digits, `.`, `_`, or `-`;
-- remain stable after creation.
+- must not be `__proto__`, `prototype`, or `constructor`;
+- remain stable across updates.
 
-Section ids use the same characters and are limited to 80 characters. They
-need to be unique only inside their planning item, but should still describe
-their purpose, such as `audience-with-duke` or `vault-confrontation`.
+Use semantic ids such as:
 
-Prefer descriptive ids over sequential ids. Do not rename an id during an
-update; create-and-delete is not supported by the import format.
-
-## Folders
-
-Folders organize navigation. They do not imply story dependency, chronology,
-or graph relationships.
-
-```json
-{
-  "id": "arc-glass-crown",
-  "schemaVersion": 1,
-  "operation": "create",
-  "name": "The Glass Crown",
-  "parentId": null,
-  "order": 0
-}
+```text
+plotline-waking-dragons
+quest-investigate-earthquake
+event-cultist-ambush
+branch-free-the-prisoner
+flow-ambush-to-prisoner
+reference-ambush-cultists
+consequence-town-friendly
+note-duke-insulted
 ```
-
-| Field | Contract |
-|---|---|
-| `name` | Required, 1–160 characters. |
-| `parentId` | Existing folder id or `null`. |
-| `order` | Integer from 0 to 1,000,000. |
-
-Folder parents must exist in the local data or the same import. Cycles are
-rejected.
 
 ## Planning items
 
-```json
-{
-  "id": "quest-stolen-sigil",
-  "schemaVersion": 1,
-  "operation": "create",
-  "kind": "quest",
-  "title": "Recover the Stolen Sigil",
-  "summary": "The duke's seal was taken before the peace summit.",
-  "body": "The thief intends to expose the duke, not sell the seal.",
-  "folderId": "arc-glass-crown",
-  "tags": ["court", "investigation"],
-  "state": "ready",
-  "pinned": true,
-  "sections": [
-    {
-      "id": "audience-with-duke",
-      "title": "Audience with the Duke",
-      "body": "The duke conceals why the sigil can open the old vault."
-    },
-    {
-      "id": "vault-confrontation",
-      "title": "Vault Confrontation",
-      "body": "The opposition changes if the party publicly accused the duke."
-    }
-  ]
-}
-```
-
-### Item kinds
-
-| Kind | Use it for |
-|---|---|
-| `thread` | A broad plot pressure or evolving world-level concern. |
-| `quest` | A player-facing objective with meaningful stages or choices. |
-| `scenario` | A situation the DM can introduce without assuming a fixed player response. |
-| `encounter` | A prepared social, exploration, puzzle, hazard, or combat setup. |
-| `note` | Reusable world-building material that benefits from links and graph placement. |
-
-Do not create a session record merely because preparation happens between
-sessions. Do not model routine retrospective notes, attendance, or automatic
-quest progress.
-
-### Item fields
+Common fields:
 
 | Field | Contract |
 |---|---|
+| `id` | Stable DM Tools id. |
+| `schemaVersion` | Exactly `2`. |
+| `operation` | `create` or `update`. |
+| `expectedUpdatedAt` | Required only for updates. |
+| `kind` | `plotline`, `quest`, `event`, or `branch`. |
+| `parentId` | Owning plotline/quest id, or `null` for campaign root. |
 | `title` | Required, 1–160 characters. |
-| `summary` | Plain text, at most 2,000 characters. |
-| `body` | Main planning notes, at most 80,000 characters. |
-| `folderId` | Existing folder id or `null`. |
+| `summary` | Concise canvas text, at most 2,000 characters. |
+| `body` | Full planning prose, at most 80,000 characters. |
+| `objective` | Intended goal or dramatic purpose, at most 10,000 characters. |
+| `setup` | Type-specific preparation, at most 30,000 characters. |
+| `resolution` | Intended result/solution, at most 30,000 characters. |
 | `tags` | Up to 40 unique strings, each at most 60 characters. |
-| `state` | `idea`, `ready`, `active`, `resolved`, or `archived`. |
-| `pinned` | Boolean; use sparingly for dashboard visibility. |
-| `sections` | Up to 80 stable named sections. |
 
-Each section has exactly `id`, `title`, and `body`. Its title is required and
-limited to 160 characters; its body is limited to 30,000 characters.
-
-Use sections when something needs its own incoming or outgoing link. Good
-sections include quest stages, possible revelations, encounter beats, a
-specific location within a scenario, or distinct factions in a conflict.
-Avoid turning every paragraph into a section.
-
-## Named links
-
-A link combines a fixed semantic `type` with a specific human-readable `name`.
-The type supports filtering and consistent graph behavior. The name explains
-the actual campaign connection and is always shown on the graph edge.
+Plotlines and quests omit `eventType` and `branchType`.
 
 ```json
 {
-  "id": "link-mira-sigil-audience",
-  "schemaVersion": 1,
+  "id": "plotline-waking-dragons",
+  "schemaVersion": 2,
   "operation": "create",
-  "name": "Requests a discreet investigation",
-  "type": "involves",
-  "source": {
-    "scope": "core",
-    "collection": "characters",
-    "id": "mira-vel"
-  },
-  "target": {
-    "scope": "planning",
-    "itemId": "quest-stolen-sigil",
-    "sectionId": "audience-with-duke"
-  },
-  "notes": "Mira refuses to discuss the vault in front of the court."
+  "kind": "plotline",
+  "parentId": null,
+  "title": "The Waking Dragons",
+  "summary": "Ancient dragons wake as forgotten seals fail.",
+  "body": "The awakenings are symptoms of a coordinated attempt to unmake the old compact.",
+  "objective": "Let the party discover the common cause behind apparently separate disasters.",
+  "setup": "",
+  "resolution": "",
+  "tags": ["dragons", "main plot"]
 }
 ```
 
-When the quest is collapsed, this edge connects Mira to the quest node. When
-the quest is expanded, it connects Mira to the exact `Audience with the Duke`
-section node. The edge name remains visible in both views.
+### Ownership
 
-Allowed relation types:
+The campaign root may own any item. A plotline or quest may own:
 
-| Type | Meaning |
-|---|---|
-| `related` | Neutral association when no stronger meaning applies. |
-| `involves` | The source participates in or is directly part of the target. |
-| `supports` | The source helps, reinforces, or makes the target more likely. |
-| `opposes` | The source obstructs, conflicts with, or threatens the target. |
-| `reveals` | The source exposes information represented by the target. |
-| `requires` | The source depends on the target. Direction matters. |
+- nested plotlines;
+- quests and nested quests;
+- events;
+- branches.
 
-Do not encode the custom edge name by inventing a new relation type.
+Events and branches may not own children. Ownership must be acyclic.
 
-### Planning endpoints
+Use ownership for containment, never to say “happens next.” Use a flow link for
+sequence. A quest can be both a self-contained plan and a child of a larger
+plotline.
 
-Whole item:
+### Event types
 
-```json
-{ "scope": "planning", "itemId": "quest-stolen-sigil" }
-```
+An event requires one `eventType`:
 
-Specific section:
+- `story` — a planned beat that needs no specialized screen;
+- `encounter` — a scene with participants, opposition, terrain, and potential
+  future combat handling;
+- `puzzle` — a challenge with presentation, clues, solution, and failure paths.
 
 ```json
 {
-  "scope": "planning",
-  "itemId": "quest-stolen-sigil",
-  "sectionId": "vault-confrontation"
+  "id": "event-cultist-ambush",
+  "schemaVersion": 2,
+  "operation": "create",
+  "kind": "event",
+  "parentId": "quest-investigate-earthquake",
+  "eventType": "encounter",
+  "title": "Cultist Ambush at the Broken Bridge",
+  "summary": "Cultists try to recover the seal fragment before the party crosses.",
+  "body": "The attackers value the fragment more than victory and retreat if it is secured.",
+  "objective": "Reveal that an organized group expected the earthquake.",
+  "setup": "Narrow bridge, unstable masonry, river thirty feet below.",
+  "resolution": "A captured cultist carries a route to the ruined observatory.",
+  "tags": ["cult", "bridge"]
 }
 ```
 
-The item and section must exist locally or in the same import.
+For an encounter, put statblocks and present NPCs in `references`; use
+`quantity` for repeated monsters. Do not embed copied statblocks in prose.
 
-### Core entity endpoints
+For a puzzle, use:
+
+- `objective` for its purpose in the story;
+- `setup` for presentation, clues, and usable hints;
+- `resolution` for solution, alternate solutions, and consequences of failure.
+
+### Branch types
+
+A branch requires one `branchType`:
+
+- `decision` — the party or an NPC chooses;
+- `condition` — a world or meta condition determines the route;
+- `random` — a roll or random table result determines the route.
+
+```json
+{
+  "id": "branch-free-the-prisoner",
+  "schemaVersion": 2,
+  "operation": "create",
+  "kind": "branch",
+  "parentId": "quest-investigate-earthquake",
+  "branchType": "decision",
+  "title": "What happens to the captured cultist?",
+  "summary": "The party may release, question, or hand over the prisoner.",
+  "body": "",
+  "objective": "Make the cost of choosing allies explicit.",
+  "setup": "",
+  "resolution": "",
+  "tags": []
+}
+```
+
+A condition gate can represent meta input such as “the group takes a long rest
+in the cursed forest” or “the d100 result is 01–05.” A normal in-world
+occurrence such as an earthquake remains an event, not a special trigger type.
+
+Branches store possible routes only. Never record which option was selected.
+
+## Flow links
+
+Flow is directed and acyclic.
+
+| Field | Contract |
+|---|---|
+| `id` | Stable id. |
+| `schemaVersion` | Exactly `2`. |
+| `sourceId` | Existing planning item id. |
+| `targetId` | Different existing planning item id. |
+| `kind` | `continues` or `option`. |
+| `label` | Optional visible line label, at most 200 characters. |
+
+`option` must originate at a `branch` item. Use its label for the choice,
+condition, or random result.
+
+```json
+{
+  "id": "flow-prisoner-to-observatory",
+  "schemaVersion": 2,
+  "operation": "create",
+  "sourceId": "branch-free-the-prisoner",
+  "targetId": "quest-ruined-observatory",
+  "kind": "option",
+  "label": "Question the prisoner"
+}
+```
+
+Prefer sibling-to-sibling links because they are directly editable on one
+canvas. Cross-scope links are legal and roll up to the visible owning card.
+Do not add an edge just because ownership already implies containment.
+
+## Named references
+
+A reference belongs to one planning item and names its semantic relationship to
+a target.
+
+| Field | Contract |
+|---|---|
+| `itemId` | Existing planning item id. |
+| `name` | Descriptive relationship, 1–200 characters. |
+| `relation` | One allowed relation below. |
+| `target` | Planning, core, or optional-addon target. |
+| `quantity` | Integer 1–1,000; default intent is 1. |
+| `notes` | Optional details, at most 2,000 characters. |
+
+Relations:
+
+```text
+related
+involves
+features
+located-at
+opposes
+supports
+reveals
+requires
+rewards
+```
+
+Core target:
 
 ```json
 {
   "scope": "core",
   "collection": "characters",
-  "id": "mira-vel"
+  "id": "npc-mira"
 }
 ```
 
-`collection` is one of:
+Allowed core collections are `characters`, `factions`, `locations`,
+`mysteries`, `artifacts`, and `events`.
 
-- `characters`
-- `factions`
-- `locations`
-- `mysteries`
-- `artifacts`
-- `events`
-
-The id must refer to a real campaign record. An unresolved core reference
-blocks the import.
-
-### External addon endpoints
+Optional-addon target:
 
 ```json
 {
   "scope": "external",
-  "addonId": "future-homebrew",
-  "kind": "rule",
-  "id": "stress-check",
-  "label": "Stress Check"
+  "addonId": "dnd55e-compendium",
+  "kind": "monster",
+  "id": "cult-fanatic",
+  "label": "Cult Fanatic"
 }
 ```
 
-External endpoints are intentionally loose so independent addons can remain
-optional. DM Tools stores the identity and fallback label but does not require
-or query the other addon. The graph remains useful when that addon is absent.
+The fallback `label` is mandatory so the plan remains readable when that addon
+is disabled or absent.
 
-## Complete minimal example
+Planning target:
 
 ```json
 {
-  "format": "dm-tools-planning",
-  "schemaVersion": 1,
-  "generatedAt": 1785024000000,
-  "folders": [
-    {
-      "id": "arc-glass-crown",
-      "schemaVersion": 1,
-      "operation": "create",
-      "name": "The Glass Crown",
-      "parentId": null,
-      "order": 0
-    }
-  ],
-  "items": [
-    {
-      "id": "quest-stolen-sigil",
-      "schemaVersion": 1,
-      "operation": "create",
-      "kind": "quest",
-      "title": "Recover the Stolen Sigil",
-      "summary": "The duke's seal was taken before the peace summit.",
-      "body": "Prepare motives and pressures, not a mandatory sequence.",
-      "folderId": "arc-glass-crown",
-      "tags": ["court", "investigation"],
-      "state": "ready",
-      "pinned": true,
-      "sections": [
-        {
-          "id": "audience-with-duke",
-          "title": "Audience with the Duke",
-          "body": "Mira requests discretion."
-        }
-      ]
-    }
-  ],
-  "links": [
-    {
-      "id": "link-mira-sigil-audience",
-      "schemaVersion": 1,
-      "operation": "create",
-      "name": "Requests a discreet investigation",
-      "type": "involves",
-      "source": {
-        "scope": "core",
-        "collection": "characters",
-        "id": "mira-vel"
-      },
-      "target": {
-        "scope": "planning",
-        "itemId": "quest-stolen-sigil",
-        "sectionId": "audience-with-duke"
-      },
-      "notes": ""
-    }
+  "scope": "planning",
+  "itemId": "quest-ruined-observatory"
+}
+```
+
+Use a planning target for a named thematic relationship, not chronology.
+
+Complete encounter participant:
+
+```json
+{
+  "id": "reference-ambush-cultists",
+  "schemaVersion": 2,
+  "operation": "create",
+  "itemId": "event-cultist-ambush",
+  "name": "Attacks from both ends of the bridge",
+  "relation": "opposes",
+  "target": {
+    "scope": "external",
+    "addonId": "dnd55e-compendium",
+    "kind": "monster",
+    "id": "cult-fanatic",
+    "label": "Cult Fanatic"
+  },
+  "quantity": 4,
+  "notes": "One carries the seal fragment."
+}
+```
+
+Do not invent core ids. Ask for them, use an export, or use campaign-bundle
+`$ref` resolution.
+
+## Planned consequences
+
+A consequence is an annotation, never applied state.
+
+| Field | Contract |
+|---|---|
+| `anchor` | `{"scope":"item","itemId":"..."}` or `{"scope":"flow","flowId":"..."}`. |
+| `kind` | `world`, `reward`, `information`, or `complication`. |
+| `title` | Required concise result, at most 200 characters. |
+| `body` | Optional detail, at most 10,000 characters. |
+| `target` | Optional planning/core/external target using the reference shape. |
+
+```json
+{
+  "id": "consequence-town-friendly",
+  "schemaVersion": 2,
+  "operation": "create",
+  "anchor": {
+    "scope": "item",
+    "itemId": "quest-investigate-earthquake"
+  },
+  "kind": "world",
+  "title": "The town treats the party as trusted allies",
+  "body": "Local officials share records and offer secure lodging."
+}
+```
+
+If the result needs its own incoming/outgoing story flow, create an event
+instead of overloading a consequence.
+
+## DM marginalia
+
+Marginalia is retrospective or table-derived information kept separate from
+the plan. A note may link to multiple planning items or none.
+
+```json
+{
+  "id": "note-duke-insulted",
+  "schemaVersion": 2,
+  "operation": "create",
+  "title": "The party publicly insulted Duke Ren",
+  "body": "The duke remained polite, but his steward ended the audience early.",
+  "anchorIds": [
+    "plotline-court",
+    "quest-secure-dukes-support"
   ]
 }
 ```
 
-Replace `mira-vel` with an actual character id from the target campaign.
+Good marginalia:
 
-## Large structures and ordered batches
+- the party angered an NPC;
+- somebody was killed unexpectedly;
+- an improvised promise became important;
+- a fact the DM wants visible next to several planned items.
 
-One atomic import can write at most 256 records across folders, items, and
-links. For a larger structure:
+Do not move predictable setup, intended outcomes, or encounter tactics into
+marginalia.
 
-1. Batch 1 creates parent folders and independent items.
-2. Later batches create child folders and additional items.
-3. Final batches create links after all their planning endpoints exist.
+## Complete example
 
-Each batch must be valid against the data that already exists before that
-batch. Do not split a newly created item and a link to that item into the wrong
-order. A failed batch changes nothing; previously committed batches remain.
+```json
+{
+  "format": "dm-tools-planning",
+  "schemaVersion": 2,
+  "generatedAt": 1785024000000,
+  "items": [
+    {
+      "id": "plotline-waking-dragons",
+      "schemaVersion": 2,
+      "operation": "create",
+      "kind": "plotline",
+      "parentId": null,
+      "title": "The Waking Dragons",
+      "summary": "Ancient dragons wake as forgotten seals fail.",
+      "body": "",
+      "objective": "Reveal the common cause behind regional disasters.",
+      "setup": "",
+      "resolution": "",
+      "tags": ["dragons"]
+    },
+    {
+      "id": "event-earthquake",
+      "schemaVersion": 2,
+      "operation": "create",
+      "kind": "event",
+      "parentId": "plotline-waking-dragons",
+      "eventType": "story",
+      "title": "The Earth Shakes",
+      "summary": "A seal breaks as the dragon stirs.",
+      "body": "",
+      "objective": "Make the awakening impossible to ignore.",
+      "setup": "",
+      "resolution": "",
+      "tags": []
+    },
+    {
+      "id": "quest-investigate-earthquake",
+      "schemaVersion": 2,
+      "operation": "create",
+      "kind": "quest",
+      "parentId": "plotline-waking-dragons",
+      "title": "Investigate the Earthquake",
+      "summary": "Trace the tremor to the ruined observatory.",
+      "body": "",
+      "objective": "Connect the disaster to deliberate sabotage.",
+      "setup": "",
+      "resolution": "",
+      "tags": []
+    }
+  ],
+  "flowLinks": [
+    {
+      "id": "flow-earthquake-investigation",
+      "schemaVersion": 2,
+      "operation": "create",
+      "sourceId": "event-earthquake",
+      "targetId": "quest-investigate-earthquake",
+      "kind": "continues",
+      "label": "The town asks for help"
+    }
+  ],
+  "references": [],
+  "consequences": [
+    {
+      "id": "consequence-town-trust",
+      "schemaVersion": 2,
+      "operation": "create",
+      "anchor": {
+        "scope": "item",
+        "itemId": "quest-investigate-earthquake"
+      },
+      "kind": "world",
+      "title": "The town trusts the party",
+      "body": ""
+    }
+  ],
+  "notes": []
+}
+```
 
-Prefer coherent batches over filling the maximum mechanically. Tell the DM the
-required order and what each batch adds.
+## Campaign-bundle references
 
-## Generation quality rules
+Inside the host campaign-bundle importer only, a core target id may be an exact
+reference object:
 
-- Model possibilities, pressures, NPC motives, encounter setups, and world
-  relationships. Do not prescribe the players' path through them.
-- Keep historical/session bookkeeping minimal unless the DM specifically asks
-  for it.
-- Use a named section for a specific quest part that needs NPC, location,
-  faction, encounter, or revelation links.
-- Use one canonical planning item for one concept. Express reuse and
-  relationships with links instead of duplicating text.
-- Keep folder hierarchy shallow. Folders are navigation, not story logic.
-- Give every link a concrete name that reads well as a graph edge.
-- Use `related` only when the other five relations do not fit.
-- Do not duplicate core NPCs, locations, factions, mysteries, artifacts, or
-  events as planning notes merely to make them visible. Link the real record.
-- Keep optional addon references external. Do not make another addon a hard
-  dependency just to show a link.
-- Preserve user-authored text and stable ids during updates.
+```json
+{
+  "scope": "core",
+  "collection": "characters",
+  "id": { "$ref": "npc.duke-ren" }
+}
+```
 
-## Validation checklist
+The host resolves it to a reserved persistent ID before DM Tools validates the
+document. Do not use `$ref` in standalone planning files, in external targets,
+or as part of a larger string.
 
-Before returning a document, verify:
+## Updates and batching
 
-- the envelope contains only the six documented fields;
-- `generatedAt` is an epoch-millisecond integer;
-- every record has schema version 1 and a valid operation;
-- each update has the exact current `expectedUpdatedAt`;
-- ids are unique inside their collection;
-- folder parents exist and form no cycle;
-- item folders exist;
-- section ids are unique inside their item;
-- every planning item and section endpoint exists;
-- every core endpoint uses a verified campaign id;
-- no link connects an endpoint to itself;
-- every link has a useful name and an allowed relation type;
-- the document proposes at most 256 writes;
-- the JSON contains no comments, trailing commas, duplicate keys, HTML, or
-  executable instructions.
+For updates:
 
-## Prompt template for another agent
+1. start from a current export;
+2. preserve record ids;
+3. set `operation` to `update`;
+4. copy the exact current `updatedAt` to `expectedUpdatedAt`;
+5. omit `updatedAt`;
+6. set root `generatedAt` later than every changed record;
+7. include unchanged arrays as empty unless those records are needed for the
+   imported candidate’s new references.
 
-> Generate a DM Tools planning import using schema version 1 from
-> `docs/AGENT_GENERATION.md`. Model forward-looking D&D planning and
-> world-building, not session scripts or extensive retrospective notes.
-> Preserve the supplied ids and current `updatedAt` values. Use named sections
-> whenever an NPC or other entity must link to a specific part of a quest.
-> Use verified core ids only. Return strict JSON plus a short list of omitted
-> unresolved references. If more than 256 records would change, return ordered,
-> independently valid batch files.
+One preview may change at most 256 records. Split larger plans so each batch is
+independently valid:
+
+1. parent items;
+2. child items;
+3. flow and references;
+4. consequences and marginalia.
+
+Never split a required anchor from the record that first creates it unless an
+earlier committed batch already created that anchor.
+
+## Final checklist
+
+- Root format and schema are exact.
+- All five arrays exist.
+- IDs are stable, valid, and unique within each collection.
+- Every child parent exists and is a plotline or quest.
+- Ownership has no cycle.
+- Every event has `eventType`; other kinds omit it.
+- Every branch has `branchType`; other kinds omit it.
+- Flow endpoints exist, differ, and form a DAG.
+- Every option starts at a branch.
+- Every reference item and target exists or has a valid optional-addon fallback.
+- Every consequence anchor exists.
+- Every marginalia anchor exists.
+- Encounter quantities are explicit.
+- Updates have exact revisions; creates omit revisions.
+- There are no canvas positions, progress states, sessions, or invented fields.
+- The preview contains no errors before the DM approves commit.

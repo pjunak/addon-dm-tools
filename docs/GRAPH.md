@@ -1,80 +1,85 @@
-# Planning graph
+# Story canvas
 
-DM Tools registers the effective-DM-only route `#/dm-scenarios`. The stable
-route is retained from the earlier scenario graph, but the page now projects
-the complete planning model through host `graphs.facade` API version 1.
-DM Tools never imports Cytoscape or exposes raw graph-library objects.
+DM Tools owns one effective-DM-only route family under `#/dm-plans`. The canvas
+is an addon-owned DOM/SVG workbench built from public host helpers, actions, and
+design tokens. It does not access Cytoscape or any host-private graph object.
+The generic host graph facade remains available to other addons but is not a
+good fit for rich planner cards, marginalia markers, nested scopes, and
+dedicated detail screens.
 
 ## Projection
 
-- Every planning item becomes a node whose kind reflects `thread`, `quest`,
-  `scenario`, `encounter`, or `note`.
-- Collapsed items hide their section nodes.
-- Expanded items add their named sections and explicit item-to-section
-  containment edges.
-- Core and external-addon nodes appear only when a stored link references
-  them.
-- Every `planning_links` record becomes exactly one edge. Its custom `name` is the edge
-  label; its fixed relation `type` remains available in stored data.
-- No edges are inferred from folders, tags, state, time, prose, or proximity.
+An open canvas represents exactly one scope:
 
-A section endpoint is resolved according to view state:
+- no id: the campaign root;
+- a plotline id: that plotline;
+- a quest id: that quest.
 
-```text
-NPC ──"Requests a discreet investigation"──> Quest / Audience with the Duke
-```
+Only direct children of the scope become cards. Ownership is never drawn as an
+edge; it is expressed by entering the child canvas and by breadcrumbs.
+Plotlines and quests may contain children. Events and branches are leaves.
 
-When the quest is collapsed, the same stored edge targets the quest node. When
-expanded, it targets the named section node. The label and link identity do not
-change.
+Stored flow links are projected separately. For a cross-scope endpoint, the
+projection walks upward until it reaches the visible direct child. A link whose
+two endpoints roll up to the same card is internal to that card and is hidden
+until the DM enters it. No edge is inferred from ownership, tags, text, time,
+position, references, or consequences.
 
-The workbench uses the facade's validated `preset` layout when the host
-advertises `node-position` and `node-drag`. New or unplaced nodes receive a
-deterministic three-lane arrangement: world references, planning items, and
-expanded sections. Element ids are deterministic hashes of stable domain
-identities, keeping them within the graph facade's length limits without
-exposing graph implementation details.
+## Interaction
 
-## Editing and view state
+- Single click or Space selects a card and updates the inspector in place.
+  This deliberately avoids a route rerender and preserves canvas scroll.
+- Double-click or Enter enters a plotline/quest or opens a dedicated
+  encounter/puzzle screen.
+- Pointer drag moves a card, snaps to the 24 px grid, and stores its position.
+- Dragging from the circular edge handle to another card creates a flow link.
+  Clicking the handle and then a target provides a second pointer path.
+- The inspector provides labelled native forms for keyboard-only creation and
+  editing of flow, references, consequences, and marginalia.
 
-Selecting a node opens a persistent inspector. Planning items and sections can
-create explicit named connections to another planning item or section from
-that inspector; the full planning workspace remains the edit surface for item
-prose and world/external references. Existing related links can be reviewed
-and deleted in either surface.
+The canvas uses one route and one active scope rather than expandable compound
+nodes. Deeply nested quests therefore remain focused and readable.
 
-Drag completion stores a bounded `{x,y}` value under the stable endpoint
-identity in the keyed DM-only `planning_views` collection. The single
-`campaign-map` record is presentation state only:
+## Visual conventions
+
+| Meaning | Convention |
+|---|---|
+| Plotline | heavy gold border |
+| Quest | blue border |
+| Story event | neutral event card |
+| Encounter | danger border; dedicated detail screen |
+| Puzzle | mystery border; dedicated detail screen |
+| Decision / condition / random branch | dashed gold border |
+| Normal flow | solid directed orthogonal line |
+| Branch option | dashed gold directed line |
+| Rolled-up cross-scope flow | subdued dashed line |
+| Linked DM note | notebook marker in the card corner |
+
+Line geometry uses right angles with rounded corners. `planning_views` stores
+only `{x,y}` positions per scope:
 
 ```json
 {
-  "id": "campaign-map",
-  "schemaVersion": 1,
+  "id": "scope-quest-earthquake",
+  "schemaVersion": 2,
+  "scopeId": "quest-earthquake",
   "positions": {
-    "planning:quest-sigil": { "x": 120, "y": 80 }
+    "event-tremor": { "x": 72, "y": 72 }
   },
   "updatedAt": 1785000000000
 }
 ```
 
-It is deliberately outside `planning_items`, `planning_links`, and the import
-schema. Auto-arrange deletes this view record and cannot change campaign
-meaning. An older compatible graph implementation without the optional drag
-features remains a read-only dagre/grid projection.
+Auto-arrange removes that scope record and cannot change story meaning.
+Imported documents never contain view records.
 
-## Accessible fallback and lifecycle
+## Lifecycle and accessibility
 
-The route always renders a keyboard-accessible list of planning items. It
-remains available when the graph facade is missing or the adapter fails. Item
-controls can focus nodes and expand or collapse section detail. The selected
-node inspector and connection form use labelled native controls and do not
-depend on pointer dragging. The toolbar reports the current node and connection
-counts, can reveal or hide every named section, and links directly to the manual
-editor. The fallback list opens automatically on small screens and whenever
-interactive rendering is unavailable.
+Every card is keyboard-focusable and has a plain-text accessible label.
+Connection, CRUD, and detail operations remain available through native form
+controls without drag gestures. The inspector, breadcrumbs, badges, and
+announcements use host components and localization.
 
-Mount is scheduled only after the addon-owned route subtree exists. Re-render,
-navigation, role transition, addon reload/update/disable, failed late mount,
-and disposal cancel pending work and destroy the owned graph idempotently.
-Generation checks prevent stale mounts from reviving disposed state.
+Each render removes the previous pointer/keyboard listeners and cancels a
+pending mount. Navigation away, role changes, addon replacement, and disposal
+perform the same cleanup. Selection alone does not remount the canvas.

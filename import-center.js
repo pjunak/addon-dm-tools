@@ -13,6 +13,27 @@ const DIAGNOSTIC_KEYS = {
   PLANNING_OPERATION_INVALID: 'diagnostic.operation',
   PLANNING_LOCAL_INVALID: 'diagnostic.localInvalid',
   PLANNING_CONFLICT: 'diagnostic.conflict',
+  PLANNING_FIELD_REQUIRED: 'diagnostic.planningField',
+  PLANNING_FIELD_TYPE: 'diagnostic.planningField',
+  PLANNING_FIELD_LENGTH: 'diagnostic.planningField',
+  PLANNING_KIND_INVALID: 'diagnostic.planningField',
+  PLANNING_EVENT_TYPE_INVALID: 'diagnostic.planningField',
+  PLANNING_BRANCH_TYPE_INVALID: 'diagnostic.planningField',
+  PLANNING_LIST_INVALID: 'diagnostic.planningField',
+  PLANNING_DUPLICATE_VALUE: 'diagnostic.planningField',
+  PLANNING_PARENT_MISSING: 'diagnostic.planningOwnership',
+  PLANNING_PARENT_KIND_INVALID: 'diagnostic.planningOwnership',
+  PLANNING_HIERARCHY_CYCLE: 'diagnostic.planningOwnership',
+  PLANNING_FLOW_ENDPOINT_MISSING: 'diagnostic.planningFlow',
+  PLANNING_FLOW_OPTION_SOURCE_INVALID: 'diagnostic.planningFlow',
+  PLANNING_FLOW_CYCLE: 'diagnostic.planningFlow',
+  PLANNING_ITEM_REFERENCE_MISSING: 'diagnostic.planningReference',
+  PLANNING_FLOW_REFERENCE_MISSING: 'diagnostic.planningReference',
+  PLANNING_CORE_REFERENCE_MISSING: 'diagnostic.planningReference',
+  PLANNING_TARGET_SCOPE_INVALID: 'diagnostic.planningReference',
+  PLANNING_RELATION_INVALID: 'diagnostic.planningReference',
+  PLANNING_QUANTITY_INVALID: 'diagnostic.planningReference',
+  PLANNING_ANCHOR_SCOPE_INVALID: 'diagnostic.planningReference',
 };
 
 function initialState() {
@@ -277,7 +298,7 @@ export function createImportCenter(host, options = {}) {
       <article class="codex-link-row">
         <div>
           <strong>${esc(operation.id)}</strong>
-          <div>${esc(operation.value?.title || operation.value?.name || '')}</div>
+          <div>${esc(operation.value?.title || operation.value?.name || operation.value?.label || '')}</div>
         </div>
         <span class="codex-badge">${esc(operation.target?.collection || '')}</span>
       </article>`).join('')}</div>`;

@@ -19,7 +19,6 @@ function fixture({
   locale = 'en',
   isDM = true,
   providers = [{ id: 'planning-json' }],
-  graphAvailable = true,
   collectionError = null,
 } = {}) {
   const state = { items, isDM, announcements: [], rerenders: 0 };
@@ -41,14 +40,13 @@ function fixture({
       formatNumber: value => String(value),
     },
     imports: { listProviders: async () => ({ providers }) },
-    graphs: { available: () => graphAvailable },
     store: {
       collection(name) {
-        assert.equal(name, 'planning_items');
+        assert.ok(name === 'planning_items' || name === 'dm_notes');
         return {
           list() {
             if (collectionError) throw collectionError;
-            return state.items.slice();
+            return name === 'planning_items' ? state.items.slice() : [];
           },
         };
       },
@@ -64,33 +62,34 @@ function fixture({
 const items = [
   {
     id: 'quest',
+    schemaVersion: 2,
     title: 'Recover the Sigil',
     summary: 'Court investigation',
     kind: 'quest',
-    state: 'ready',
-    pinned: true,
+    parentId: 'plotline',
     updatedAt: 100,
   },
   {
     id: 'ambush',
+    schemaVersion: 2,
     title: 'Road Ambush',
     summary: 'Bandits on the north road',
-    kind: 'encounter',
-    state: 'active',
-    pinned: false,
+    kind: 'event',
+    eventType: 'encounter',
+    parentId: null,
     updatedAt: 200,
   },
 ];
 
-test('dashboard exposes manual, graph, and import workflows with planning counts', async () => {
+test('dashboard exposes the unified planner and import workflows with planning counts', async () => {
   const value = fixture({ items });
   assert.match(value.dashboard.render(), /aria-busy="true"/);
   await value.dashboard.initialize();
   const html = value.dashboard.render();
   assert.match(html, /Campaign Planning/);
   assert.match(html, /href="#\/dm-plans"/);
-  assert.match(html, /href="#\/dm-scenarios"/);
   assert.match(html, /href="#\/dm-import"/);
+  assert.doesNotMatch(html, /dm-scenarios/);
   assert.match(html, /Recover the Sigil/);
   assert.match(html, /Road Ambush/);
   assert.match(html, /<div class="codex-tile-value">2<\/div>/);
@@ -115,11 +114,10 @@ test('dashboard reads live data, announces changes, and escapes planning text', 
 });
 
 test('missing capabilities and collection failures keep recovery routes usable', async () => {
-  const missing = fixture({ providers: [], graphAvailable: false });
+  const missing = fixture({ providers: [] });
   await missing.dashboard.initialize();
   const missingHtml = missing.dashboard.render();
   assert.match(missingHtml, /planning import provider is unavailable/i);
-  assert.match(missingHtml, /Interactive graph rendering is unavailable/);
   assert.match(missingHtml, /href="#\/dm-plans"/);
 
   const error = new Error('sensitive detail');

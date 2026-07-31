@@ -40,22 +40,24 @@ export function createDashboard(host) {
   function readItems() {
     const result = host.store.collection('planning_items').list();
     if (!Array.isArray(result)) throw new Error('Planning collection is unavailable.');
-    return result.filter(record => record && typeof record === 'object');
+    return result.filter(record => (
+      record && typeof record === 'object' && record.schemaVersion === 2
+    ));
   }
 
   function summarize(items) {
     return {
       total: items.length,
-      active: items.filter(item => item.state === 'active').length,
-      ready: items.filter(item => item.state === 'ready').length,
-      encounters: items.filter(item => item.kind === 'encounter').length,
-      pinned: items.filter(item => item.pinned).length,
+      plotlines: items.filter(item => item.kind === 'plotline').length,
+      quests: items.filter(item => item.kind === 'quest').length,
+      encounters: items.filter(item => item.kind === 'event' && item.eventType === 'encounter').length,
+      notes: host.store.collection('dm_notes').list().length,
     };
   }
 
   function announceUpdate(items, summary) {
     const newest = items.reduce((value, item) => Math.max(value, item.updatedAt || 0), 0);
-    const signature = `${summary.total}:${summary.active}:${summary.ready}:${summary.pinned}:${newest}`;
+    const signature = `${summary.total}:${summary.plotlines}:${summary.quests}:${summary.notes}:${newest}`;
     if (lastSignature && signature !== lastSignature) {
       host.ui.announce(host.i18n.plural('dashboard.announce.updated', summary.total));
     }
@@ -75,18 +77,14 @@ export function createDashboard(host) {
       : providerStatus === 'error'
         ? `<p class="codex-warnings">${esc(t('dashboard.importError'))}</p>`
         : '';
-    const graphWarning = host.graphs.available()
-      ? ''
-      : `<p class="codex-warnings">${esc(t('dashboard.graphUnavailable'))}</p>`;
     const cards = [
       ['#/dm-plans', 'dashboard.planning.title', 'dashboard.planning.body'],
-      ['#/dm-scenarios', 'dashboard.graph.title', 'dashboard.graph.body'],
       ['#/dm-import', 'dashboard.import.title', 'dashboard.import.body'],
     ];
     return `<section class="settings-panel" aria-labelledby="dm-tools-workflow-title">
       <h3 id="dm-tools-workflow-title">${esc(t('dashboard.workflow.title'))}</h3>
       <p class="settings-hint">${esc(t('dashboard.workflow.body'))}</p>
-      ${providerWarning}${graphWarning}
+      ${providerWarning}
       <nav aria-label="${esc(t('dashboard.workflow.label'))}"
         style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:var(--space-3)">
         ${cards.map(([href, title, body]) => `<a class="codex-link-tile" href="${href}">
@@ -99,8 +97,7 @@ export function createDashboard(host) {
 
   function itemListHtml(items) {
     const prioritized = items.slice().sort((left, right) => (
-      Number(right.pinned) - Number(left.pinned)
-      || Number(right.updatedAt || 0) - Number(left.updatedAt || 0)
+      Number(right.updatedAt || 0) - Number(left.updatedAt || 0)
       || left.title.localeCompare(right.title)
     )).slice(0, 12);
     if (!prioritized.length) {
@@ -113,16 +110,23 @@ export function createDashboard(host) {
     return `<section class="settings-panel">
       <h3>${esc(t('dashboard.items.title'))}</h3>
       <div style="display:grid;gap:var(--space-2)">
-        ${prioritized.map(item => `<article class="codex-link-row">
+        ${prioritized.map(item => `<a class="codex-link-row" href="${item.kind === 'plotline' || item.kind === 'quest'
+          ? `#/dm-plans/${encodeURIComponent(item.id)}`
+          : item.parentId ? `#/dm-plans/${encodeURIComponent(item.parentId)}` : '#/dm-plans'}">
           <div>
             <strong>${esc(item.title || t('dashboard.unnamed'))}</strong>
             ${item.summary ? `<div class="settings-hint">${esc(item.summary)}</div>` : ''}
           </div>
           <div>
-            ${item.pinned ? `<span class="codex-badge codex-badge-accent">${esc(t('dashboard.pinned'))}</span>` : ''}
-            <span class="codex-badge">${esc(t(`planning.kind.${item.kind}`))}</span>
+            <span class="codex-badge">${esc(t(
+              item.kind === 'event'
+                ? `planner.eventType.${item.eventType}`
+                : item.kind === 'branch'
+                  ? `planner.branchType.${item.branchType}`
+                  : `planner.kind.${item.kind}`,
+            ))}</span>
           </div>
-        </article>`).join('')}
+        </a>`).join('')}
       </div>
     </section>`;
   }
@@ -156,10 +160,10 @@ export function createDashboard(host) {
         <p class="settings-hint">${esc(t('dashboard.description'))}</p>
         <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
           ${tile('total', summary.total, true)}
-          ${tile('active', summary.active, summary.active > 0)}
-          ${tile('ready', summary.ready)}
+          ${tile('plotlines', summary.plotlines)}
+          ${tile('quests', summary.quests)}
           ${tile('encounters', summary.encounters)}
-          ${tile('pinned', summary.pinned)}
+          ${tile('notes', summary.notes)}
         </div>
       </section>
       ${workflowHtml()}
