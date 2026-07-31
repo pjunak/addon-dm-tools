@@ -564,7 +564,7 @@ function nodeHtml(node, selectedId, host) {
   </article>`;
 }
 
-function canvasHtml(projection, selectedId, host) {
+export function renderStoryCanvas(projection, selectedId, host) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const byId = new Map(projection.nodes.map(node => [node.item.id, node]));
@@ -645,7 +645,7 @@ export function renderCanvasPage({
             <button class="inline-create-btn" type="button"${dataAction(host.action('plannerResetLayout'))}>${esc(t('planner.action.resetLayout'))}</button>
           </span>
         </div>
-        ${canvasHtml(projection, selectedId, host)}
+        ${renderStoryCanvas(projection, selectedId, host)}
       </div>
       <aside id="dm-story-inspector" class="dmt-planner-inspector" aria-label="${esc(t('planner.inspector.title'))}">
         ${renderInspector({ host, data, selectedId, draft, errors })}

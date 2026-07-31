@@ -50,6 +50,14 @@ Inside a bundle only, the host resolves exact `{"$ref":"local.name"}` objects
 before the provider runs. This is intended for `id` inside a core reference
 target. Standalone imports require concrete IDs.
 
+DM Tools also provides a versioned campaign-review presentation API to the
+host. The core Campaign Import Center uses the real Story Planner projection,
+canvas renderer, styles, node conventions, and orthogonal flow lines for the
+embedded editable preview. It starts inside a sole imported plotline, supports
+the same nested campaign/plotline/quest scopes, and places the host-owned
+before/after source form in the planner inspector. Preview navigation never
+writes `planning_views` or any campaign collection.
+
 Before provider code runs, the host rejects duplicate JSON keys, invalid UTF-8,
 prototype keys, malformed input, and configured byte, depth, string, node, and
 record limits.

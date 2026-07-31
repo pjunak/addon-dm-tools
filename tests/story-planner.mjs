@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { createImportReviewPreview } from '../import-review-preview.js';
 import { createStoryPlanner } from '../story-planner.js';
 import {
   itemAncestors,
@@ -121,6 +122,60 @@ test('positions snap to the planner grid and orthogonal paths remain determinist
   );
 });
 
+test('campaign import preview reuses the real planner projection, canvas, and node styles', () => {
+  const { host } = fixture();
+  const preview = createImportReviewPreview(host);
+  const plotline = planningItem();
+  const quest = planningItem({
+    id: 'quest-earthquake',
+    kind: 'quest',
+    parentId: plotline.id,
+    title: 'Investigate the Earthquake',
+  });
+  const branch = planningItem({
+    id: 'branch-route',
+    kind: 'branch',
+    branchType: 'decision',
+    parentId: plotline.id,
+    title: 'Choose a route',
+  });
+  const view = preview.project({
+    document: {
+      format: 'dm-tools-planning',
+      schemaVersion: 2,
+      items: [plotline, quest, branch],
+      flowLinks: [{
+        id: 'flow-choice',
+        sourceId: quest.id,
+        targetId: branch.id,
+        kind: 'continues',
+        label: 'The trail forks',
+      }],
+      references: [],
+      consequences: [],
+      notes: [],
+    },
+  });
+  const html = preview.render({ view, inspectorHtml: '<strong>Editable import</strong>' });
+
+  assert.equal(view.scopeId, plotline.id);
+  assert.deepEqual(view.projection.nodes.map(node => node.item.id).sort(), [
+    branch.id,
+    quest.id,
+  ]);
+  assert.match(html, /dmt-planner-workbench/);
+  assert.match(html, /dmt-story-canvas/);
+  assert.match(html, /data-kind="quest"/);
+  assert.match(html, /data-kind="branch"/);
+  assert.match(html, /dmt-story-edge/);
+  assert.match(html, /Editable import/);
+  const campaign = preview.project({
+    document: view.data,
+    scopeId: '',
+  });
+  assert.deepEqual(campaign.projection.nodes.map(node => node.item.id), [plotline.id]);
+});
+
 function fixture() {
   const stores = Object.fromEntries([
     'planning_items',
@@ -205,7 +260,7 @@ function fixture() {
       scheduled[token] = null;
     },
   });
-  return { planner, stores, announcements };
+  return { planner, stores, announcements, host };
 }
 
 function event(fields) {

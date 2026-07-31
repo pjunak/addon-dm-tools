@@ -96,6 +96,11 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
   assert.equal(result.rec.sidebar[1].role, 'dm');
   assert.equal(result.rec.sidebar.length, 2);
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
+  assert.equal(result.rec.provided.apiVersion, 1);
+  assert.equal(result.rec.provided.campaignImportReview.apiVersion, 1);
+  assert.equal(typeof result.rec.provided.campaignImportReview.project, 'function');
+  assert.equal(typeof result.rec.provided.campaignImportReview.render, 'function');
+  assert.equal(typeof result.rec.provided.campaignImportReview.mount, 'function');
   assert.ok(smokeRegistrations(result.rec).ok);
   assert.deepEqual(result.rec.i18nMissing, []);
   await disposeMockHost(result.rec);

@@ -1,5 +1,6 @@
 import { createDashboard } from './dashboard.js';
 import { createImportCenter } from './import-center.js';
+import { createImportReviewPreview } from './import-review-preview.js';
 import { migratePlanningV2 } from './planning-migration.js';
 import { createStoryPlanner } from './story-planner.js';
 
@@ -33,6 +34,12 @@ export default function register(host) {
   const center = createImportCenter(host);
   const planner = createStoryPlanner(host);
   const dashboard = createDashboard(host);
+  const importReviewPreview = createImportReviewPreview(host);
+
+  host.provide(Object.freeze({
+    apiVersion: 1,
+    campaignImportReview: importReviewPreview,
+  }));
 
   host.registerSlot('dm:dashboard', () => dashboard.render());
   host.registerRoute('dm-plans', (sub, parts) => planner.render(sub, parts));
