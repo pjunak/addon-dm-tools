@@ -85,8 +85,7 @@ export function createDashboard(host) {
       <h3 id="dm-tools-workflow-title">${esc(t('dashboard.workflow.title'))}</h3>
       <p class="settings-hint">${esc(t('dashboard.workflow.body'))}</p>
       ${providerWarning}
-      <nav aria-label="${esc(t('dashboard.workflow.label'))}"
-        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:var(--space-3)">
+      <nav class="codex-auto-grid codex-auto-grid-wide" aria-label="${esc(t('dashboard.workflow.label'))}">
         ${cards.map(([href, title, body]) => `<a class="codex-link-tile" href="${href}">
           <strong>${esc(t(title))}</strong>
           <span class="settings-hint">${esc(t(body))}</span>
@@ -109,7 +108,7 @@ export function createDashboard(host) {
     }
     return `<section class="settings-panel">
       <h3>${esc(t('dashboard.items.title'))}</h3>
-      <div style="display:grid;gap:var(--space-2)">
+      <div class="codex-stack codex-stack-compact">
         ${prioritized.map(item => `<a class="codex-link-row" href="${item.kind === 'plotline' || item.kind === 'quest'
           ? `#/dm-plans/${encodeURIComponent(item.id)}`
           : item.parentId ? `#/dm-plans/${encodeURIComponent(item.parentId)}` : '#/dm-plans'}">
@@ -154,11 +153,11 @@ export function createDashboard(host) {
     }
     const summary = summarize(items);
     announceUpdate(items, summary);
-    return `<div class="addon-dm-tools-dashboard" style="display:grid;gap:var(--space-5)">
+    return `<div class="addon-dm-tools-dashboard codex-stack codex-stack-loose">
       <section class="settings-panel">
         <h2>${esc(t('dashboard.title'))}</h2>
         <p class="settings-hint">${esc(t('dashboard.description'))}</p>
-        <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+        <div class="codex-cluster">
           ${tile('total', summary.total, true)}
           ${tile('plotlines', summary.plotlines)}
           ${tile('quests', summary.quests)}

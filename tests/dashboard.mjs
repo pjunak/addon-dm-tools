@@ -93,6 +93,10 @@ test('dashboard exposes the unified planner and import workflows with planning c
   assert.match(html, /Recover the Sigil/);
   assert.match(html, /Road Ambush/);
   assert.match(html, /<div class="codex-tile-value">2<\/div>/);
+  assert.match(html, /class="addon-dm-tools-dashboard codex-stack codex-stack-loose"/);
+  assert.match(html, /class="codex-auto-grid codex-auto-grid-wide"/);
+  assert.match(html, /class="codex-cluster"/);
+  assert.doesNotMatch(html, /style="display:/, 'generic dashboard layout comes from host classes');
 });
 
 test('dashboard reads live data, announces changes, and escapes planning text', async () => {
