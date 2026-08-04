@@ -72,6 +72,43 @@ test('adapter descriptors, failures, duplicate identities, and unsafe links are 
   assert.doesNotMatch(html, /Duplicate/);
 });
 
+test('throwing descriptor properties cannot break another import adapter', () => {
+  const malformed = adapter('malformed-addon', 'malformed', 'Malformed');
+  malformed.api.descriptor = () => ({
+    id: 'malformed',
+    get label() { throw new Error('bad label'); },
+  });
+  const { center } = fixture([malformed, adapter('healthy-addon', 'healthy', 'Healthy')]);
+  assert.doesNotThrow(() => center.render());
+  assert.match(center.render(), /Healthy/);
+  assert.doesNotMatch(center.render(), /malformed-addon/);
+});
+
+test('resource links remain on the current origin after URL parsing', () => {
+  const linked = adapter('linked-addon', 'linked', 'Linked');
+  let changingHrefReads = 0;
+  linked.api.descriptor = () => ({
+    id: 'linked',
+    label: 'Linked',
+    links: [
+      { label: 'Safe', href: '/api/addon/linked/schema?version=1' },
+      { label: 'Backslash escape', href: '/\\evil.example/path' },
+      {
+        label: 'Snapshotted',
+        get href() {
+          changingHrefReads += 1;
+          return changingHrefReads === 1 ? '/safe-once' : '/\\evil.example/changed';
+        },
+      },
+    ],
+  });
+  const html = fixture([linked]).center.render();
+  assert.match(html, /\/api\/addon\/linked\/schema\?version=1/);
+  assert.match(html, /\/safe-once/);
+  assert.doesNotMatch(html, /evil\.example/);
+  assert.equal(changingHrefReads, 1);
+});
+
 test('players never receive adapter content', () => {
   const { center, host } = fixture([adapter('secret-addon', 'secret', 'Secret', '<input type="file">')]);
   host.role.isDM = () => false;
@@ -79,4 +116,3 @@ test('players never receive adapter content', () => {
   assert.match(html, /page.dmOnly/);
   assert.doesNotMatch(html, /type="file"/);
 });
-

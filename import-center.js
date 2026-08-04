@@ -1,30 +1,50 @@
 const CONTRACT = 'codex.import-adapter';
+const LINK_BASE = 'https://codex.invalid';
+
+function normalizeLink(link) {
+  try {
+    if (!link) return null;
+    const label = link.label;
+    const href = link.href;
+    if (typeof label !== 'string' || typeof href !== 'string') return null;
+    if (!href.startsWith('/') || href.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(href)) return null;
+    const parsed = new URL(href, LINK_BASE);
+    if (parsed.origin !== LINK_BASE) return null;
+    return Object.freeze({ label, href });
+  } catch (_) {
+    return null;
+  }
+}
 
 function normalizeAdapter(handle) {
-  const api = handle?.api;
-  const provider = handle?.provider;
-  if (!api || api.apiVersion !== 1 || typeof api.descriptor !== 'function' || typeof api.render !== 'function') return null;
-  let descriptor;
-  try { descriptor = api.descriptor(); } catch { return null; }
-  if (!descriptor || typeof descriptor !== 'object') return null;
-  const id = typeof descriptor.id === 'string' && /^[a-z0-9][a-z0-9-]{1,63}$/.test(descriptor.id)
-    ? descriptor.id
-    : '';
-  if (!id || typeof descriptor.label !== 'string' || !descriptor.label.trim()) return null;
-  const links = Array.isArray(descriptor.links) ? descriptor.links.filter(link => (
-    link && typeof link.label === 'string' && typeof link.href === 'string' && /^\/(?!\/)/.test(link.href)
-  )).slice(0, 8) : [];
-  return {
-    key: `${provider?.addonId || 'unknown'}:${id}`,
-    api,
-    provider,
-    descriptor: {
-      id,
-      label: descriptor.label,
-      description: typeof descriptor.description === 'string' ? descriptor.description : '',
-      links,
-    },
-  };
+  try {
+    const api = handle?.api;
+    const provider = handle?.provider;
+    if (!api || api.apiVersion !== 1 || typeof api.descriptor !== 'function' || typeof api.render !== 'function') return null;
+    const descriptor = api.descriptor();
+    if (!descriptor || typeof descriptor !== 'object') return null;
+    const id = typeof descriptor.id === 'string' && /^[a-z0-9][a-z0-9-]{1,63}$/.test(descriptor.id)
+      ? descriptor.id
+      : '';
+    const label = typeof descriptor.label === 'string' ? descriptor.label : '';
+    if (!id || !label.trim()) return null;
+    const descriptorLinks = descriptor.links;
+    const rawLinks = Array.isArray(descriptorLinks) ? descriptorLinks.slice(0, 8) : [];
+    const links = rawLinks.map(normalizeLink).filter(Boolean);
+    return Object.freeze({
+      key: `${provider?.addonId || 'unknown'}:${id}`,
+      api,
+      provider,
+      descriptor: Object.freeze({
+        id,
+        label,
+        description: typeof descriptor.description === 'string' ? descriptor.description : '',
+        links: Object.freeze(links),
+      }),
+    });
+  } catch (_) {
+    return null;
+  }
 }
 
 export function createImportCenter(host) {

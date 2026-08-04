@@ -57,7 +57,11 @@ provider addon id plus its descriptor id; no official addon ids or payload
 schemas are hardcoded in the center. Each content owner supplies localized
 metadata, review/editor HTML, registered actions, scoped import-provider calls,
 safe resource/view links, and cleanup. The center selects adapters and contains
-descriptor/render failures; it never parses their documents.
+descriptor invocation, descriptor property access, and render failures; one
+adapter cannot prevent another from loading. Resource links must be parsed as
+same-origin root-relative URLs: scheme-relative paths, backslashes, control
+characters, and cross-origin results are rejected. The center never parses an
+adapter's documents.
 
 The planning adapter remains paired with `(dm-tools, planning-json)` and owns
 the workflow below. Core campaign data is a separate built-in adapter using the
