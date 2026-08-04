@@ -31,7 +31,8 @@ story-planner.js                 planner state, CRUD, transactions, navigation
 dashboard.js                     live dm:dashboard planning overview
 import-center.js                 reviewed import state machine and UI
 server/index.cjs                 server composition
-server/planning-provider.cjs     multi-collection schema-v2 provider
+server/planning-provider.cjs     schema-v2 import provider and restricted
+                                 campaign-bundle contributor
 locales/                         English source and Czech translation
 tests/                           contract, migration, provider, UI, dashboard
 ```
@@ -65,6 +66,9 @@ tests/                           contract, migration, provider, UI, dashboard
 - Register all collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
+- The server provider also contributes restricted `(dm-tools, planning)` data
+  to reviewed campaign bundles. Keep its reserved core targets and planning
+  references aligned with the schema and host bundle contract.
 - Updates use epoch-millisecond `expectedUpdatedAt`; never merge or overwrite a
   newer record silently.
 - `planning_items`, `planning_flow_links`, `planning_references`,
