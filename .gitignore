@@ -1,2 +1,15 @@
 # Local agent-tool compatibility file; shared guidance lives in AGENTS.md.
 CLAUDE.md
+
+# Secrets and private keys
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
