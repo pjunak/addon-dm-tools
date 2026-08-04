@@ -29,7 +29,8 @@ story-planner-render.js          escaped canvas, inspector, and detail HTML
 story-planner-styles.js          addon-scoped host-token styles
 story-planner.js                 planner state, CRUD, transactions, navigation
 dashboard.js                     live dm:dashboard planning overview
-import-center.js                 reviewed import state machine and UI
+import-center.js                 generic adapter discovery, selection, lifecycle
+planning-import-adapter.js       reviewed planning import state machine and UI
 server/index.cjs                 server composition
 server/planning-provider.cjs     schema-v2 import provider and restricted
                                  campaign-bundle contributor
@@ -58,6 +59,8 @@ tests/                           contract, migration, provider, UI, dashboard
   remain useful when that addon is absent.
 - Character Sheets, compendiums, and future homebrew addons remain optional.
 - Manual editing and reviewed generated imports use the same data contract.
+- The visible Import Center belongs here. It composes `codex.import-adapter`
+  services and must never branch on known addon ids or payload schemas.
 
 ## Correctness boundaries
 
@@ -66,6 +69,8 @@ tests/                           contract, migration, provider, UI, dashboard
 - Register all collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
+- Import adapters own their UI, actions, provider client, links, and cleanup.
+  The center only validates descriptors, selects adapters, and contains errors.
 - The server provider also contributes restricted `(dm-tools, planning)` data
   to reviewed campaign bundles. Keep its reserved core targets and planning
   references aligned with the schema and host bundle contract.

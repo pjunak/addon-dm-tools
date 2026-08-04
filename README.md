@@ -64,7 +64,9 @@ follow [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md).
 
 - `#/dm-plans` — campaign story canvas; nested scopes and detail screens use
   path segments under the same route
-- `#/dm-import` — preview, review, and atomically commit generated plans
+- `#/dm-import` — the complete adapter-driven Import Center. It always includes
+  the planning adapter and automatically includes any compatible adapter from
+  core or another installed content addon.
 - `#/dm` — host-owned DM shell containing the addon overview
 
 Players, anonymous visitors, and DM-view-as-player receive neither these
@@ -77,6 +79,12 @@ version 2. Preview is read-only. Commit publishes the exact reviewed plan
 through one durable host transaction. Imports never delete, change canvas
 positions, or overwrite a record with a stale `expectedUpdatedAt`. One document
 may propose at most 256 writes.
+
+The planning client publishes `codex.import-adapter` v1 while DM Tools consumes
+the same contract with cardinality many. New content addons appear without a
+DM Tools change; each owner supplies its localized review/editor UI, provider
+actions, and safe view/edit links. Core contributes campaign data through the
+same contract and has no visible import route of its own.
 
 The provider also serves as restricted campaign-bundle contributor
 `(dm-tools, planning)`, so a reviewed campaign bundle can reserve core record

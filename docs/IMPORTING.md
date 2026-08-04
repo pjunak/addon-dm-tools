@@ -50,13 +50,20 @@ Inside a bundle only, the host resolves exact `{"$ref":"local.name"}` objects
 before the provider runs. This is intended for `id` inside a core reference
 target. Standalone imports require concrete IDs.
 
-DM Tools also provides a versioned campaign-review presentation API to the
-host. The core Campaign Import Center uses the real Story Planner projection,
-canvas renderer, styles, node conventions, and orthogonal flow lines for the
-embedded editable preview. It starts inside a sole imported plotline, supports
-the same nested campaign/plotline/quest scopes, and places the host-owned
-before/after source form in the planner inspector. Preview navigation never
-writes `planning_views` or any campaign collection.
+DM Tools owns the complete visible Import Center at `#/dm-import`. It consumes
+zero or more `codex.import-adapter` v1 services and publishes its planning
+workflow through that same cardinality-many contract. Adapter identity is the
+provider addon id plus its descriptor id; no official addon ids or payload
+schemas are hardcoded in the center. Each content owner supplies localized
+metadata, review/editor HTML, registered actions, scoped import-provider calls,
+safe resource/view links, and cleanup. The center selects adapters and contains
+descriptor/render failures; it never parses their documents.
+
+The planning adapter remains paired with `(dm-tools, planning-json)` and owns
+the workflow below. Core campaign data is a separate built-in adapter using the
+same service shape. Disabling or updating any adapter reloads DM Tools after
+the adapter is disposed; the server job's provider/package/content and
+collection revision pins prevent a stale preview from committing.
 
 Before provider code runs, the host rejects duplicate JSON keys, invalid UTF-8,
 prototype keys, malformed input, and configured byte, depth, string, node, and

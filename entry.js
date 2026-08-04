@@ -1,6 +1,6 @@
 import { createDashboard } from './dashboard.js';
 import { createImportCenter } from './import-center.js';
-import { createImportReviewPreview } from './import-review-preview.js';
+import { createPlanningImportAdapter } from './planning-import-adapter.js';
 import { migratePlanningV2 } from './planning-migration.js';
 import { createStoryPlanner } from './story-planner.js';
 
@@ -31,15 +31,22 @@ export default function register(host) {
     'planning_views',
   ].forEach(name => host.registerCollection(name));
 
+  const planningImport = createPlanningImportAdapter(host);
+  host.provideService('codex.import-adapter', '1.0.0', Object.freeze({
+    apiVersion: 1,
+    descriptor: () => Object.freeze({
+      id: 'planning-json',
+      label: host.i18n.t('page.title'),
+      description: host.i18n.t('page.description'),
+      accept: '.json,application/json',
+      links: Object.freeze([]),
+    }),
+    render: () => planningImport.render(),
+    leave: () => planningImport.leave(),
+  }));
   const center = createImportCenter(host);
   const planner = createStoryPlanner(host);
   const dashboard = createDashboard(host);
-  const importReviewPreview = createImportReviewPreview(host);
-
-  host.provide(Object.freeze({
-    apiVersion: 1,
-    campaignImportReview: importReviewPreview,
-  }));
 
   host.registerSlot('dm:dashboard', () => dashboard.render());
   host.registerRoute('dm-plans', (sub, parts) => planner.render(sub, parts));
@@ -57,14 +64,15 @@ export default function register(host) {
     role: 'dm',
   });
 
-  host.registerAction('selectFile', input => center.selectFile(input));
-  host.registerAction('preview', () => center.requestPreview());
-  host.registerAction('review', () => center.review());
-  host.registerAction('confirm', checked => center.confirm(checked));
-  host.registerAction('commit', () => center.commit());
-  host.registerAction('status', () => center.recoverStatus());
-  host.registerAction('cancel', () => center.cancel());
-  host.registerAction('reset', () => center.reset());
+  host.registerAction('selectFile', input => planningImport.selectFile(input));
+  host.registerAction('preview', () => planningImport.requestPreview());
+  host.registerAction('review', () => planningImport.review());
+  host.registerAction('confirm', checked => planningImport.confirm(checked));
+  host.registerAction('commit', () => planningImport.commit());
+  host.registerAction('status', () => planningImport.recoverStatus());
+  host.registerAction('cancel', () => planningImport.cancel());
+  host.registerAction('reset', () => planningImport.reset());
+  host.registerAction('selectImportAdapter', key => center.select(key));
 
   host.registerAction('plannerOpenItem', id => planner.openItem(id));
   host.registerAction('plannerSelectItem', id => planner.selectItem(id));
@@ -113,7 +121,7 @@ export default function register(host) {
       planner.leave();
       return;
     }
-    center.initialize();
+    planningImport.initialize();
     dashboard.initialize();
   };
   if (typeof window !== 'undefined') window.addEventListener('hashchange', routeChanged);
@@ -121,10 +129,10 @@ export default function register(host) {
   host.onDispose(async () => {
     if (typeof window !== 'undefined') window.removeEventListener('hashchange', routeChanged);
     if (typeof window !== 'undefined') window.removeEventListener('role:changed', roleChanged);
-    await Promise.all([center.dispose(), planner.dispose(), dashboard.dispose()]);
+    await Promise.all([center.dispose(), planningImport.dispose(), planner.dispose(), dashboard.dispose()]);
   });
 
-  center.initialize();
+  planningImport.initialize();
   dashboard.initialize();
   migratePlanningV2(host).then(result => {
     if (result.migrated) {

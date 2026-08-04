@@ -1,9 +1,9 @@
 {
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "apiVersion": 2,
-  "hostVersion": ">=1.0.0",
+  "hostVersion": ">=1.2.0",
   "capabilities": {
     "required": [
       "collections.dm",
@@ -19,6 +19,22 @@
   "locales": {
     "en": "locales/en.json",
     "cs": "locales/cs.json"
+  },
+  "services": {
+    "provides": [
+      {
+        "contract": "codex.import-adapter",
+        "version": "1.0.0"
+      }
+    ],
+    "consumes": [
+      {
+        "contract": "codex.import-adapter",
+        "range": "^1.0.0",
+        "cardinality": "many",
+        "required": false
+      }
+    ]
   },
   "permissions": [
     "data:own",

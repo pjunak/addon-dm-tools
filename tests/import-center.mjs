@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createImportCenter } from '../import-center.js';
+import { createPlanningImportAdapter } from '../planning-import-adapter.js';
 
 const en = JSON.parse(await readFile(new URL('../locales/en.json', import.meta.url), 'utf8'));
 const cs = JSON.parse(await readFile(new URL('../locales/cs.json', import.meta.url), 'utf8'));
@@ -79,7 +79,7 @@ function hostFixture({ locale = 'en', imports = {}, isDM = true } = {}) {
       ...imports,
     },
   };
-  const center = createImportCenter(host, { focus: id => rec.focus.push(id) });
+  const center = createPlanningImportAdapter(host, { focus: id => rec.focus.push(id) });
   return { center, host, rec };
 }
 
