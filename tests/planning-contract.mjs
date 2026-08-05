@@ -144,7 +144,7 @@ test('named references retain quantities and validate campaign records', () => {
     relation: 'opposes',
     target: {
       scope: 'external',
-      addonId: 'dnd55e-compendium',
+      addonId: 'example-bestiary',
       kind: 'monster',
       id: 'goblin',
       label: 'Goblin',

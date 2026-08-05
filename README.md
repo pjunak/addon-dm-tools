@@ -102,7 +102,7 @@ node --test tests/*.mjs
 From the sibling host repository:
 
 ```powershell
-node scripts/dev-install-addon.cjs ../dm-tools
+node scripts/dev-install-addon.cjs ../addon-dm-tools
 ```
 
 This release changes server providers and declared collections, so reinstall,

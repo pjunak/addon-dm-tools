@@ -308,7 +308,7 @@ Optional-addon target:
 ```json
 {
   "scope": "external",
-  "addonId": "dnd55e-compendium",
+  "addonId": "example-bestiary",
   "kind": "monster",
   "id": "cult-fanatic",
   "label": "Cult Fanatic"
@@ -341,7 +341,7 @@ Complete encounter participant:
   "relation": "opposes",
   "target": {
     "scope": "external",
-    "addonId": "dnd55e-compendium",
+    "addonId": "example-bestiary",
     "kind": "monster",
     "id": "cult-fanatic",
     "label": "Cult Fanatic"

@@ -1,4 +1,4 @@
-# AGENTS.md — dm-tools
+# AGENTS.md — addon-dm-tools
 
 DM Tools is the API-v2 planning and world-building addon for the sibling
 `ttrpg-codex` host. Its manifest id is the permanent storage namespace.
@@ -110,7 +110,7 @@ node --test tests/*.mjs
 Then from the host:
 
 ```text
-node scripts/dev-install-addon.cjs ../dm-tools
+node scripts/dev-install-addon.cjs ../addon-dm-tools
 ```
 
 Server-provider changes require reinstall, restart, and refresh. Permission
