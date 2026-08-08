@@ -4,8 +4,8 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-planner-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap}
     .addon-dm-tools .dmt-planner-heading h1{margin-bottom:var(--space-1)}
     .addon-dm-tools .dmt-planner-toolbar{display:flex;flex-wrap:wrap;gap:var(--space-2)}
-    .addon-dm-tools .dmt-planner-workbench{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,25rem);min-height:42rem;border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-raised);box-shadow:var(--shadow-md)}
-    .addon-dm-tools .dmt-planner-stage{display:grid;grid-template-rows:auto minmax(36rem,72vh);min-width:0;background:var(--bg-base)}
+    .addon-dm-tools .dmt-planner-workbench{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,25rem);height:max(42rem,calc(72vh + 3rem));border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-raised);box-shadow:var(--shadow-md)}
+    .addon-dm-tools .dmt-planner-stage{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0;background:var(--bg-base)}
     .addon-dm-tools .dmt-planner-stagebar{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:var(--text-xs)}
     .addon-dm-tools .dmt-planner-stagebar span{display:flex;align-items:center;gap:var(--space-2)}
     .addon-dm-tools .dmt-story-viewport{position:relative;overflow:auto;overscroll-behavior:contain;background-color:var(--bg-base)}
@@ -34,7 +34,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-node-port{position:absolute;right:-.7rem;top:50%;display:grid;place-items:center;width:1.4rem;height:1.4rem;padding:0;transform:translateY(-50%);border:2px solid var(--accent-gold);border-radius:50%;background:var(--bg-raised);color:transparent;cursor:crosshair}
     .addon-dm-tools .dmt-node-port:hover,.addon-dm-tools .dmt-node-port:focus-visible{background:var(--accent-gold);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-gold) 25%,transparent)}
     .addon-dm-tools .dmt-story-canvas.is-connecting .dmt-story-node{cursor:crosshair}
-    .addon-dm-tools .dmt-planner-inspector{overflow:auto;padding:var(--space-4);border-left:1px solid var(--border-subtle);background:var(--bg-surface)}
+    .addon-dm-tools .dmt-planner-inspector{min-height:0;overflow:auto;padding:var(--space-4);border-left:1px solid var(--border-subtle);background:var(--bg-surface)}
     .addon-dm-tools .dmt-inspector-eyebrow{margin:0;color:var(--accent-gold);font-size:var(--text-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
     .addon-dm-tools .dmt-planner-inspector h2{margin:var(--space-1) 0 var(--space-2);color:var(--text-parchment)}
     .addon-dm-tools .dmt-inspector-actions,.addon-dm-tools .dmt-inspector-badges{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-block:var(--space-3)}
@@ -57,7 +57,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-detail-aside{display:grid;gap:var(--space-4);position:sticky;top:var(--space-3)}
     .addon-dm-tools .dmt-empty-canvas{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;padding:var(--space-5);text-align:center;color:var(--text-muted)}
     @media(max-width:1100px){
-      .addon-dm-tools .dmt-planner-workbench{grid-template-columns:1fr}
+      .addon-dm-tools .dmt-planner-workbench{grid-template-columns:1fr;height:auto;min-height:42rem}
       .addon-dm-tools .dmt-planner-inspector{border-left:0;border-top:1px solid var(--border-subtle);max-height:none}
       .addon-dm-tools .dmt-planner-stage{grid-template-rows:auto minmax(30rem,60vh)}
       .addon-dm-tools .dmt-detail-grid{grid-template-columns:1fr}

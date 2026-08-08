@@ -83,3 +83,7 @@ announcements use host components and localization.
 Each render removes the previous pointer/keyboard listeners and cancels a
 pending mount. Navigation away, role changes, addon replacement, and disposal
 perform the same cleanup. Selection alone does not remount the canvas.
+On the desktop split view, the workbench owns a viewport-bounded height and the
+inspector scrolls independently, so long selected-item content cannot stretch
+the stage or push the canvas below its toolbar. The stacked layout returns to
+normal document flow.

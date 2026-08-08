@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { createStoryPlanner } from '../story-planner.js';
+import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
   itemAncestors,
   normalizePositions,
@@ -118,6 +119,25 @@ test('positions snap to the planner grid and orthogonal paths remain determinist
       { x: 500, y: 180, width: 240, height: 116 },
     ),
     'M 240 58 H 358 Q 370 58 370 70 V 226 Q 370 238 382 238 H 500',
+  );
+});
+
+test('desktop canvas height is independent from inspector content', () => {
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-planner-workbench\{[^}]*height:max\(42rem,calc\(72vh \+ 3rem\)\)/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-planner-stage\{[^}]*grid-template-rows:auto minmax\(0,1fr\)[^}]*min-height:0/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-planner-inspector\{min-height:0;overflow:auto/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /@media\(max-width:1100px\)\{[\s\S]*?\.dmt-planner-workbench\{[^}]*height:auto/,
   );
 });
 
