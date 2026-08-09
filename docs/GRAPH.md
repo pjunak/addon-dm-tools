@@ -36,6 +36,9 @@ position, references, or consequences.
   Clicking the handle and then a target provides a second pointer path.
 - The inspector provides labelled native forms for keyboard-only creation and
   editing of flow, references, consequences, and marginalia.
+- Deleting a populated plotline or quest requires explicit confirmation and
+  atomically removes its planning subtree and attached planner data. Named
+  campaign targets such as people and places are references and remain intact.
 
 The canvas uses one route and one active scope rather than expandable compound
 nodes. Deeply nested quests therefore remain focused and readable.

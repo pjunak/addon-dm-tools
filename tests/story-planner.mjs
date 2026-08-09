@@ -6,6 +6,7 @@ import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
   itemAncestors,
+  itemSubtreeIds,
   normalizePositions,
   orthogonalPath,
   projectScope,
@@ -122,6 +123,22 @@ test('positions snap to the planner grid and orthogonal paths remain determinist
   );
 });
 
+test('item subtrees include every nested descendant once', () => {
+  const plotline = planningItem();
+  const quest = planningItem({ id: 'quest', kind: 'quest', parentId: plotline.id });
+  const event = planningItem({
+    id: 'event',
+    kind: 'event',
+    eventType: 'story',
+    parentId: quest.id,
+  });
+  assert.deepEqual(itemSubtreeIds(plotline.id, [plotline, quest, event]), [
+    plotline.id,
+    quest.id,
+    event.id,
+  ]);
+});
+
 test('desktop canvas height is independent from inspector content', () => {
   assert.match(
     STORY_PLANNER_STYLES,
@@ -202,6 +219,24 @@ function fixture() {
             values.delete(id);
           },
         };
+      },
+      async transaction(names, callback) {
+        const allowed = new Set(names);
+        return callback({
+          collection(name) {
+            if (!allowed.has(name)) throw new Error(`unexpected transaction collection ${name}`);
+            const values = stores[name];
+            return {
+              remove: id => values.delete(id),
+              put(record) {
+                const stored = structuredClone(record);
+                delete stored.id;
+                values.set(record.id, stored);
+                return record;
+              },
+            };
+          },
+        });
       },
       getCharacters: () => [{ id: 'mira', name: 'Mira Vel' }],
       getFactions: () => ({}),
@@ -338,4 +373,112 @@ test('manual flows and named references can cross nested canvas scopes', async t
   }), 'branch-choice');
   const [consequence] = value.stores.planning_consequences.values();
   assert.deepEqual(consequence.target, { scope: 'planning', itemId: 'event-tremor' });
+});
+
+test('deleting a populated plotline confirms and removes only its planning subtree', async t => {
+  const originalWindow = globalThis.window;
+  let confirmed = false;
+  let confirmation = '';
+  globalThis.window = {
+    location: { hash: '' },
+    confirm(message) {
+      confirmation = message;
+      return confirmed;
+    },
+  };
+  t.after(() => { globalThis.window = originalWindow; });
+  const value = fixture();
+  const add = (store, record) => {
+    const stored = structuredClone(record);
+    delete stored.id;
+    value.stores[store].set(record.id, stored);
+  };
+  add('planning_items', planningItem({
+    id: 'quest-child',
+    kind: 'quest',
+    parentId: 'plotline-dragons',
+    title: 'Nested quest',
+  }));
+  add('planning_items', planningItem({
+    id: 'event-grandchild',
+    kind: 'event',
+    eventType: 'story',
+    parentId: 'quest-child',
+    title: 'Nested event',
+  }));
+  add('planning_items', planningItem({
+    id: 'plotline-survivor',
+    title: 'Unrelated plotline',
+  }));
+  add('planning_flow_links', {
+    id: 'flow-out',
+    schemaVersion: 2,
+    sourceId: 'event-grandchild',
+    targetId: 'plotline-survivor',
+    kind: 'continues',
+    label: '',
+    updatedAt: 100,
+  });
+  add('planning_references', {
+    id: 'reference-out',
+    schemaVersion: 2,
+    itemId: 'plotline-survivor',
+    name: 'Points into deleted plan',
+    relation: 'related',
+    target: { scope: 'planning', itemId: 'event-grandchild' },
+    quantity: 1,
+    notes: '',
+    updatedAt: 100,
+  });
+  add('planning_consequences', {
+    id: 'consequence-out',
+    schemaVersion: 2,
+    anchor: { scope: 'item', itemId: 'plotline-survivor' },
+    kind: 'world',
+    title: 'Points into deleted plan',
+    body: '',
+    target: { scope: 'planning', itemId: 'quest-child' },
+    updatedAt: 100,
+  });
+  add('dm_notes', {
+    id: 'shared-note',
+    schemaVersion: 2,
+    title: 'Shared note',
+    body: '',
+    anchorIds: ['event-grandchild', 'plotline-survivor'],
+    updatedAt: 100,
+  });
+  add('planning_views', {
+    id: 'scope-plotline-dragons',
+    schemaVersion: 2,
+    scopeId: 'plotline-dragons',
+    positions: { 'quest-child': { x: 72, y: 72 } },
+    updatedAt: 100,
+  });
+  add('planning_views', {
+    id: 'scope-campaign',
+    schemaVersion: 2,
+    scopeId: null,
+    positions: {
+      'plotline-dragons': { x: 72, y: 72 },
+      'plotline-survivor': { x: 384, y: 72 },
+    },
+    updatedAt: 100,
+  });
+
+  await value.planner.deleteItem('plotline-dragons');
+  assert.match(confirmation, /nested planning items \(2\)/);
+  assert.equal(value.stores.planning_items.has('plotline-dragons'), true);
+
+  confirmed = true;
+  await value.planner.deleteItem('plotline-dragons');
+  assert.deepEqual([...value.stores.planning_items.keys()], ['plotline-survivor']);
+  assert.equal(value.stores.planning_flow_links.size, 0);
+  assert.equal(value.stores.planning_references.size, 0);
+  assert.equal(value.stores.planning_consequences.size, 0);
+  assert.deepEqual(value.stores.dm_notes.get('shared-note').anchorIds, ['plotline-survivor']);
+  assert.equal(value.stores.planning_views.has('scope-plotline-dragons'), false);
+  assert.deepEqual(value.stores.planning_views.get('scope-campaign').positions, {
+    'plotline-survivor': { x: 384, y: 72 },
+  });
 });

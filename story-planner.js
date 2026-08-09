@@ -9,6 +9,7 @@ import {
 } from './planning-contract.js';
 import { mountStoryCanvas } from './story-planner-interactions.js';
 import {
+  itemSubtreeIds,
   normalizePositions,
   projectScope,
 } from './story-planner-model.js';
@@ -394,35 +395,66 @@ export function createStoryPlanner(host, options = {}) {
     const data = readData();
     const item = data.items.find(value => value.id === id);
     if (!item) return;
-    if (data.items.some(value => value.parentId === id)) {
-      host.ui.toast(t('planner.item.hasChildren'));
-      return;
-    }
-    if (typeof window !== 'undefined' && !window.confirm(t('planner.item.deleteConfirm', {
+    const deleteIds = new Set(itemSubtreeIds(id, data.items));
+    const descendantCount = deleteIds.size - 1;
+    const confirmKey = descendantCount
+      ? 'planner.item.deleteTreeConfirm'
+      : 'planner.item.deleteConfirm';
+    if (typeof window !== 'undefined' && !window.confirm(t(confirmKey, {
       title: item.title,
+      n: descendantCount,
     }))) return;
-    const relatedFlows = data.flowLinks.filter(flow => flow.sourceId === id || flow.targetId === id);
+    const relatedFlows = data.flowLinks.filter(flow => (
+      deleteIds.has(flow.sourceId) || deleteIds.has(flow.targetId)
+    ));
     const flowIds = new Set(relatedFlows.map(flow => flow.id));
-    await host.store.transaction(Object.values(COLLECTIONS).filter(name => name !== COLLECTIONS.views), tx => {
-      tx.collection(COLLECTIONS.items).remove(id);
+    const views = collection('views').list();
+    const deletedViewIds = new Set([...deleteIds].map(itemId => viewId(itemId)));
+    await host.store.transaction(Object.values(COLLECTIONS), tx => {
+      const itemCollection = tx.collection(COLLECTIONS.items);
+      deleteIds.forEach(itemId => itemCollection.remove(itemId));
       const flowCollection = tx.collection(COLLECTIONS.flowLinks);
       relatedFlows.forEach(flow => flowCollection.remove(flow.id));
       const referenceCollection = tx.collection(COLLECTIONS.references);
       data.references.filter(reference => (
-        reference.itemId === id
-        || (reference.target?.scope === 'planning' && reference.target.itemId === id)
+        deleteIds.has(reference.itemId)
+        || (reference.target?.scope === 'planning' && deleteIds.has(reference.target.itemId))
       )).forEach(reference => referenceCollection.remove(reference.id));
       const consequenceCollection = tx.collection(COLLECTIONS.consequences);
       data.consequences.filter(value => (
-        (value.anchor?.scope === 'item' && value.anchor.itemId === id)
+        (value.anchor?.scope === 'item' && deleteIds.has(value.anchor.itemId))
         || (value.anchor?.scope === 'flow' && flowIds.has(value.anchor.flowId))
+        || (value.target?.scope === 'planning' && deleteIds.has(value.target.itemId))
       )).forEach(value => consequenceCollection.remove(value.id));
       const noteCollection = tx.collection(COLLECTIONS.notes);
-      data.notes.filter(note => note.anchorIds.includes(id)).forEach(note => noteCollection.put({
+      data.notes.filter(note => note.anchorIds.some(itemId => deleteIds.has(itemId)))
+        .forEach(note => noteCollection.put({
         ...note,
-        anchorIds: note.anchorIds.filter(anchorId => anchorId !== id),
+        anchorIds: note.anchorIds.filter(anchorId => !deleteIds.has(anchorId)),
         updatedAt: Math.max(Date.now(), note.updatedAt + 1),
       }));
+      const viewCollection = tx.collection(COLLECTIONS.views);
+      views.forEach(view => {
+        if (deleteIds.has(view.scopeId) || deletedViewIds.has(view.id)) {
+          viewCollection.remove(view.id);
+          return;
+        }
+        if (!view.positions || typeof view.positions !== 'object' || Array.isArray(view.positions)) {
+          return;
+        }
+        const positions = { ...view.positions };
+        let changed = false;
+        deleteIds.forEach(itemId => {
+          if (!Object.prototype.hasOwnProperty.call(positions, itemId)) return;
+          delete positions[itemId];
+          changed = true;
+        });
+        if (changed) viewCollection.put({
+          ...view,
+          positions,
+          updatedAt: Math.max(Date.now(), Number(view.updatedAt || 0) + 1),
+        });
+      });
     }, { timeoutMs: 10_000 });
     draft = null;
     selectedId = '';

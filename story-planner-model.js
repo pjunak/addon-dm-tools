@@ -41,6 +41,26 @@ export function itemAncestors(itemId, items) {
   return result;
 }
 
+export function itemSubtreeIds(itemId, items) {
+  const childrenByParent = new Map();
+  for (const item of items) {
+    if (!item?.id || !item.parentId) continue;
+    if (!childrenByParent.has(item.parentId)) childrenByParent.set(item.parentId, []);
+    childrenByParent.get(item.parentId).push(item.id);
+  }
+  const result = [];
+  const pending = [itemId];
+  const seen = new Set();
+  while (pending.length) {
+    const currentId = pending.shift();
+    if (!currentId || seen.has(currentId)) continue;
+    seen.add(currentId);
+    result.push(currentId);
+    pending.push(...(childrenByParent.get(currentId) || []));
+  }
+  return result;
+}
+
 function directChildFor(itemId, scopeId, byId) {
   let current = byId.get(itemId);
   const seen = new Set();
