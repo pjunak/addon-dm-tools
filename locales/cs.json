@@ -274,7 +274,7 @@
   "dashboard.workflow.body": "Upravujte přímo, procházejte vazby nebo zkontrolujte atomicky importovanou strukturu.",
   "dashboard.workflow.label": "Nástroje plánování PJ",
   "dashboard.planning.title": "Plánovač příběhu",
-  "dashboard.planning.body": "Tvořte vnořené dějové linky, úkoly, události, větvení, odkazy a následky na jednom plátně.",
+  "dashboard.planning.body": "Tvořte vnořené dějové linky, úkoly, události, větvení, odkazy a následky na přehledných samostatných plátnech.",
   "dashboard.import.title": "Centrum importu",
   "dashboard.import.body": "Zobrazte náhled a atomicky uložte vygenerovaný plánovací dokument.",
   "dashboard.importMissing": "Poskytovatel importu plánů není dostupný. Serverový doplněk může vyžadovat restart.",

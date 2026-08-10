@@ -2,7 +2,8 @@
 
 DM Tools is the planning and world-building addon for
 [ttrpg-codex](https://github.com/pjunak/ttrpg-codex). It gives the effective DM
-one nested story canvas and one reviewed import workflow over the same model.
+a hierarchy of focused story canvases and a reviewed import workflow over the
+same model.
 
 The planner is deliberately forward-looking. It helps a DM organize plotlines,
 quests, story events, encounters, puzzles, decisions, conditions, world
@@ -33,6 +34,12 @@ quest scope. Flow links are acyclic, independent from ownership, and connect
 only siblings with that same immediate parent. Every stored flow is therefore
 fully visible and editable on exactly one canvas.
 
+For example, the campaign canvas may contain `Quest A → Quest B`, while Quest
+A's canvas contains `Event A1 → Event A2`. An event inside Quest A never links
+directly to an event inside Quest B. Put the handoff between their quest cards
+on the shared parent canvas; use a named reference when the relationship is
+cross-scope but not chronological.
+
 Single click selects a card and opens its inspector. Double-click enters a
 plotline or quest, or opens the dedicated encounter/puzzle screen. Cards drag
 to a 24 px grid. Pulling from a card’s edge creates an orthogonal flow link;
@@ -51,9 +58,11 @@ All collections are host-managed and DM-only:
 | `dm_notes` | Separate marginalia linked to zero or more planning items. |
 | `planning_views` | Per-scope card positions only; never planning meaning or import data. |
 
-The shared schema is [`planning-contract.js`](planning-contract.js). Import
-behavior is documented in [`docs/IMPORTING.md`](docs/IMPORTING.md). Agents must
-follow [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md).
+The shared schema is [`planning-contract.js`](planning-contract.js). See
+[`docs/GRAPH.md`](docs/GRAPH.md) for canvas semantics,
+[`docs/IMPORTING.md`](docs/IMPORTING.md) for import behavior, and
+[`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) for the exact generated
+JSON contract.
 
 ## Routes
 
@@ -70,10 +79,11 @@ surfaces nor their data.
 ## Import guarantees
 
 Provider `(dm-tools, planning-json)` uses provider API 1 and planning schema
-version 2. Preview is read-only. Commit publishes the exact reviewed plan
-through one durable host transaction. Imports never delete, change canvas
-positions, or overwrite a record with a stale `expectedUpdatedAt`. One document
-may propose at most 256 writes.
+version 3. Older versions are rejected without conversion. Preview is
+read-only. Commit publishes the exact reviewed plan through one durable host
+transaction. Imports never delete, change canvas positions, or overwrite a
+record with a stale `expectedUpdatedAt`. One document may propose at most 256
+writes.
 
 The planning client publishes `codex.import-adapter` v1 while DM Tools consumes
 the same contract with cardinality many. New content addons appear without a
@@ -86,7 +96,7 @@ The provider also serves as restricted campaign-bundle contributor
 IDs and refer to them from DM Tools without granting the addon core-write
 authority.
 
-## Test and install
+## Development
 
 From this repository:
 
@@ -100,9 +110,10 @@ From the sibling host repository:
 node scripts/dev-install-addon.cjs ../addon-dm-tools
 ```
 
-This release changes server providers and declared collections, so reinstall,
-restart the host, and refresh the browser. A production update that introduces
-new permissions must use the per-addon installation wizard.
+Source changes are invisible to the host until the addon is dev-installed.
+Server-provider or manifest changes also require a host restart and browser
+refresh. A production update that introduces new permissions must use the
+per-addon installation wizard.
 
 ## License
 

@@ -3,12 +3,13 @@
 DM Tools registers `(dm-tools, planning-json)` using provider API 1 and planning
 schema version 3. It accepts strict UTF-8 JSON and may atomically write the five
 meaning-bearing keyed DM-only collections.
+
 Older planning schema versions are rejected and are not converted.
 
 The exact record fields, examples, batching rules, and generation workflow live
 in [`AGENT_GENERATION.md`](AGENT_GENERATION.md).
 
-## Boundary
+## Document contract
 
 ```json
 {
@@ -51,6 +52,19 @@ Inside a bundle only, the host resolves exact `{"$ref":"local.name"}` objects
 before the provider runs. This is intended for `id` inside a core reference
 target. Standalone imports require concrete IDs.
 
+### Local flow invariant
+
+Every flow source and target must exist in the complete candidate and have the
+same immediate `parentId`. Matching nesting depth is insufficient. A create or
+update that would connect different canvases blocks the entire preview. The
+provider never rolls up, retargets, deletes, or converts such a link. See
+[`GRAPH.md`](GRAPH.md) for the canvas model.
+
+Planning references and consequence targets are not flow edges and may point
+across ownership scopes.
+
+## Import Center
+
 DM Tools owns the complete visible Import Center at `#/dm-import`. It consumes
 zero or more `codex.import-adapter` v1 services and publishes its planning
 workflow through that same cardinality-many contract. Adapter identity is the
@@ -73,6 +87,8 @@ collection revision pins prevent a stale preview from committing.
 Before provider code runs, the host rejects duplicate JSON keys, invalid UTF-8,
 prototype keys, malformed input, and configured byte, depth, string, node, and
 record limits.
+
+## Provider workflow
 
 The provider then:
 

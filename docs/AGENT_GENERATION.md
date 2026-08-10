@@ -26,6 +26,23 @@ Do not generate:
 - canvas positions or any `planning_views` data;
 - duplicate copies of core or addon records.
 
+## Choose the right relationship
+
+The planner is an ownership tree containing one local flow DAG per canvas.
+Keep these relationships distinct:
+
+| Meaning | Representation | May cross ownership scopes? |
+|---|---|---|
+| Contains / belongs inside | `parentId` | Not applicable |
+| Happens next / presents an option | `flowLinks` | No; both endpoints must be siblings |
+| Reveals / requires / involves / otherwise relates | `references` | Yes |
+| Intended result or complication | `consequences` | Yes, through an optional target |
+| Fact learned at the table | `notes.anchorIds` | Yes |
+
+Never use a cross-scope reference as disguised chronology. If flow leaves a
+nested plan, end its internal sequence locally and connect the owning cards on
+their nearest shared canvas.
+
 ## Generation workflow
 
 1. Gather the campaign premise, intended tone, known people/places/factions,
@@ -36,7 +53,9 @@ Do not generate:
    - use events and branches only as leaves.
 3. Assign stable lowercase IDs before writing references.
 4. Draft items in parent-before-child order.
-5. Add only explicit flow links between siblings on the same canvas.
+5. Add only explicit flow links between siblings on the same canvas. Model a
+   transition between nested plans as a flow between their owning cards on the
+   nearest shared canvas.
 6. Add named references with fallback labels for optional-addon records.
 7. Add intended consequences as annotations, not state changes.
 8. Put retrospective facts in `notes`, not in the planning item body.
@@ -47,6 +66,7 @@ Do not generate:
 ## Root document
 
 Every array is required even when empty.
+Only schema version 3 is accepted; do not emit or convert older versions.
 
 ```json
 {
@@ -237,8 +257,8 @@ Flow is directed and acyclic.
 |---|---|
 | `id` | Stable id. |
 | `schemaVersion` | Exactly `3`. |
-| `sourceId` | Existing planning item id. |
-| `targetId` | Different existing planning item id. |
+| `sourceId` | Existing planning item id on the link's canvas. |
+| `targetId` | Different sibling item id on that same canvas. |
 | `kind` | `continues` or `option`. |
 | `label` | Optional visible line label, at most 200 characters. |
 
@@ -331,6 +351,7 @@ Planning target:
 ```
 
 Use a planning target for a named thematic relationship, not chronology.
+Unlike flow, that relationship may cross ownership scopes.
 
 Complete encounter participant:
 

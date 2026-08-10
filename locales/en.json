@@ -270,7 +270,7 @@
   "dashboard.workflow.body": "Edit directly, inspect relationships, or review an atomically imported structure.",
   "dashboard.workflow.label": "DM planning tools",
   "dashboard.planning.title": "Story Planner",
-  "dashboard.planning.body": "Build nested plotlines, quests, events, branches, references, and consequences on one canvas.",
+  "dashboard.planning.body": "Build nested plotlines, quests, events, branches, references, and consequences across focused canvases.",
   "dashboard.import.title": "Import Center",
   "dashboard.import.body": "Preview and atomically commit a generated planning document.",
   "dashboard.importMissing": "The planning import provider is unavailable. The server addon may need a restart.",

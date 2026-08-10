@@ -5,14 +5,18 @@ DM Tools is the API-v2 planning and world-building addon for the sibling
 
 ## Start here
 
-Read only the references relevant to the task:
+Read only the references relevant to the task. Each document has one owner:
 
-1. [`README.md`](README.md) for product scope and current surfaces.
-2. [`planning-contract.js`](planning-contract.js) before changing stored data.
-3. [`docs/IMPORTING.md`](docs/IMPORTING.md) before changing import behavior.
-4. [`docs/GRAPH.md`](docs/GRAPH.md) before changing the story canvas.
-5. [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) before generating or
-   changing the LLM interchange format.
+1. [`README.md`](README.md) for the human-facing product overview and local
+   development commands.
+2. [`planning-contract.js`](planning-contract.js) for the executable stored-data
+   schema and complete-dataset validation.
+3. [`docs/GRAPH.md`](docs/GRAPH.md) for canvas projection, local-flow semantics,
+   interactions, and presentation-only view records.
+4. [`docs/IMPORTING.md`](docs/IMPORTING.md) for preview, reconciliation,
+   atomicity, and campaign-bundle behavior.
+5. [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) for the exact planning
+   JSON format produced by people or language models.
 6. `../ttrpg-codex/examples/addons/AGENTS.md` for the public host contract.
    Read host internals only when the public contract is insufficient.
 
@@ -34,7 +38,7 @@ server/index.cjs                 server composition
 server/planning-provider.cjs     schema-v3 import provider and restricted
                                  campaign-bundle contributor
 locales/                         English source and Czech translation
-tests/                           contract, migration, provider, UI, dashboard
+tests/                           contract, provider, UI, dashboard, lifecycle
 ```
 
 ## Product boundaries
@@ -43,8 +47,9 @@ tests/                           contract, migration, provider, UI, dashboard
   campaign-state machine, or mandatory retrospective journal.
 - Ownership is strict and tree-shaped: the campaign owns root items; plotlines
   and quests may own nested items; events and branches are leaves.
-- Each canvas owns a separate acyclic flow graph between its direct children.
-  Flow never crosses ownership scopes, changes ownership, or records what
+- The planner is a tree of local DAGs: ownership forms the tree, and each
+  campaign/plotline/quest canvas owns an acyclic flow graph between its direct
+  children. Flow never crosses scopes, changes ownership, or records what
   actually happened.
 - `eventType` changes presentation and structured detail labels. Encounter and
   puzzle events open dedicated screens; story events remain concise beats.
@@ -64,8 +69,15 @@ tests/                           contract, migration, provider, UI, dashboard
 
 ## Correctness boundaries
 
-- `planning-contract.js` is the only schema. Manual editing, migration, import,
-  and tests must not create parallel validators.
+- `planning-contract.js` is the only schema. Manual editing, import, and tests
+  must not create parallel validators.
+- Planning schema version 3 is the only supported version. Reject older stored
+  records and import documents; do not translate or merge them.
+- Every flow endpoint must exist, differ, and have exactly the same immediate
+  `parentId`. Equal depth is insufficient. Reparenting must fail if it would
+  strand an attached flow; never delete or retarget that flow implicitly.
+- Named planning references, marginalia anchors, and consequence targets may
+  cross ownership scopes because they are not canvas flow.
 - Register all collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
@@ -79,9 +91,9 @@ tests/                           contract, migration, provider, UI, dashboard
 - `planning_items`, `planning_flow_links`, `planning_references`,
   `planning_consequences`, and `dm_notes` are planning meaning.
   `planning_views` is presentation only and never enters imports.
-- Render only direct children and their local flow on an open canvas. Never
-  infer edges from prose, tags, proximity, timestamps, ownership, or nested
-  content.
+- Render only direct children and their real local flow on an open canvas.
+  Never roll up or infer edges from nested content, ownership, prose, tags,
+  proximity, or timestamps.
 - Selection must update the inspector without a route rerender so the canvas
   scroll position remains stable.
 - Clean up every scheduled mount and DOM listener on rerender, navigation,

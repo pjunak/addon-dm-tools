@@ -7,7 +7,24 @@ The generic host graph facade remains available to other addons but is not a
 good fit for rich planner cards, marginalia markers, nested scopes, and
 dedicated detail screens.
 
-## Projection
+## Model: a tree of local DAGs
+
+Ownership forms a tree. Flow does not form one campaign-wide graph; each
+campaign, plotline, or quest scope owns a separate directed acyclic graph over
+its direct children.
+
+For every stored flow link:
+
+```text
+source.parentId === target.parentId
+```
+
+`null === null` makes campaign-root links valid. Equal nesting depth is not
+enough: children of different quests are on different canvases and cannot share
+a flow link. Named references and consequence targets are separate semantic
+relationships and may cross scopes.
+
+## Scope and projection
 
 An open canvas represents exactly one scope:
 
@@ -25,6 +42,14 @@ visible. Invalid or incomplete records are ignored defensively by projection.
 No edge is inferred from ownership, nested content, tags, text, time, position,
 references, or consequences.
 
+### Transitions between nested plans
+
+Represent a cross-plan handoff at the nearest shared canvas. If an internal
+event in Quest A leads into Quest B, end Quest A's internal flow locally and
+connect `Quest A → Quest B` on their parent canvas. The planner deliberately
+does not preserve an exact cross-scope chronological endpoint. Use a named
+reference when the precise relationship matters but is not story flow.
+
 ## Interaction
 
 - Single click or Space selects a card and updates the inspector in place.
@@ -35,7 +60,11 @@ references, or consequences.
 - Dragging from the circular edge handle to another card creates a flow link.
   Clicking the handle and then a target provides a second pointer path.
 - The inspector provides labelled native forms for keyboard-only creation and
-  editing of flow, references, consequences, and marginalia.
+  editing of flow, references, consequences, and marginalia. Flow target
+  controls list siblings from the active canvas only.
+- Moving an item to another owner is rejected while any attached flow would be
+  left on a different canvas. The DM must remove those links explicitly; the
+  planner never deletes or retargets them as a side effect.
 - Deleting a populated plotline or quest requires explicit confirmation and
   atomically removes its planning subtree and attached planner data. Named
   campaign targets such as people and places are references and remain intact.
@@ -73,7 +102,8 @@ only `{x,y}` positions per scope:
 ```
 
 Auto-arrange removes that scope record and cannot change story meaning.
-Imported documents never contain view records.
+Imported documents never contain view records. Only schema-version-3 view
+records are read; older layouts are ignored rather than converted.
 
 ## Lifecycle and accessibility
 
