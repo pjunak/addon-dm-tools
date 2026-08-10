@@ -34,10 +34,7 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   assert.equal(result.ok, true, result.errors.join('; '));
   assert.equal(manifest.id, 'dm-tools');
   assert.deepEqual(manifest.collections, [
-    { name: 'scenarios', keyed: false, access: 'dm' },
     { name: 'planning_items', keyed: true, access: 'dm' },
-    { name: 'planning_folders', keyed: true, access: 'dm' },
-    { name: 'planning_links', keyed: true, access: 'dm' },
     { name: 'planning_flow_links', keyed: true, access: 'dm' },
     { name: 'planning_references', keyed: true, access: 'dm' },
     { name: 'planning_consequences', keyed: true, access: 'dm' },
@@ -77,10 +74,7 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
   });
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.rec.collections, [
-    { name: 'scenarios', keyed: false, access: 'dm' },
     { name: 'planning_items', keyed: true, access: 'dm' },
-    { name: 'planning_folders', keyed: true, access: 'dm' },
-    { name: 'planning_links', keyed: true, access: 'dm' },
     { name: 'planning_flow_links', keyed: true, access: 'dm' },
     { name: 'planning_references', keyed: true, access: 'dm' },
     { name: 'planning_consequences', keyed: true, access: 'dm' },
@@ -112,9 +106,6 @@ test('effective player registration exposes no collection', async () => {
     catalogs: { en, cs },
     locale: 'cs',
     fetch: providerFetch,
-    fixtures: {
-      'collection:scenarios': [{ id: 'hidden', name: 'Hidden scenario' }],
-    },
   });
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.rec.collections, []);

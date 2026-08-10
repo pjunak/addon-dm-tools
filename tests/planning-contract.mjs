@@ -9,12 +9,11 @@ import {
   normalizePlanningReference,
   validatePlanningDataset,
 } from '../planning-contract.js';
-import { buildLegacyMigration } from '../planning-migration.js';
 
 function item(overrides = {}) {
   return normalizePlanningItem({
     id: 'plotline-dragons',
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'plotline',
     parentId: null,
     title: 'The Waking Dragons',
@@ -84,13 +83,19 @@ test('rejects ownership cycles and children under leaf events', () => {
   assert.ok(errors.some(error => error.code === 'PLANNING_PARENT_KIND_INVALID'));
 });
 
-test('flow is acyclic, option links originate at branches, and may cross nested scopes', () => {
+test('flow stays on one canvas, remains acyclic, and starts options at branches', () => {
   const root = item();
-  const quest = item({
-    id: 'quest-earthquake',
+  const firstQuest = item({
+    id: 'quest-mountain',
     kind: 'quest',
     parentId: root.id,
-    title: 'Earthquake',
+    title: 'Take the Mountain Road',
+  });
+  const secondQuest = item({
+    id: 'quest-river',
+    kind: 'quest',
+    parentId: root.id,
+    title: 'Follow the River',
   });
   const branch = item({
     id: 'branch-route',
@@ -99,38 +104,58 @@ test('flow is acyclic, option links originate at branches, and may cross nested 
     title: 'Choose route',
     branchType: 'decision',
   });
-  const nested = item({
-    id: 'event-nested',
+  const firstNested = item({
+    id: 'event-mountain-pass',
     kind: 'event',
-    parentId: quest.id,
-    title: 'Nested event',
+    parentId: firstQuest.id,
+    title: 'Cross the Mountain Pass',
+    eventType: 'story',
+  });
+  const secondNested = item({
+    id: 'event-river-crossing',
+    kind: 'event',
+    parentId: secondQuest.id,
+    title: 'Cross the River',
     eventType: 'story',
   });
   const option = normalizePlanningFlow({
     id: 'flow-option',
-    schemaVersion: 2,
+    schemaVersion: 3,
     sourceId: branch.id,
-    targetId: nested.id,
+    targetId: firstQuest.id,
     kind: 'option',
     label: 'Take the mountain road',
     updatedAt: 100,
   }).value;
   assert.deepEqual(validatePlanningDataset({
-    items: [root, quest, branch, nested],
+    items: [root, firstQuest, secondQuest, branch, firstNested, secondNested],
     flowLinks: [option],
   }), []);
-  const invalidOption = { ...option, id: 'flow-invalid', sourceId: quest.id };
+  const crossCanvas = {
+    ...option,
+    id: 'flow-cross-canvas',
+    sourceId: firstNested.id,
+    targetId: secondNested.id,
+    kind: 'continues',
+  };
+  const invalidOption = {
+    ...option,
+    id: 'flow-invalid-option',
+    sourceId: firstQuest.id,
+    targetId: secondQuest.id,
+  };
   const back = {
     ...option,
     id: 'flow-back',
-    sourceId: nested.id,
+    sourceId: firstQuest.id,
     targetId: branch.id,
     kind: 'continues',
   };
   const errors = validatePlanningDataset({
-    items: [root, quest, branch, nested],
-    flowLinks: [option, invalidOption, back],
+    items: [root, firstQuest, secondQuest, branch, firstNested, secondNested],
+    flowLinks: [option, crossCanvas, invalidOption, back],
   });
+  assert.ok(errors.some(error => error.code === 'PLANNING_FLOW_SCOPE_MISMATCH'));
   assert.ok(errors.some(error => error.code === 'PLANNING_FLOW_OPTION_SOURCE_INVALID'));
   assert.ok(errors.some(error => error.code === 'PLANNING_FLOW_CYCLE'));
 });
@@ -138,7 +163,7 @@ test('flow is acyclic, option links originate at branches, and may cross nested 
 test('named references retain quantities and validate campaign records', () => {
   const reference = normalizePlanningReference({
     id: 'reference-goblins',
-    schemaVersion: 2,
+    schemaVersion: 3,
     itemId: 'plotline-dragons',
     name: 'Guards the ruined gate',
     relation: 'opposes',
@@ -171,7 +196,7 @@ test('named references retain quantities and validate campaign records', () => {
 test('consequences and separate marginalia validate their anchors', () => {
   const consequence = normalizePlanningConsequence({
     id: 'consequence-town-friendly',
-    schemaVersion: 2,
+    schemaVersion: 3,
     anchor: { scope: 'item', itemId: 'plotline-dragons' },
     kind: 'world',
     title: 'The town becomes friendly',
@@ -180,7 +205,7 @@ test('consequences and separate marginalia validate their anchors', () => {
   }).value;
   const note = normalizeDmNote({
     id: 'note-angry-noble',
-    schemaVersion: 2,
+    schemaVersion: 3,
     title: 'The party angered the duke',
     body: 'Keep this separate from the planned quest structure.',
     anchorIds: ['plotline-dragons'],
@@ -196,61 +221,4 @@ test('consequences and separate marginalia validate their anchors', () => {
     notes: [{ ...note, anchorIds: ['missing'] }],
   });
   assert.ok(errors.some(error => error.code === 'PLANNING_ITEM_REFERENCE_MISSING'));
-});
-
-test('legacy folders, sections, notes, and named links translate without mutation', () => {
-  const source = {
-    scenarios: [],
-    folders: [{
-      id: 'arc-court',
-      name: 'Court',
-      parentId: null,
-      updatedAt: 10,
-    }],
-    items: [{
-      id: 'quest-sigil',
-      schemaVersion: 1,
-      kind: 'quest',
-      title: 'Recover the Sigil',
-      summary: '',
-      body: '',
-      folderId: 'arc-court',
-      tags: [],
-      state: 'ready',
-      pinned: true,
-      sections: [{ id: 'audience', title: 'Audience', body: 'Meet the duke.' }],
-      updatedAt: 10,
-    }, {
-      id: 'note-duke',
-      schemaVersion: 1,
-      kind: 'note',
-      title: 'The duke is suspicious',
-      summary: '',
-      body: 'A fact learned at the table.',
-      folderId: 'arc-court',
-      tags: [],
-      state: 'idea',
-      pinned: false,
-      sections: [],
-      updatedAt: 10,
-    }],
-    links: [{
-      id: 'link-mira',
-      schemaVersion: 1,
-      name: 'Requests discretion',
-      type: 'involves',
-      source: { scope: 'core', collection: 'characters', id: 'mira' },
-      target: { scope: 'planning', itemId: 'quest-sigil', sectionId: 'audience' },
-      notes: '',
-      updatedAt: 10,
-    }],
-  };
-  const before = structuredClone(source);
-  const result = buildLegacyMigration(source);
-  assert.deepEqual(source, before);
-  assert.deepEqual(result.conflicts, []);
-  assert.ok(result.items.some(value => value.kind === 'plotline' && value.title === 'Court'));
-  assert.ok(result.items.some(value => value.kind === 'event' && value.title === 'Audience'));
-  assert.equal(result.references[0].name, 'Requests discretion');
-  assert.equal(result.notes[0].title, 'The duke is suspicious');
 });

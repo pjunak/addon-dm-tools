@@ -29,9 +29,9 @@ Campaign
 ```
 
 Each open canvas shows only the direct children of its campaign, plotline, or
-quest scope. Flow links are acyclic and independent from ownership. A flow that
-crosses a deeper scope is summarized on the owning card until the DM enters
-that canvas.
+quest scope. Flow links are acyclic, independent from ownership, and connect
+only siblings with that same immediate parent. Every stored flow is therefore
+fully visible and editable on exactly one canvas.
 
 Single click selects a card and opens its inspector. Double-click enters a
 plotline or quest, or opens the dedicated encounter/puzzle screen. Cards drag
@@ -50,11 +50,6 @@ All collections are host-managed and DM-only:
 | `planning_consequences` | Planned world changes, rewards, information, and complications attached to an item or flow. |
 | `dm_notes` | Separate marginalia linked to zero or more planning items. |
 | `planning_views` | Per-scope card positions only; never planning meaning or import data. |
-
-`scenarios`, `planning_folders`, and `planning_links` remain declared only as
-non-destructive migration sources. The v2 migration translates compatible
-records atomically, retains the originals, and does not mark itself complete
-when any record cannot be translated safely.
 
 The shared schema is [`planning-contract.js`](planning-contract.js). Import
 behavior is documented in [`docs/IMPORTING.md`](docs/IMPORTING.md). Agents must

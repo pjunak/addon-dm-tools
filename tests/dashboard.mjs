@@ -62,7 +62,7 @@ function fixture({
 const items = [
   {
     id: 'quest',
-    schemaVersion: 2,
+    schemaVersion: 3,
     title: 'Recover the Sigil',
     summary: 'Court investigation',
     kind: 'quest',
@@ -71,7 +71,7 @@ const items = [
   },
   {
     id: 'ambush',
-    schemaVersion: 2,
+    schemaVersion: 3,
     title: 'Road Ambush',
     summary: 'Bandits on the north road',
     kind: 'event',
@@ -89,7 +89,6 @@ test('dashboard exposes the unified planner and import workflows with planning c
   assert.match(html, /Campaign Planning/);
   assert.match(html, /href="#\/dm-plans"/);
   assert.match(html, /href="#\/dm-import"/);
-  assert.doesNotMatch(html, /dm-scenarios/);
   assert.match(html, /Recover the Sigil/);
   assert.match(html, /Road Ambush/);
   assert.match(html, /<div class="codex-tile-value">2<\/div>/);

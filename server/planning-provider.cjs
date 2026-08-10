@@ -1,7 +1,7 @@
 'use strict';
 
 const PROVIDER_ID = 'planning-json';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const ADDON_ID = 'dm-tools';
 const ROOT_FIELDS = new Set([
   'format',

@@ -234,9 +234,8 @@ function flowSection(item, data, host) {
     flow.sourceId === item.id || flow.targetId === item.id
   ));
   const targets = data.items
-    .filter(value => value.id !== item.id)
-    .map(value => ({ ...value, pathLabel: itemPathLabel(value, data.items) }))
-    .sort((left, right) => left.pathLabel.localeCompare(right.pathLabel));
+    .filter(value => value.id !== item.id && value.parentId === item.parentId)
+    .sort((left, right) => left.title.localeCompare(right.title));
   return `<section class="dmt-inspector-section">
     <h3>${esc(t('planner.flow.title'))}</h3>
     <div class="dmt-flow-list">
@@ -266,7 +265,7 @@ function flowSection(item, data, host) {
       <form class="dmt-planner-form"${dataOn('submit', host.action('plannerSaveFlow'), '$ev', item.id)}>
         <label>${esc(t('planner.flow.target'))}
           <select class="edit-input" name="targetId" required>
-            ${targets.map(value => option(value.id, '', esc(value.pathLabel))).join('')}
+            ${targets.map(value => option(value.id, '', esc(value.title))).join('')}
           </select>
         </label>
         <div class="dmt-planner-form-row">
@@ -583,7 +582,7 @@ export function renderStoryCanvas(projection, selectedId, host) {
           const targetBox = { ...target.position, width: 240, height: 116 };
           const labelX = (sourceBox.x + sourceBox.width + targetBox.x) / 2;
           const labelY = (sourceBox.y + targetBox.y) / 2 + 58;
-          return `<path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" data-rolled-up="${flow.rolledUp ? 'true' : 'false'}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
+          return `<path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
             ${flow.label ? `<text class="dmt-story-edge-label" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>

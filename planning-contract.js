@@ -1,4 +1,4 @@
-export const PLANNING_SCHEMA_VERSION = 2;
+export const PLANNING_SCHEMA_VERSION = 3;
 
 export const PLANNING_KINDS = Object.freeze([
   'plotline',
@@ -621,6 +621,14 @@ function validateFlow(items, flowLinks, errors) {
       errors.push(issue(
         'PLANNING_FLOW_ENDPOINT_MISSING',
         'Flow links must connect existing planning items.',
+        ['flowLinks', link.id],
+      ));
+      continue;
+    }
+    if (source.parentId !== target.parentId) {
+      errors.push(issue(
+        'PLANNING_FLOW_SCOPE_MISMATCH',
+        'Flow links must connect planning items on the same canvas.',
         ['flowLinks', link.id],
       ));
       continue;

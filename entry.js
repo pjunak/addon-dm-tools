@@ -1,7 +1,6 @@
 import { createDashboard } from './dashboard.js';
 import { createImportCenter } from './import-center.js';
 import { createPlanningImportAdapter } from './planning-import-adapter.js';
-import { migratePlanningV2 } from './planning-migration.js';
 import { createStoryPlanner } from './story-planner.js';
 
 const REQUIRED_CAPABILITIES = Object.freeze([
@@ -20,10 +19,7 @@ export default function register(host) {
   if (!host.role.isDM()) return () => {};
 
   [
-    'scenarios',
     'planning_items',
-    'planning_folders',
-    'planning_links',
     'planning_flow_links',
     'planning_references',
     'planning_consequences',
@@ -134,11 +130,4 @@ export default function register(host) {
 
   planningImport.initialize();
   dashboard.initialize();
-  migratePlanningV2(host).then(result => {
-    if (result.migrated) {
-      host.ui.announce(host.i18n.t('planner.migration.completed', { n: result.migrated }));
-      host.ui.rerender();
-    }
-    if (result.conflicts.length) host.ui.toast(host.i18n.t('planner.migration.conflict'));
-  }).catch(() => host.ui.toast(host.i18n.t('planner.migration.failed')));
 }

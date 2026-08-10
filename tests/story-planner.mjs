@@ -41,7 +41,7 @@ function interpolate(value, params = {}) {
 function planningItem(overrides = {}) {
   return {
     id: 'plotline-dragons',
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'plotline',
     parentId: null,
     title: 'The Waking Dragons',
@@ -56,7 +56,7 @@ function planningItem(overrides = {}) {
   };
 }
 
-test('scope projection shows only direct children and rolls deeper flow to their owner', () => {
+test('scope projection shows only direct children and their local flow', () => {
   const plotline = planningItem();
   const quest = planningItem({
     id: 'quest-earthquake',
@@ -82,6 +82,12 @@ test('scope projection shows only direct children and rolls deeper flow to their
     scopeId: plotline.id,
     items: [plotline, quest, nested, decision],
     flowLinks: [{
+      id: 'flow-local',
+      sourceId: decision.id,
+      targetId: quest.id,
+      kind: 'option',
+      label: 'Investigate',
+    }, {
       id: 'flow-nested',
       sourceId: nested.id,
       targetId: decision.id,
@@ -97,8 +103,8 @@ test('scope projection shows only direct children and rolls deeper flow to their
     'branch-route',
     'quest-earthquake',
   ]);
-  assert.equal(projected.flowLinks[0].sourceId, quest.id);
-  assert.equal(projected.flowLinks[0].rolledUp, true);
+  assert.deepEqual(projected.flowLinks.map(flow => flow.id), ['flow-local']);
+  assert.equal(Object.hasOwn(projected.flowLinks[0], 'rolledUp'), false);
   assert.equal(projected.nodes.find(node => node.item.id === quest.id).noteCount, 1);
   assert.deepEqual(itemAncestors(nested.id, [plotline, quest, nested]), [
     plotline,
@@ -168,7 +174,7 @@ function fixture() {
     'planning_views',
   ].map(name => [name, new Map()]));
   stores.planning_items.set('plotline-dragons', {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'plotline',
     parentId: null,
     title: 'The Waking Dragons',
@@ -300,13 +306,13 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.deepEqual(value.stores.planning_items.get(draft.id).tags, ['dragon', 'mystery']);
 });
 
-test('manual flows and named references can cross nested canvas scopes', async t => {
+test('manual flow stays local while named references may cross canvas scopes', async t => {
   const original = globalThis.FormData;
   globalThis.FormData = FakeFormData;
   t.after(() => { globalThis.FormData = original; });
   const value = fixture();
   value.stores.planning_items.set('branch-choice', {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'branch',
     branchType: 'decision',
     parentId: null,
@@ -320,7 +326,7 @@ test('manual flows and named references can cross nested canvas scopes', async t
     updatedAt: 100,
   });
   value.stores.planning_items.set('event-tremor', {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'event',
     eventType: 'story',
     parentId: 'plotline-dragons',
@@ -333,6 +339,13 @@ test('manual flows and named references can cross nested canvas scopes', async t
     tags: [],
     updatedAt: 100,
   });
+  const rootHtml = value.planner.render();
+  const flowTargetOptions = rootHtml.match(
+    /<select class="edit-input" name="targetId" required>([\s\S]*?)<\/select>/,
+  )?.[1] || '';
+  assert.match(flowTargetOptions, /value="plotline-dragons"/);
+  assert.doesNotMatch(flowTargetOptions, /value="event-tremor"/);
+
   await value.planner.saveFlow({
     preventDefault() {},
     currentTarget: {
@@ -352,7 +365,8 @@ test('manual flows and named references can cross nested canvas scopes', async t
     kind: 'continues',
     label: 'Forces a choice',
   }), 'event-tremor');
-  assert.equal(value.stores.planning_flow_links.size, 2);
+  assert.equal(value.stores.planning_flow_links.size, 1);
+  assert.match(value.announcements.at(-1), /validation failed/i);
 
   await value.planner.savePlanningReference(event({
     targetId: 'event-tremor',
@@ -373,6 +387,72 @@ test('manual flows and named references can cross nested canvas scopes', async t
   }), 'branch-choice');
   const [consequence] = value.stores.planning_consequences.values();
   assert.deepEqual(consequence.target, { scope: 'planning', itemId: 'event-tremor' });
+});
+
+test('schema-v2 canvas positions are ignored rather than converted', () => {
+  const value = fixture();
+  value.stores.planning_views.set('scope-campaign', {
+    schemaVersion: 2,
+    scopeId: null,
+    positions: { 'plotline-dragons': { x: 984, y: 984 } },
+    updatedAt: 100,
+  });
+  const html = value.planner.render();
+  assert.match(html, /style="left:72px;top:72px"/);
+  assert.doesNotMatch(html, /left:984px|top:984px/);
+});
+
+test('moving an item cannot strand an attached flow on another canvas', async t => {
+  const original = globalThis.FormData;
+  globalThis.FormData = FakeFormData;
+  t.after(() => { globalThis.FormData = original; });
+  const value = fixture();
+  value.stores.planning_items.set('quest-owner', {
+    schemaVersion: 3,
+    kind: 'quest',
+    parentId: null,
+    title: 'New Owner',
+    summary: '',
+    body: '',
+    objective: '',
+    setup: '',
+    resolution: '',
+    tags: [],
+    updatedAt: 100,
+  });
+  value.stores.planning_items.set('event-prologue', {
+    schemaVersion: 3,
+    kind: 'event',
+    eventType: 'story',
+    parentId: null,
+    title: 'Prologue',
+    summary: '',
+    body: '',
+    objective: '',
+    setup: '',
+    resolution: '',
+    tags: [],
+    updatedAt: 100,
+  });
+  await value.planner.saveFlow(event({
+    targetId: 'plotline-dragons',
+    kind: 'continues',
+    label: '',
+  }), 'event-prologue');
+  value.planner.editItem('plotline-dragons');
+  await value.planner.saveItem(event({
+    kind: 'plotline',
+    parentId: 'quest-owner',
+    title: 'The Waking Dragons',
+    summary: 'Ancient dragons stir.',
+    body: '',
+    objective: '',
+    setup: '',
+    resolution: '',
+    tags: '',
+  }));
+  assert.equal(value.stores.planning_items.get('plotline-dragons').parentId, null);
+  assert.match(value.announcements.at(-1), /validation failed/i);
 });
 
 test('deleting a populated plotline confirms and removes only its planning subtree', async t => {
@@ -412,8 +492,8 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   }));
   add('planning_flow_links', {
     id: 'flow-out',
-    schemaVersion: 2,
-    sourceId: 'event-grandchild',
+    schemaVersion: 3,
+    sourceId: 'plotline-dragons',
     targetId: 'plotline-survivor',
     kind: 'continues',
     label: '',
@@ -421,7 +501,7 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   });
   add('planning_references', {
     id: 'reference-out',
-    schemaVersion: 2,
+    schemaVersion: 3,
     itemId: 'plotline-survivor',
     name: 'Points into deleted plan',
     relation: 'related',
@@ -432,7 +512,7 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   });
   add('planning_consequences', {
     id: 'consequence-out',
-    schemaVersion: 2,
+    schemaVersion: 3,
     anchor: { scope: 'item', itemId: 'plotline-survivor' },
     kind: 'world',
     title: 'Points into deleted plan',
@@ -442,7 +522,7 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   });
   add('dm_notes', {
     id: 'shared-note',
-    schemaVersion: 2,
+    schemaVersion: 3,
     title: 'Shared note',
     body: '',
     anchorIds: ['event-grandchild', 'plotline-survivor'],
@@ -450,14 +530,14 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   });
   add('planning_views', {
     id: 'scope-plotline-dragons',
-    schemaVersion: 2,
+    schemaVersion: 3,
     scopeId: 'plotline-dragons',
     positions: { 'quest-child': { x: 72, y: 72 } },
     updatedAt: 100,
   });
   add('planning_views', {
     id: 'scope-campaign',
-    schemaVersion: 2,
+    schemaVersion: 3,
     scopeId: null,
     positions: {
       'plotline-dragons': { x: 72, y: 72 },

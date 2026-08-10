@@ -22,7 +22,6 @@ Read only the references relevant to the task:
 addon.json                       capabilities, permissions, collections
 entry.js                         composition and role-conditioned registration
 planning-contract.js             pure schema and complete-dataset validation
-planning-migration.js            non-destructive v1-to-v2 translation
 story-planner-model.js           ownership projection, layout, orthogonal paths
 story-planner-interactions.js    pointer/keyboard drag and connection lifecycle
 story-planner-render.js          escaped canvas, inspector, and detail HTML
@@ -32,7 +31,7 @@ dashboard.js                     live dm:dashboard planning overview
 import-center.js                 generic adapter discovery, selection, lifecycle
 planning-import-adapter.js       reviewed planning import state machine and UI
 server/index.cjs                 server composition
-server/planning-provider.cjs     schema-v2 import provider and restricted
+server/planning-provider.cjs     schema-v3 import provider and restricted
                                  campaign-bundle contributor
 locales/                         English source and Czech translation
 tests/                           contract, migration, provider, UI, dashboard
@@ -44,7 +43,8 @@ tests/                           contract, migration, provider, UI, dashboard
   campaign-state machine, or mandatory retrospective journal.
 - Ownership is strict and tree-shaped: the campaign owns root items; plotlines
   and quests may own nested items; events and branches are leaves.
-- Flow is a separate acyclic graph. It never changes ownership or records what
+- Each canvas owns a separate acyclic flow graph between its direct children.
+  Flow never crosses ownership scopes, changes ownership, or records what
   actually happened.
 - `eventType` changes presentation and structured detail labels. Encounter and
   puzzle events open dedicated screens; story events remain concise beats.
@@ -79,14 +79,9 @@ tests/                           contract, migration, provider, UI, dashboard
 - `planning_items`, `planning_flow_links`, `planning_references`,
   `planning_consequences`, and `dm_notes` are planning meaning.
   `planning_views` is presentation only and never enters imports.
-- `scenarios`, `planning_folders`, and `planning_links` are read-only migration
-  sources. Do not add product behavior to them or delete their data without
-  explicit maintainer approval.
-- The v2 migration is atomic and non-destructive. A conflict writes neither
-  translated data nor the completion marker.
-- Render only direct children on an open canvas. Cross-scope flow is rolled up
-  to the visible owning child; never infer edges from prose, tags, proximity,
-  timestamps, or ownership.
+- Render only direct children and their local flow on an open canvas. Never
+  infer edges from prose, tags, proximity, timestamps, ownership, or nested
+  content.
 - Selection must update the inspector without a route rerender so the canvas
   scroll position remains stable.
 - Clean up every scheduled mount and DOM listener on rerender, navigation,

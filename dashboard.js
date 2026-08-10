@@ -1,3 +1,5 @@
+import { PLANNING_SCHEMA_VERSION } from './planning-contract.js';
+
 const PROVIDER_ID = 'planning-json';
 
 export function createDashboard(host) {
@@ -41,7 +43,8 @@ export function createDashboard(host) {
     const result = host.store.collection('planning_items').list();
     if (!Array.isArray(result)) throw new Error('Planning collection is unavailable.');
     return result.filter(record => (
-      record && typeof record === 'object' && record.schemaVersion === 2
+      record && typeof record === 'object'
+      && record.schemaVersion === PLANNING_SCHEMA_VERSION
     ));
   }
 

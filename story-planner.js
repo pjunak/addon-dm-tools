@@ -33,6 +33,7 @@ const VALIDATION_GROUPS = Object.freeze({
   PLANNING_PARENT_KIND_INVALID: 'ownership',
   PLANNING_HIERARCHY_CYCLE: 'ownership',
   PLANNING_FLOW_ENDPOINT_MISSING: 'flow',
+  PLANNING_FLOW_SCOPE_MISMATCH: 'flowScope',
   PLANNING_FLOW_OPTION_SOURCE_INVALID: 'flow',
   PLANNING_FLOW_CYCLE: 'flow',
   PLANNING_ITEM_REFERENCE_MISSING: 'reference',
@@ -120,7 +121,9 @@ export function createStoryPlanner(host, options = {}) {
     const views = collection('views');
     const record = views.get?.(viewId())
       || views.list().find(value => value.id === viewId());
-    return normalizePositions(record?.positions);
+    return record?.schemaVersion === PLANNING_SCHEMA_VERSION
+      ? normalizePositions(record.positions)
+      : {};
   }
 
   function cleanupMount() {
@@ -186,9 +189,10 @@ export function createStoryPlanner(host, options = {}) {
 
   function persistPosition(itemId, position) {
     const id = viewId();
-    const current = collection('views').get?.(id)
+    const stored = collection('views').get?.(id)
       || collection('views').list().find(value => value.id === id)
       || {};
+    const current = stored.schemaVersion === PLANNING_SCHEMA_VERSION ? stored : {};
     const positions = {
       ...normalizePositions(current.positions),
       [itemId]: position,

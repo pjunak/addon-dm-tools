@@ -13,7 +13,6 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-story-edges{position:absolute;inset:0;overflow:visible;pointer-events:none}
     .addon-dm-tools .dmt-story-edge{fill:none;stroke:var(--text-muted);stroke-width:2;marker-end:url(#dmt-arrow)}
     .addon-dm-tools .dmt-story-edge[data-kind="option"]{stroke:var(--accent-gold);stroke-dasharray:8 6}
-    .addon-dm-tools .dmt-story-edge[data-rolled-up="true"]{opacity:.55;stroke-dasharray:4 5}
     .addon-dm-tools .dmt-story-edge-label{fill:var(--text-parchment);font-family:var(--font-ui);font-size:var(--text-xs);paint-order:stroke;stroke:var(--bg-base);stroke-width:6;stroke-linejoin:round}
     .addon-dm-tools .dmt-story-preview{fill:none;stroke:var(--accent-gold);stroke-width:2;stroke-dasharray:6 5;pointer-events:none}
     .addon-dm-tools .dmt-story-node{position:absolute;width:15rem;min-height:7.2rem;padding:var(--space-3);border:2px solid var(--accent-gold-dim);border-radius:var(--radius);background:var(--bg-raised);color:var(--text-parchment);box-shadow:var(--shadow-sm);cursor:grab;user-select:none;touch-action:none;transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out)}

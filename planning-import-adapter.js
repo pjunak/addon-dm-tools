@@ -25,6 +25,7 @@ const DIAGNOSTIC_KEYS = {
   PLANNING_PARENT_KIND_INVALID: 'diagnostic.planningOwnership',
   PLANNING_HIERARCHY_CYCLE: 'diagnostic.planningOwnership',
   PLANNING_FLOW_ENDPOINT_MISSING: 'diagnostic.planningFlow',
+  PLANNING_FLOW_SCOPE_MISMATCH: 'diagnostic.planningFlowScope',
   PLANNING_FLOW_OPTION_SOURCE_INVALID: 'diagnostic.planningFlow',
   PLANNING_FLOW_CYCLE: 'diagnostic.planningFlow',
   PLANNING_ITEM_REFERENCE_MISSING: 'diagnostic.planningReference',

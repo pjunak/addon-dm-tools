@@ -36,8 +36,7 @@ Do not generate:
    - use events and branches only as leaves.
 3. Assign stable lowercase IDs before writing references.
 4. Draft items in parent-before-child order.
-5. Add only explicit flow links. Prefer links between siblings on the same
-   canvas; cross-scope flow is supported when genuinely needed.
+5. Add only explicit flow links between siblings on the same canvas.
 6. Add named references with fallback labels for optional-addon records.
 7. Add intended consequences as annotations, not state changes.
 8. Put retrospective facts in `notes`, not in the planning item body.
@@ -52,7 +51,7 @@ Every array is required even when empty.
 ```json
 {
   "format": "dm-tools-planning",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": 1785024000000,
   "items": [],
   "flowLinks": [],
@@ -115,7 +114,7 @@ Common fields:
 | Field | Contract |
 |---|---|
 | `id` | Stable DM Tools id. |
-| `schemaVersion` | Exactly `2`. |
+| `schemaVersion` | Exactly `3`. |
 | `operation` | `create` or `update`. |
 | `expectedUpdatedAt` | Required only for updates. |
 | `kind` | `plotline`, `quest`, `event`, or `branch`. |
@@ -133,7 +132,7 @@ Plotlines and quests omit `eventType` and `branchType`.
 ```json
 {
   "id": "plotline-waking-dragons",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "kind": "plotline",
   "parentId": null,
@@ -174,7 +173,7 @@ An event requires one `eventType`:
 ```json
 {
   "id": "event-cultist-ambush",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "kind": "event",
   "parentId": "quest-investigate-earthquake",
@@ -209,7 +208,7 @@ A branch requires one `branchType`:
 ```json
 {
   "id": "branch-free-the-prisoner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "kind": "branch",
   "parentId": "quest-investigate-earthquake",
@@ -237,30 +236,34 @@ Flow is directed and acyclic.
 | Field | Contract |
 |---|---|
 | `id` | Stable id. |
-| `schemaVersion` | Exactly `2`. |
+| `schemaVersion` | Exactly `3`. |
 | `sourceId` | Existing planning item id. |
 | `targetId` | Different existing planning item id. |
 | `kind` | `continues` or `option`. |
 | `label` | Optional visible line label, at most 200 characters. |
 
 `option` must originate at a `branch` item. Use its label for the choice,
-condition, or random result.
+condition, or random result. In this example, `event-question-the-prisoner` is
+another child of `quest-investigate-earthquake`.
 
 ```json
 {
-  "id": "flow-prisoner-to-observatory",
-  "schemaVersion": 2,
+  "id": "flow-prisoner-to-questioning",
+  "schemaVersion": 3,
   "operation": "create",
   "sourceId": "branch-free-the-prisoner",
-  "targetId": "quest-ruined-observatory",
+  "targetId": "event-question-the-prisoner",
   "kind": "option",
   "label": "Question the prisoner"
 }
 ```
 
-Prefer sibling-to-sibling links because they are directly editable on one
-canvas. Cross-scope links are legal and roll up to the visible owning card.
-Do not add an edge just because ownership already implies containment.
+The source and target must have the same immediate `parentId`, including
+`null` for campaign-root items. A flow link is fully visible and editable on
+that shared canvas. To express progression between two nested plans, connect
+their owning plotline or quest cards on the nearest shared canvas and keep each
+plan's internal flow local. Do not add an edge just because ownership already
+implies containment.
 
 ## Named references
 
@@ -334,7 +337,7 @@ Complete encounter participant:
 ```json
 {
   "id": "reference-ambush-cultists",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "itemId": "event-cultist-ambush",
   "name": "Attacks from both ends of the bridge",
@@ -369,7 +372,7 @@ A consequence is an annotation, never applied state.
 ```json
 {
   "id": "consequence-town-friendly",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "anchor": {
     "scope": "item",
@@ -392,7 +395,7 @@ the plan. A note may link to multiple planning items or none.
 ```json
 {
   "id": "note-duke-insulted",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "operation": "create",
   "title": "The party publicly insulted Duke Ren",
   "body": "The duke remained polite, but his steward ended the audience early.",
@@ -418,12 +421,12 @@ marginalia.
 ```json
 {
   "format": "dm-tools-planning",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": 1785024000000,
   "items": [
     {
       "id": "plotline-waking-dragons",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "operation": "create",
       "kind": "plotline",
       "parentId": null,
@@ -437,7 +440,7 @@ marginalia.
     },
     {
       "id": "event-earthquake",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "operation": "create",
       "kind": "event",
       "parentId": "plotline-waking-dragons",
@@ -452,7 +455,7 @@ marginalia.
     },
     {
       "id": "quest-investigate-earthquake",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "operation": "create",
       "kind": "quest",
       "parentId": "plotline-waking-dragons",
@@ -468,7 +471,7 @@ marginalia.
   "flowLinks": [
     {
       "id": "flow-earthquake-investigation",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "operation": "create",
       "sourceId": "event-earthquake",
       "targetId": "quest-investigate-earthquake",
@@ -480,7 +483,7 @@ marginalia.
   "consequences": [
     {
       "id": "consequence-town-trust",
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "operation": "create",
       "anchor": {
         "scope": "item",
@@ -545,7 +548,7 @@ earlier committed batch already created that anchor.
 - Ownership has no cycle.
 - Every event has `eventType`; other kinds omit it.
 - Every branch has `branchType`; other kinds omit it.
-- Flow endpoints exist, differ, and form a DAG.
+- Flow endpoints exist, differ, share the same immediate parent, and form a DAG.
 - Every option starts at a branch.
 - Every reference item and target exists or has a valid optional-addon fallback.
 - Every consequence anchor exists.

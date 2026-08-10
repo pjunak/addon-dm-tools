@@ -1,8 +1,9 @@
 # Planning import
 
 DM Tools registers `(dm-tools, planning-json)` using provider API 1 and planning
-schema version 2. It accepts strict UTF-8 JSON and may atomically write the five
+schema version 3. It accepts strict UTF-8 JSON and may atomically write the five
 meaning-bearing keyed DM-only collections.
+Older planning schema versions are rejected and are not converted.
 
 The exact record fields, examples, batching rules, and generation workflow live
 in [`AGENT_GENERATION.md`](AGENT_GENERATION.md).
@@ -12,7 +13,7 @@ in [`AGENT_GENERATION.md`](AGENT_GENERATION.md).
 ```json
 {
   "format": "dm-tools-planning",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": 1785024000000,
   "items": [],
   "flowLinks": [],
@@ -35,7 +36,7 @@ The campaign-bundle contributor envelope is:
   "contributorId": "planning",
   "document": {
     "format": "dm-tools-planning",
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "generatedAt": 1785024000000,
     "items": [],
     "flowLinks": [],
@@ -79,8 +80,8 @@ The provider then:
 2. reads one consistent snapshot of all five planning collections and allowed
    core reference collections;
 3. reconciles create, update, identical skip, and conflict in memory;
-4. validates ownership, flow, anchors, and new core references against the
-   complete candidate;
+4. validates ownership, same-parent flow, anchors, and new core references
+   against the complete candidate;
 5. returns at most 256 exact `put` operations.
 
 Optional-addon targets are not existence-checked. Their addon, kind, record id,
@@ -107,10 +108,3 @@ single-use token, rechecks provider/package and collection revisions, and
 publishes those exact operations through one durable transaction. Cancellation,
 expiry, provider change, revision conflict, or publication failure leaves all
 five collections unchanged.
-
-## Legacy data
-
-The old scenario import format is retired. Startup translates v1 scenarios,
-folders, items, sections, and links already stored in the campaign into v2
-once. The transaction retains every original source record. It writes no
-completion marker when any translation or v2 dataset validation fails.

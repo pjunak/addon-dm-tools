@@ -19,11 +19,11 @@ const generatedAt = 1785024000000;
 function document(overrides = {}) {
   return {
     format: 'dm-tools-planning',
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt,
     items: [{
       id: 'plotline-dragons',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       kind: 'plotline',
       parentId: null,
@@ -36,7 +36,7 @@ function document(overrides = {}) {
       tags: ['dragons'],
     }, {
       id: 'quest-earthquake',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       kind: 'quest',
       parentId: 'plotline-dragons',
@@ -49,7 +49,7 @@ function document(overrides = {}) {
       tags: [],
     }, {
       id: 'event-tremor',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       kind: 'event',
       parentId: 'plotline-dragons',
@@ -64,7 +64,7 @@ function document(overrides = {}) {
     }],
     flowLinks: [{
       id: 'flow-investigate',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       sourceId: 'event-tremor',
       targetId: 'quest-earthquake',
@@ -73,7 +73,7 @@ function document(overrides = {}) {
     }],
     references: [{
       id: 'reference-mira',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       itemId: 'quest-earthquake',
       name: 'Asks the party to investigate',
@@ -84,7 +84,7 @@ function document(overrides = {}) {
     }],
     consequences: [{
       id: 'consequence-town',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       anchor: { scope: 'item', itemId: 'quest-earthquake' },
       kind: 'world',
@@ -93,7 +93,7 @@ function document(overrides = {}) {
     }],
     notes: [{
       id: 'note-duke',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       title: 'The duke distrusts the party',
       body: 'Observed during play.',
@@ -110,7 +110,7 @@ function harness(collections = {}) {
     capabilities: manifest.capabilities,
     permissions: manifest.permissions,
     collections: manifest.collections,
-    contentRevision: 'dm-tools-planning-v2-test',
+    contentRevision: 'dm-tools-planning-v3-test',
   }, {
     collections,
     coreCollections: {
@@ -131,7 +131,7 @@ async function preview(instance, value) {
   return instance.manager.preview(job.id, 'mock-session');
 }
 
-test('server composition registers only the v2 planner and its bundle contribution', async () => {
+test('server composition registers only the v3 planner and its bundle contribution', async () => {
   const providers = [];
   const contributors = [];
   await serverEntry.init({
@@ -143,12 +143,12 @@ test('server composition registers only the v2 planner and its bundle contributi
     },
   });
   assert.deepEqual(providers.map(provider => [provider.id, provider.schemaVersion]), [
-    ['planning-json', 2],
+    ['planning-json', 3],
   ]);
   assert.deepEqual(contributors, [{ id: 'planning', providerId: 'planning-json' }]);
 });
 
-test('v2 preview is read-only and commits the full story structure atomically', async () => {
+test('v3 preview is read-only and commits the full story structure atomically', async () => {
   const instance = harness();
   const ready = await preview(instance, document());
   assert.equal(ready.committable, true);
@@ -162,6 +162,49 @@ test('v2 preview is read-only and commits the full story structure atomically', 
   assert.equal(instance.collection('planning_references')['reference-mira'].quantity, 1);
   assert.equal(instance.collection('dm_notes')['note-duke'].body, 'Observed during play.');
   assert.equal(instance.events(), 1);
+  await instance.dispose();
+});
+
+test('schema-v2 documents are rejected without conversion', async () => {
+  const source = document({ schemaVersion: 2 });
+  source.items.forEach(record => { record.schemaVersion = 2; });
+  source.flowLinks.forEach(record => { record.schemaVersion = 2; });
+  source.references.forEach(record => { record.schemaVersion = 2; });
+  source.consequences.forEach(record => { record.schemaVersion = 2; });
+  source.notes.forEach(record => { record.schemaVersion = 2; });
+  const instance = harness();
+  const ready = await preview(instance, source);
+  assert.equal(ready.committable, false);
+  assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_SCHEMA_UNSUPPORTED'));
+  assert.deepEqual(instance.collection('planning_items'), {});
+  await instance.dispose();
+});
+
+test('cross-canvas flow blocks the complete import', async () => {
+  const source = document();
+  source.items.push({
+    id: 'event-hidden-chamber',
+    schemaVersion: 3,
+    operation: 'create',
+    kind: 'event',
+    parentId: 'quest-earthquake',
+    eventType: 'story',
+    title: 'Enter the Hidden Chamber',
+    summary: '',
+    body: '',
+    objective: '',
+    setup: '',
+    resolution: '',
+    tags: [],
+  });
+  source.flowLinks[0].targetId = 'event-hidden-chamber';
+  const instance = harness();
+  const ready = await preview(instance, source);
+  assert.equal(ready.committable, false);
+  assert.ok(ready.plan.diagnostics.some(
+    entry => entry.code === 'PLANNING_FLOW_SCOPE_MISMATCH',
+  ));
+  assert.deepEqual(instance.collection('planning_items'), {});
   await instance.dispose();
 });
 
@@ -184,7 +227,7 @@ test('missing ownership and campaign references block the complete import', asyn
 
 test('updates require the exact local timestamp', async () => {
   const local = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'plotline',
     parentId: null,
     title: 'The Waking Dragons',
@@ -219,7 +262,7 @@ test('an older dangling core reference does not block an unrelated note import',
   const instance = harness({
     planning_items: {
       existing: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         kind: 'event',
         eventType: 'story',
         parentId: null,
@@ -235,7 +278,7 @@ test('an older dangling core reference does not block an unrelated note import',
     },
     planning_references: {
       old: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         itemId: 'existing',
         name: 'Former contact',
         relation: 'related',
@@ -253,7 +296,7 @@ test('an older dangling core reference does not block an unrelated note import',
     consequences: [],
     notes: [{
       id: 'note-new',
-      schemaVersion: 2,
+      schemaVersion: 3,
       operation: 'create',
       title: 'New observation',
       body: '',

@@ -61,17 +61,6 @@ export function itemSubtreeIds(itemId, items) {
   return result;
 }
 
-function directChildFor(itemId, scopeId, byId) {
-  let current = byId.get(itemId);
-  const seen = new Set();
-  while (current && current.parentId !== scopeId) {
-    if (seen.has(current.id)) return null;
-    seen.add(current.id);
-    current = current.parentId ? byId.get(current.parentId) : null;
-  }
-  return current?.parentId === scopeId ? current : null;
-}
-
 function arrange(items, edges) {
   const itemIds = new Set(items.map(item => item.id));
   const incoming = new Map(items.map(item => [item.id, 0]));
@@ -121,18 +110,10 @@ export function projectScope({
   const children = items
     .filter(item => item.parentId === scopeId)
     .sort((left, right) => left.title.localeCompare(right.title));
-  const projectedFlows = [];
-  for (const flow of flowLinks) {
-    const source = directChildFor(flow.sourceId, scopeId, byId);
-    const target = directChildFor(flow.targetId, scopeId, byId);
-    if (!source || !target || source.id === target.id) continue;
-    projectedFlows.push({
-      ...flow,
-      sourceId: source.id,
-      targetId: target.id,
-      rolledUp: source.id !== flow.sourceId || target.id !== flow.targetId,
-    });
-  }
+  const childIds = new Set(children.map(item => item.id));
+  const projectedFlows = flowLinks
+    .filter(flow => childIds.has(flow.sourceId) && childIds.has(flow.targetId))
+    .map(flow => ({ ...flow }));
   const arranged = arrange(children, projectedFlows);
   const saved = normalizePositions(positions);
   const noteCount = new Map();

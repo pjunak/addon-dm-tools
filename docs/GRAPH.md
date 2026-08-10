@@ -19,11 +19,11 @@ Only direct children of the scope become cards. Ownership is never drawn as an
 edge; it is expressed by entering the child canvas and by breadcrumbs.
 Plotlines and quests may contain children. Events and branches are leaves.
 
-Stored flow links are projected separately. For a cross-scope endpoint, the
-projection walks upward until it reaches the visible direct child. A link whose
-two endpoints roll up to the same card is internal to that card and is hidden
-until the DM enters it. No edge is inferred from ownership, tags, text, time,
-position, references, or consequences.
+Stored flow links connect only direct siblings with the same immediate parent.
+Each link is therefore rendered on exactly one canvas with both real endpoints
+visible. Invalid or incomplete records are ignored defensively by projection.
+No edge is inferred from ownership, nested content, tags, text, time, position,
+references, or consequences.
 
 ## Interaction
 
@@ -55,7 +55,6 @@ nodes. Deeply nested quests therefore remain focused and readable.
 | Decision / condition / random branch | dashed gold border |
 | Normal flow | solid directed orthogonal line |
 | Branch option | dashed gold directed line |
-| Rolled-up cross-scope flow | subdued dashed line |
 | Linked DM note | notebook marker in the card corner |
 
 Line geometry uses right angles with rounded corners. `planning_views` stores
@@ -64,7 +63,7 @@ only `{x,y}` positions per scope:
 ```json
 {
   "id": "scope-quest-earthquake",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "scopeId": "quest-earthquake",
   "positions": {
     "event-tremor": { "x": 72, "y": 72 }

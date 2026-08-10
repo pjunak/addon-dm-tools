@@ -53,22 +53,7 @@
   ],
   "collections": [
     {
-      "name": "scenarios",
-      "keyed": false,
-      "access": "dm"
-    },
-    {
       "name": "planning_items",
-      "keyed": true,
-      "access": "dm"
-    },
-    {
-      "name": "planning_folders",
-      "keyed": true,
-      "access": "dm"
-    },
-    {
-      "name": "planning_links",
       "keyed": true,
       "access": "dm"
     },
