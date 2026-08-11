@@ -692,7 +692,7 @@ export function renderCanvasPage({
       </div>
     </section>
     ${renderPlannerDialog({ host, data, draft, errors, dialogTab })}
-    <div class="dmt-shortcuts-modal" data-dmt-shortcuts-modal hidden>
+    <div class="dmt-shortcuts-modal" data-dmt-shortcuts-modal hidden inert aria-hidden="true">
       <button class="dmt-planner-modal-backdrop" type="button" data-dmt-shortcuts-close tabindex="-1" aria-label="${esc(t('planner.action.cancel'))}"></button>
       <section class="dmt-shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="dmt-shortcuts-title">
         <header><h2 id="dmt-shortcuts-title">${esc(t('planner.shortcuts.title'))}</h2><button type="button" data-dmt-shortcuts-close aria-label="${esc(t('planner.action.cancel'))}">×</button></header>

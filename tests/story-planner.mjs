@@ -4,7 +4,10 @@ import test from 'node:test';
 
 import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
-import { rectanglesIntersect } from '../story-planner-interactions.js';
+import {
+  rectanglesIntersect,
+  setShortcutModalOpen,
+} from '../story-planner-interactions.js';
 import {
   itemAncestors,
   itemSubtreeIds,
@@ -173,8 +176,51 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.dmt-shortcuts-modal\[hidden\]\{display:none\}/,
+    /\.dmt-shortcuts-modal\[hidden\]\{display:none!important\}/,
   );
+});
+
+test('shortcut popup synchronizes hidden, inert, accessibility, and focus state', () => {
+  const attributes = new Map([
+    ['hidden', ''],
+    ['inert', ''],
+    ['aria-hidden', 'true'],
+  ]);
+  let closeFocusCount = 0;
+  let triggerFocusCount = 0;
+  const modal = {
+    toggleAttribute(name, force) {
+      if (force) attributes.set(name, '');
+      else attributes.delete(name);
+    },
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+    querySelector() {
+      return { focus: () => { closeFocusCount++; } };
+    },
+  };
+  const root = {
+    querySelector(selector) {
+      if (selector === '[data-dmt-shortcuts-modal]') return modal;
+      if (selector === '[data-dmt-command="shortcuts"]') {
+        return { focus: () => { triggerFocusCount++; } };
+      }
+      return null;
+    },
+  };
+
+  assert.equal(setShortcutModalOpen(root, true), true);
+  assert.equal(attributes.has('hidden'), false);
+  assert.equal(attributes.has('inert'), false);
+  assert.equal(attributes.get('aria-hidden'), 'false');
+  assert.equal(closeFocusCount, 1);
+
+  assert.equal(setShortcutModalOpen(root, false), true);
+  assert.equal(attributes.has('hidden'), true);
+  assert.equal(attributes.has('inert'), true);
+  assert.equal(attributes.get('aria-hidden'), 'true');
+  assert.equal(triggerFocusCount, 1);
 });
 
 test('selection rectangles include cards that touch their boundary', () => {
@@ -311,6 +357,7 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /class="dmt-atlas-dock"/);
   assert.match(rootHtml, /class="dmt-story-edges"[^>]*role="group"/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
+  assert.match(rootHtml, /data-dmt-shortcuts-modal hidden inert aria-hidden="true"/);
   assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);
 

@@ -85,6 +85,20 @@ function trapModalTab(event, modal) {
   return true;
 }
 
+export function setShortcutModalOpen(root, open) {
+  const modal = root?.querySelector('[data-dmt-shortcuts-modal]');
+  if (!modal) return false;
+  modal.toggleAttribute('hidden', !open);
+  modal.toggleAttribute('inert', !open);
+  modal.setAttribute('aria-hidden', String(!open));
+  if (open) {
+    modal.querySelector('[data-dmt-shortcuts-close]:not([tabindex="-1"])')?.focus();
+  } else {
+    root.querySelector('[data-dmt-command="shortcuts"]')?.focus();
+  }
+  return true;
+}
+
 export function mountPlannerDialog({ root, onDialogTab, onCancelEdit }) {
   if (!root?.querySelector('[data-dmt-modal]')) return () => {};
   const click = event => {
@@ -286,15 +300,11 @@ export function mountStoryCanvas({
       if (command === 'connect' && items.size === 1 && !flows.size) startConnection([...items][0]);
       if (command === 'delete') onDeleteSelection?.([...items], [...flows]);
       if (command === 'undo') onUndo?.();
-      if (command === 'shortcuts') {
-        const modal = root.querySelector('[data-dmt-shortcuts-modal]');
-        modal?.removeAttribute('hidden');
-        modal?.querySelector('[data-dmt-shortcuts-close]')?.focus();
-      }
+      if (command === 'shortcuts') setShortcutModalOpen(root, true);
       return;
     }
     if (event.target.closest('[data-dmt-shortcuts-close]')) {
-      root.querySelector('[data-dmt-shortcuts-modal]')?.setAttribute('hidden', '');
+      setShortcutModalOpen(root, false);
       return;
     }
     const tab = event.target.closest('[data-dmt-dialog-tab]');
@@ -549,7 +559,7 @@ export function mountStoryCanvas({
       return;
     }
     if (event.key === 'Escape') {
-      if (shortcutModal && !shortcutModal.hasAttribute('hidden')) shortcutModal.setAttribute('hidden', '');
+      if (shortcutModal && !shortcutModal.hasAttribute('hidden')) setShortcutModalOpen(root, false);
       else if (editModal) onCancelEdit?.();
       else if (connectionSource) cancelConnection();
       else {
@@ -563,7 +573,7 @@ export function mountStoryCanvas({
     }
     if (editModal || (shortcutModal && !shortcutModal.hasAttribute('hidden'))) return;
     if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
-      shortcutModal?.removeAttribute('hidden');
+      setShortcutModalOpen(root, true);
       event.preventDefault();
       return;
     }
