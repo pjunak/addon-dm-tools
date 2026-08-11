@@ -7,7 +7,7 @@ import {
   normalizePlanningReference,
   validatePlanningDataset,
 } from './planning-contract.js';
-import { mountStoryCanvas } from './story-planner-interactions.js';
+import { mountPlannerDialog, mountStoryCanvas } from './story-planner-interactions.js';
 import {
   itemSubtreeIds,
   normalizePositions,
@@ -17,7 +17,7 @@ import {
   buildRenderData,
   renderCanvasPage,
   renderDetailPage,
-  renderInspector,
+  renderSelectionToolbar,
 } from './story-planner-render.js';
 
 const COLLECTIONS = Object.freeze({
@@ -88,12 +88,17 @@ export function createStoryPlanner(host, options = {}) {
   let scopeId = null;
   let detailId = '';
   let selectedId = '';
+  let selectedItemIds = new Set();
+  let selectedFlowIds = new Set();
   let draft = null;
   let errors = [];
   let connectionSource = '';
+  let dialogTab = 'details';
+  let undoDelete = null;
   let cleanupInteractions = () => {};
   let scheduled = null;
   let viewWrite = Promise.resolve();
+  const viewportScroll = new Map();
   let disposed = false;
 
   const collection = key => host.store.collection(COLLECTIONS[key]);
@@ -127,6 +132,15 @@ export function createStoryPlanner(host, options = {}) {
   }
 
   function cleanupMount() {
+    if (typeof document !== 'undefined') {
+      const viewport = document.querySelector(
+        '.addon-route-page[data-addon-id="dm-tools"] .dmt-planner-shell .dmt-story-viewport',
+      );
+      if (viewport) viewportScroll.set(viewId(), {
+        left: viewport.scrollLeft,
+        top: viewport.scrollTop,
+      });
+    }
     cleanupInteractions();
     cleanupInteractions = () => {};
     if (scheduled !== null) {
@@ -162,48 +176,65 @@ export function createStoryPlanner(host, options = {}) {
     }
   }
 
-  function updateSelection(id) {
+  function updateSelection(selection) {
     const data = readData();
-    if (!data.items.some(item => item.id === id)) return;
-    selectedId = id;
-    draft = null;
+    const payload = typeof selection === 'string'
+      ? { itemIds: [selection], flowIds: [], primaryId: selection, announce: true }
+      : (selection || {});
+    const validItemIds = new Set(data.items.map(item => item.id));
+    const validFlowIds = new Set(data.flowLinks.map(flow => flow.id));
+    selectedItemIds = new Set((payload.itemIds || []).filter(id => validItemIds.has(id)));
+    selectedFlowIds = new Set((payload.flowIds || []).filter(id => validFlowIds.has(id)));
+    selectedId = selectedItemIds.has(payload.primaryId)
+      ? payload.primaryId
+      : ([...selectedItemIds][0] || '');
     errors = [];
-    if (typeof document === 'undefined') return;
-    document.querySelectorAll('.dmt-story-node.is-selected')
-      .forEach(node => node.classList.remove('is-selected'));
-    document.querySelector(`[data-dmt-node="${CSS.escape(id)}"]`)?.classList.add('is-selected');
-    const inspector = document.getElementById('dm-story-inspector');
-    if (inspector) {
-      inspector.innerHTML = renderInspector({
+    if (typeof document !== 'undefined') {
+      const root = document.querySelector('.addon-route-page[data-addon-id="dm-tools"] .dmt-planner-shell');
+      root?.querySelectorAll('[data-dmt-node]').forEach(node => {
+        node.classList.toggle('is-selected', selectedItemIds.has(node.dataset.dmtNode));
+      });
+      root?.querySelectorAll('[data-dmt-edge-group]').forEach(group => {
+        group.classList.toggle('is-selected', selectedFlowIds.has(group.dataset.dmtEdgeGroup));
+      });
+      const actions = root?.querySelector('[data-dmt-selection-actions]');
+      if (actions) actions.innerHTML = renderSelectionToolbar(
         host,
         data,
-        selectedId,
-        draft,
-        errors,
-      });
+        selectedItemIds,
+        selectedFlowIds,
+      );
     }
-    host.ui.announce(t('planner.announce.selected', {
-      title: data.items.find(item => item.id === id)?.title || id,
-    }));
+    if (payload.announce !== false) {
+      const selectedItem = data.items.find(item => item.id === selectedId);
+      if (selectedItemIds.size + selectedFlowIds.size > 1) {
+        host.ui.announce(t('planner.announce.selectedMany', {
+          n: selectedItemIds.size + selectedFlowIds.size,
+        }));
+      } else if (selectedItem) {
+        host.ui.announce(t('planner.announce.selected', { title: selectedItem.title }));
+      }
+    }
   }
 
-  function persistPosition(itemId, position) {
+  function persistPositions(updates) {
     const id = viewId();
-    const stored = collection('views').get?.(id)
-      || collection('views').list().find(value => value.id === id)
-      || {};
-    const current = stored.schemaVersion === PLANNING_SCHEMA_VERSION ? stored : {};
-    const positions = {
-      ...normalizePositions(current.positions),
-      [itemId]: position,
-    };
-    viewWrite = viewWrite.then(() => collection('views').save({
-      id,
-      schemaVersion: PLANNING_SCHEMA_VERSION,
-      scopeId,
-      positions,
-      updatedAt: Math.max(Date.now(), Number(current.updatedAt || 0) + 1),
-    })).catch(() => host.ui.toast(t('planner.layout.failed')));
+    viewWrite = viewWrite.then(() => {
+      const stored = collection('views').get?.(id)
+        || collection('views').list().find(value => value.id === id)
+        || {};
+      const current = stored.schemaVersion === PLANNING_SCHEMA_VERSION ? stored : {};
+      return collection('views').save({
+        id,
+        schemaVersion: PLANNING_SCHEMA_VERSION,
+        scopeId,
+        positions: {
+          ...normalizePositions(current.positions),
+          ...normalizePositions(updates),
+        },
+        updatedAt: Math.max(Date.now(), Number(current.updatedAt || 0) + 1),
+      });
+    }).catch(() => host.ui.toast(t('planner.layout.failed')));
     return viewWrite;
   }
 
@@ -240,15 +271,29 @@ export function createStoryPlanner(host, options = {}) {
     if (!root) return;
     cleanupInteractions = mountStoryCanvas({
       root,
-      onSelect: updateSelection,
+      selectedItemIds: [...selectedItemIds],
+      selectedFlowIds: [...selectedFlowIds],
+      onSelectionChange: updateSelection,
+      onEdit: editItem,
       onOpen: openItem,
-      onMove: persistPosition,
+      onMove: persistPositions,
       onConnect: (source, target) => saveFlowBetween(source, target),
       onConnectStart: source => {
         connectionSource = source;
         host.ui.announce(t(source ? 'planner.canvas.connecting' : 'planner.canvas.connectionCancelled'));
       },
+      onCreate: createItem,
+      onDeleteSelection: deleteSelection,
+      onUndo: undoLastDelete,
+      onDialogTab: setDialogTab,
+      onCancelEdit: cancelEdit,
     });
+    const savedScroll = viewportScroll.get(viewId());
+    const viewport = root.querySelector('.dmt-story-viewport');
+    if (savedScroll && viewport) {
+      viewport.scrollLeft = savedScroll.left;
+      viewport.scrollTop = savedScroll.top;
+    }
   }
 
   function render(sub = '', parts = []) {
@@ -273,7 +318,13 @@ export function createStoryPlanner(host, options = {}) {
         errors = [];
       }
       selectedId = item.id;
-      return renderDetailPage({ host, data, item, draft, errors });
+      selectedItemIds = new Set([item.id]);
+      selectedFlowIds.clear();
+      scheduled = schedule(() => {
+        scheduled = null;
+        mountDialogOnly();
+      });
+      return renderDetailPage({ host, data, item, draft, errors, dialogTab });
     }
     const scope = scopeId ? data.items.find(value => value.id === scopeId) : null;
     if (scopeId && (!scope || (scope.kind !== 'plotline' && scope.kind !== 'quest'))) {
@@ -288,10 +339,12 @@ export function createStoryPlanner(host, options = {}) {
       scopeId,
       positions: readPositions(),
     });
-    if (!projection.nodes.some(node => node.item.id === selectedId)) {
-      selectedId = projection.nodes[0]?.item.id || '';
-      if (draft?.item.parentId !== scopeId) draft = null;
-    }
+    const visibleItemIds = new Set(projection.nodes.map(node => node.item.id));
+    const visibleFlowIds = new Set(projection.flowLinks.map(flow => flow.id));
+    selectedItemIds = new Set([...selectedItemIds].filter(id => visibleItemIds.has(id)));
+    selectedFlowIds = new Set([...selectedFlowIds].filter(id => visibleFlowIds.has(id)));
+    selectedId = selectedItemIds.has(selectedId) ? selectedId : ([...selectedItemIds][0] || '');
+    if (draft?.item.parentId !== scopeId) draft = null;
     scheduled = schedule(() => {
       scheduled = null;
       mount();
@@ -301,14 +354,28 @@ export function createStoryPlanner(host, options = {}) {
       data,
       projection,
       scopeId,
-      selectedId,
+      selectedItemIds,
+      selectedFlowIds,
       draft,
       errors,
       connectionSource,
+      dialogTab,
+      canUndo: !!undoDelete,
     });
   }
 
-  function createItem(kind, subtype = '') {
+  function mountDialogOnly() {
+    if (disposed || typeof document === 'undefined') return;
+    const root = document.querySelector('.addon-route-page[data-addon-id="dm-tools"] .dmt-planner-shell');
+    if (!root) return;
+    cleanupInteractions = mountPlannerDialog({
+      root,
+      onDialogTab: setDialogTab,
+      onCancelEdit: cancelEdit,
+    });
+  }
+
+  function createItem(kind, subtype = '', position = null) {
     const id = host.store.generateId(`${kind}-${Date.now()}`);
     const item = {
       id,
@@ -327,7 +394,10 @@ export function createStoryPlanner(host, options = {}) {
       updatedAt: Date.now(),
     };
     selectedId = id;
-    draft = { isNew: true, item };
+    selectedItemIds = new Set();
+    selectedFlowIds.clear();
+    draft = { isNew: true, item, position };
+    dialogTab = 'details';
     errors = [];
     host.ui.rerender();
   }
@@ -336,7 +406,10 @@ export function createStoryPlanner(host, options = {}) {
     const item = readData().items.find(value => value.id === id);
     if (!item) return;
     selectedId = id;
+    selectedItemIds = new Set([id]);
+    selectedFlowIds.clear();
     draft = { isNew: false, item: structuredClone(item) };
+    dialogTab = 'details';
     errors = [];
     host.ui.rerender();
   }
@@ -345,6 +418,12 @@ export function createStoryPlanner(host, options = {}) {
     draft = null;
     errors = [];
     host.ui.rerender();
+  }
+
+  function setDialogTab(value) {
+    if (!draft || !['details', 'links', 'notes'].includes(value)) return;
+    if (draft.isNew && value !== 'details') return;
+    dialogTab = value;
   }
 
   function itemFromForm(form, current) {
@@ -380,10 +459,16 @@ export function createStoryPlanner(host, options = {}) {
     nextItems.push(result.value);
     const validation = validateCandidate({ ...data, items: nextItems });
     if (validation.length) return report(validation);
+    const draftPosition = draft.position;
     await collection('items').save(result.value);
+    if (draftPosition && result.value.parentId === scopeId) {
+      await persistPositions({ [result.value.id]: draftPosition });
+    }
     draft = null;
     errors = [];
     selectedId = result.value.id;
+    selectedItemIds = new Set([result.value.id]);
+    selectedFlowIds.clear();
     host.ui.announce(t('planner.item.saved'));
     if (detailId && result.value.id === detailId
         && !(result.value.kind === 'event' && ['encounter', 'puzzle'].includes(result.value.eventType))) {
@@ -395,44 +480,71 @@ export function createStoryPlanner(host, options = {}) {
     host.ui.rerender();
   }
 
-  async function deleteItem(id) {
+  async function deleteSelection(itemIds = [], flowIds = []) {
+    await viewWrite;
     const data = readData();
-    const item = data.items.find(value => value.id === id);
-    if (!item) return;
-    const deleteIds = new Set(itemSubtreeIds(id, data.items));
-    const descendantCount = deleteIds.size - 1;
-    const confirmKey = descendantCount
-      ? 'planner.item.deleteTreeConfirm'
-      : 'planner.item.deleteConfirm';
-    if (typeof window !== 'undefined' && !window.confirm(t(confirmKey, {
-      title: item.title,
-      n: descendantCount,
-    }))) return;
+    const roots = itemIds.map(id => data.items.find(item => item.id === id)).filter(Boolean);
+    const deleteIds = new Set(roots.flatMap(item => itemSubtreeIds(item.id, data.items)));
+    const explicitFlowIds = new Set(flowIds.filter(id => data.flowLinks.some(flow => flow.id === id)));
+    if (!deleteIds.size && !explicitFlowIds.size) return;
+    if (deleteIds.size && typeof window !== 'undefined') {
+      let message;
+      if (roots.length === 1) {
+        const descendantCount = deleteIds.size - 1;
+        message = t(descendantCount ? 'planner.item.deleteTreeConfirm' : 'planner.item.deleteConfirm', {
+          title: roots[0].title,
+          n: descendantCount,
+        });
+      } else {
+        message = t('planner.selection.deleteConfirm', {
+          n: deleteIds.size,
+          links: explicitFlowIds.size,
+        });
+      }
+      if (!window.confirm(message)) return;
+    }
     const relatedFlows = data.flowLinks.filter(flow => (
-      deleteIds.has(flow.sourceId) || deleteIds.has(flow.targetId)
+      explicitFlowIds.has(flow.id)
+      || deleteIds.has(flow.sourceId)
+      || deleteIds.has(flow.targetId)
     ));
-    const flowIds = new Set(relatedFlows.map(flow => flow.id));
+    const deletedFlowIds = new Set(relatedFlows.map(flow => flow.id));
+    const relatedReferences = data.references.filter(reference => (
+      deleteIds.has(reference.itemId)
+      || (reference.target?.scope === 'planning' && deleteIds.has(reference.target.itemId))
+    ));
+    const relatedConsequences = data.consequences.filter(value => (
+      (value.anchor?.scope === 'item' && deleteIds.has(value.anchor.itemId))
+      || (value.anchor?.scope === 'flow' && deletedFlowIds.has(value.anchor.flowId))
+      || (value.target?.scope === 'planning' && deleteIds.has(value.target.itemId))
+    ));
+    const relatedNotes = data.notes.filter(note => note.anchorIds.some(id => deleteIds.has(id)));
     const views = collection('views').list();
     const deletedViewIds = new Set([...deleteIds].map(itemId => viewId(itemId)));
+    const relatedViews = views.filter(view => (
+      deleteIds.has(view.scopeId)
+      || deletedViewIds.has(view.id)
+      || [...deleteIds].some(id => Object.prototype.hasOwnProperty.call(view.positions || {}, id))
+    ));
+    undoDelete = {
+      items: data.items.filter(item => deleteIds.has(item.id)),
+      flowLinks: relatedFlows,
+      references: relatedReferences,
+      consequences: relatedConsequences,
+      notes: relatedNotes,
+      views: relatedViews,
+    };
     await host.store.transaction(Object.values(COLLECTIONS), tx => {
       const itemCollection = tx.collection(COLLECTIONS.items);
       deleteIds.forEach(itemId => itemCollection.remove(itemId));
       const flowCollection = tx.collection(COLLECTIONS.flowLinks);
       relatedFlows.forEach(flow => flowCollection.remove(flow.id));
       const referenceCollection = tx.collection(COLLECTIONS.references);
-      data.references.filter(reference => (
-        deleteIds.has(reference.itemId)
-        || (reference.target?.scope === 'planning' && deleteIds.has(reference.target.itemId))
-      )).forEach(reference => referenceCollection.remove(reference.id));
+      relatedReferences.forEach(reference => referenceCollection.remove(reference.id));
       const consequenceCollection = tx.collection(COLLECTIONS.consequences);
-      data.consequences.filter(value => (
-        (value.anchor?.scope === 'item' && deleteIds.has(value.anchor.itemId))
-        || (value.anchor?.scope === 'flow' && flowIds.has(value.anchor.flowId))
-        || (value.target?.scope === 'planning' && deleteIds.has(value.target.itemId))
-      )).forEach(value => consequenceCollection.remove(value.id));
+      relatedConsequences.forEach(value => consequenceCollection.remove(value.id));
       const noteCollection = tx.collection(COLLECTIONS.notes);
-      data.notes.filter(note => note.anchorIds.some(itemId => deleteIds.has(itemId)))
-        .forEach(note => noteCollection.put({
+      relatedNotes.forEach(note => noteCollection.put({
         ...note,
         anchorIds: note.anchorIds.filter(anchorId => !deleteIds.has(anchorId)),
         updatedAt: Math.max(Date.now(), note.updatedAt + 1),
@@ -462,9 +574,65 @@ export function createStoryPlanner(host, options = {}) {
     }, { timeoutMs: 10_000 });
     draft = null;
     selectedId = '';
+    selectedItemIds.clear();
+    selectedFlowIds.clear();
     errors = [];
-    host.ui.announce(t('planner.item.deleted'));
-    navigate(item.parentId ? `#/dm-plans/${encodeURIComponent(item.parentId)}` : '#/dm-plans');
+    host.ui.announce(t(deleteIds.size ? 'planner.selection.deleted' : 'planner.flow.deleted'));
+    if (detailId) {
+      const parentId = roots.find(item => item.id === detailId)?.parentId;
+      navigate(parentId ? `#/dm-plans/${encodeURIComponent(parentId)}` : '#/dm-plans');
+    } else {
+      host.ui.rerender();
+    }
+  }
+
+  async function deleteItem(id) {
+    return deleteSelection([id], []);
+  }
+
+  async function undoLastDelete() {
+    if (!undoDelete) return;
+    const snapshot = undoDelete;
+    const current = readData();
+    const currentByCollection = {
+      items: new Map(current.items.map(value => [value.id, value])),
+      flowLinks: new Map(current.flowLinks.map(value => [value.id, value])),
+      references: new Map(current.references.map(value => [value.id, value])),
+      consequences: new Map(current.consequences.map(value => [value.id, value])),
+      notes: new Map(current.notes.map(value => [value.id, value])),
+      views: new Map(collection('views').list().map(value => [value.id, value])),
+    };
+    await host.store.transaction(Object.values(COLLECTIONS), tx => {
+      Object.entries(snapshot).forEach(([key, values]) => {
+        const target = tx.collection(COLLECTIONS[key]);
+        values.forEach(value => {
+          const existing = currentByCollection[key].get(value.id);
+          if (key === 'notes' && existing) {
+            target.put({
+              ...value,
+              ...existing,
+              anchorIds: [...new Set([...value.anchorIds, ...existing.anchorIds])],
+              updatedAt: Math.max(Date.now(), Number(existing.updatedAt || 0) + 1),
+            });
+          } else if (key === 'views' && existing) {
+            target.put({
+              ...value,
+              ...existing,
+              positions: {
+                ...normalizePositions(value.positions),
+                ...normalizePositions(existing.positions),
+              },
+              updatedAt: Math.max(Date.now(), Number(existing.updatedAt || 0) + 1),
+            });
+          } else if (!existing) {
+            target.put(value);
+          }
+        });
+      });
+    }, { timeoutMs: 10_000 });
+    undoDelete = null;
+    host.ui.announce(t('planner.selection.restored'));
+    host.ui.rerender();
   }
 
   async function saveFlow(event, sourceId) {
@@ -477,16 +645,7 @@ export function createStoryPlanner(host, options = {}) {
   }
 
   async function deleteFlow(id) {
-    const data = readData();
-    const consequences = data.consequences.filter(value => (
-      value.anchor?.scope === 'flow' && value.anchor.flowId === id
-    ));
-    await host.store.transaction([COLLECTIONS.flowLinks, COLLECTIONS.consequences], tx => {
-      tx.collection(COLLECTIONS.flowLinks).remove(id);
-      consequences.forEach(value => tx.collection(COLLECTIONS.consequences).remove(value.id));
-    }, { timeoutMs: 10_000 });
-    host.ui.announce(t('planner.flow.deleted'));
-    host.ui.rerender();
+    return deleteSelection([], [id]);
   }
 
   async function updateFlow(event, id) {
@@ -745,6 +904,8 @@ export function createStoryPlanner(host, options = {}) {
     cancelEdit,
     saveItem,
     deleteItem,
+    deleteSelection,
+    undoLastDelete,
     saveFlow,
     updateFlow,
     deleteFlow,
@@ -770,9 +931,13 @@ export function createStoryPlanner(host, options = {}) {
       scopeId,
       detailId,
       selectedId,
+      selectedItemIds: [...selectedItemIds],
+      selectedFlowIds: [...selectedFlowIds],
       draft: draft ? structuredClone(draft) : null,
       errors: structuredClone(errors),
       connectionSource,
+      dialogTab,
+      canUndo: !!undoDelete,
     }),
   });
 }

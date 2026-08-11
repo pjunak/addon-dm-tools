@@ -52,16 +52,27 @@ reference when the precise relationship matters but is not story flow.
 
 ## Interaction
 
-- Single click or Space selects a card and updates the inspector in place.
-  This deliberately avoids a route rerender and preserves canvas scroll.
-- Double-click or Enter enters a plotline/quest or opens a dedicated
-  encounter/puzzle screen.
-- Pointer drag moves a card, snaps to the 24 px grid, and stores its position.
+- The Atlas dock is both the creation palette and visual legend. Each tool uses
+  the same shape, border color, and line treatment as the card it creates.
+  Clicking creates at the visible center; dragging creates at the drop point.
+- Single click or Space selects a card. Shift-click toggles membership and a
+  drag on empty canvas creates a marquee selection. Selection updates card and
+  edge styling plus the contextual toolbar without remounting the canvas, so
+  scroll is preserved.
+- Double-click or Enter edits one card in a modal. Shift+Enter, or the explicit
+  contextual action, enters a plotline/quest or opens an encounter/puzzle.
+- Pointer drag moves every selected card as a group, snaps to the 24 px grid,
+  and stores the changed positions in one view update. Arrow keys move the
+  selection by one grid step; Shift+Arrow moves it by four.
 - Dragging from the circular edge handle to another card creates a flow link.
-  Clicking the handle and then a target provides a second pointer path.
-- The inspector provides labelled native forms for keyboard-only creation and
-  editing of flow, references, consequences, and marginalia. Flow target
-  controls list siblings from the active canvas only.
+  Clicking the handle and then a target, or pressing C and choosing a target,
+  provides equivalent paths.
+- Flow lines are focusable and selectable. Delete removes selected lines
+  immediately; deleting cards confirms the semantic subtree cleanup. The most
+  recent deletion can be restored with Undo or Ctrl/Cmd+Z.
+- The editing modal provides labelled native forms under Details,
+  Links & consequences, and Notes tabs. Flow target controls list siblings
+  from the active canvas only.
 - Moving an item to another owner is rejected while any attached flow would be
   left on a different canvas. The DM must remove those links explicitly; the
   planner never deletes or retargets them as a side effect.
@@ -107,15 +118,14 @@ records are read; older layouts are ignored rather than converted.
 
 ## Lifecycle and accessibility
 
-Every card is keyboard-focusable and has a plain-text accessible label.
-Connection, CRUD, and detail operations remain available through native form
-controls without drag gestures. The inspector, breadcrumbs, badges, and
-announcements use host components and localization.
+Every card and flow line is keyboard-focusable and has a plain-text accessible
+label. Connection, CRUD, selection, and detail operations remain available
+without drag gestures. The modal, breadcrumbs, badges, shortcut reference, and
+announcements use host components or tokens and localization.
 
 Each render removes the previous pointer/keyboard listeners and cancels a
 pending mount. Navigation away, role changes, addon replacement, and disposal
-perform the same cleanup. Selection alone does not remount the canvas.
-On the desktop split view, the workbench owns a viewport-bounded height and the
-inspector scrolls independently, so long selected-item content cannot stretch
-the stage or push the canvas below its toolbar. The stacked layout returns to
-normal document flow.
+perform the same cleanup. Selection alone does not remount the canvas. On
+desktop the Atlas is a narrow left rail and the workbench owns a
+viewport-bounded height. On narrow screens the Atlas becomes a horizontally
+scrollable tool shelf while the editor modal becomes a bottom sheet.

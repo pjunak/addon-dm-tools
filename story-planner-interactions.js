@@ -1,12 +1,13 @@
 import { orthogonalPath } from './story-planner-model.js';
 
 const GRID = 24;
+const DRAG_THRESHOLD = 4;
 
 function pointInCanvas(event, canvas) {
   const bounds = canvas.getBoundingClientRect();
   return {
-    x: event.clientX - bounds.left + canvas.scrollLeft,
-    y: event.clientY - bounds.top + canvas.scrollTop,
+    x: event.clientX - bounds.left,
+    y: event.clientY - bounds.top,
   };
 }
 
@@ -19,168 +20,608 @@ function nodeGeometry(node) {
   };
 }
 
+export function rectanglesIntersect(left, right) {
+  return left.x <= right.x + right.width
+    && left.x + left.width >= right.x
+    && left.y <= right.y + right.height
+    && left.y + left.height >= right.y;
+}
+
+function selectionRectangle(start, current) {
+  return {
+    x: Math.min(start.x, current.x),
+    y: Math.min(start.y, current.y),
+    width: Math.abs(current.x - start.x),
+    height: Math.abs(current.y - start.y),
+  };
+}
+
+function applyRectangle(element, rectangle) {
+  element.style.left = `${rectangle.x}px`;
+  element.style.top = `${rectangle.y}px`;
+  element.style.width = `${rectangle.width}px`;
+  element.style.height = `${rectangle.height}px`;
+}
+
 function redraw(canvas) {
   for (const edge of canvas.querySelectorAll('[data-dmt-edge]')) {
     const source = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.source)}"]`);
     const target = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.target)}"]`);
-    if (source && target) edge.setAttribute('d', orthogonalPath(
-      nodeGeometry(source),
-      nodeGeometry(target),
-    ));
+    if (!source || !target) continue;
+    const path = orthogonalPath(nodeGeometry(source), nodeGeometry(target));
+    edge.setAttribute('d', path);
+    canvas.querySelector(`[data-dmt-edge-hit="${CSS.escape(edge.dataset.dmtEdge)}"]`)
+      ?.setAttribute('d', path);
   }
+}
+
+function isTypingTarget(target) {
+  return !!target?.closest?.('input, textarea, select, [contenteditable="true"]');
+}
+
+function trapModalTab(event, modal) {
+  if (event.key !== 'Tab' || !modal) return false;
+  const controls = [...modal.querySelectorAll(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter(control => !control.closest('[hidden]'));
+  if (!controls.length) return false;
+  const first = controls[0];
+  const last = controls.at(-1);
+  if (event.shiftKey && document.activeElement === first) last.focus();
+  else if (!event.shiftKey && document.activeElement === last) first.focus();
+  else return false;
+  event.preventDefault();
+  return true;
+}
+
+export function mountPlannerDialog({ root, onDialogTab, onCancelEdit }) {
+  if (!root?.querySelector('[data-dmt-modal]')) return () => {};
+  const click = event => {
+    const tab = event.target.closest('[data-dmt-dialog-tab]');
+    if (tab && !tab.disabled) {
+      root.querySelectorAll('[data-dmt-dialog-tab]').forEach(button => {
+        button.setAttribute('aria-selected', String(button === tab));
+      });
+      root.querySelectorAll('[data-dmt-dialog-panel]').forEach(panel => {
+        panel.toggleAttribute('hidden', panel.dataset.dmtDialogPanel !== tab.dataset.dmtDialogTab);
+      });
+      onDialogTab?.(tab.dataset.dmtDialogTab);
+      return;
+    }
+    if (event.target.closest('[data-dmt-modal-close]')) onCancelEdit?.();
+  };
+  const keydown = event => {
+    if (trapModalTab(event, root.querySelector('[data-dmt-modal]'))) return;
+    if (event.key !== 'Escape') return;
+    onCancelEdit?.();
+    event.preventDefault();
+  };
+  root.addEventListener('click', click);
+  root.addEventListener('keydown', keydown);
+  (root.querySelector('[data-dmt-modal] input[name="title"]')
+    || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])'))
+    ?.focus({ preventScroll: true });
+  return () => {
+    root.removeEventListener('click', click);
+    root.removeEventListener('keydown', keydown);
+  };
 }
 
 export function mountStoryCanvas({
   root,
-  onSelect,
+  selectedItemIds = [],
+  selectedFlowIds = [],
+  onSelectionChange,
+  onEdit,
   onOpen,
   onMove,
   onConnect,
   onConnectStart,
+  onCreate,
+  onDeleteSelection,
+  onUndo,
+  onDialogTab,
+  onCancelEdit,
 }) {
   const canvas = root?.querySelector('.dmt-story-canvas');
-  if (!canvas) return () => {};
+  const viewport = root?.querySelector('.dmt-story-viewport');
+  if (!canvas || !viewport) return () => {};
   const removers = [];
+  const items = new Set(selectedItemIds);
+  const flows = new Set(selectedFlowIds);
+  let primaryId = [...items][0] || '';
   let connectionSource = '';
+  let nodeDrag = null;
+  let marquee = null;
+  let portDrag = null;
+  let suppressPortClick = false;
+  let draggedTool = null;
 
   const listen = (target, event, handler, options) => {
     target.addEventListener(event, handler, options);
     removers.push(() => target.removeEventListener(event, handler, options));
   };
 
-  for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
-    const itemId = node.dataset.dmtNode;
-    let drag = null;
-    let suppressClick = false;
-    listen(node, 'click', event => {
-      if (suppressClick) {
-        suppressClick = false;
-        event.preventDefault();
-        return;
-      }
-      if (event.defaultPrevented || event.target.closest('.dmt-node-port')) return;
-      if (connectionSource && connectionSource !== itemId) {
-        const source = connectionSource;
-        connectionSource = '';
-        canvas.classList.remove('is-connecting');
-        onConnect(source, itemId);
-        return;
-      }
-      onSelect(itemId);
-    });
-    listen(node, 'dblclick', event => {
-      if (event.target.closest('button, a, input, textarea, select')) return;
-      event.preventDefault();
-      onOpen(itemId);
-    });
-    listen(node, 'keydown', event => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        onOpen(itemId);
-      } else if (event.key === ' ') {
-        event.preventDefault();
-        onSelect(itemId);
-      }
-    });
-    listen(node, 'pointerdown', event => {
-      if (event.button !== 0 || event.target.closest('button, a, input, textarea, select')) return;
-      const start = pointInCanvas(event, canvas);
-      const position = nodeGeometry(node);
-      drag = { start, position, moved: false };
-      node.setPointerCapture?.(event.pointerId);
-    });
-    listen(node, 'pointermove', event => {
-      if (!drag) return;
-      const current = pointInCanvas(event, canvas);
-      const dx = current.x - drag.start.x;
-      const dy = current.y - drag.start.y;
-      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-      if (!drag.moved) return;
-      node.style.left = `${Math.max(0, drag.position.x + dx)}px`;
-      node.style.top = `${Math.max(0, drag.position.y + dy)}px`;
-      redraw(canvas);
-      event.preventDefault();
-    });
-    const finishDrag = event => {
-      if (!drag) return;
-      if (drag.moved) {
-        suppressClick = true;
-        const x = Math.round((Number.parseFloat(node.style.left) || 0) / GRID) * GRID;
-        const y = Math.round((Number.parseFloat(node.style.top) || 0) / GRID) * GRID;
-        node.style.left = `${x}px`;
-        node.style.top = `${y}px`;
-        redraw(canvas);
-        onMove(itemId, { x, y });
-        event.preventDefault();
-      }
-      drag = null;
-    };
-    listen(node, 'pointerup', finishDrag);
-    listen(node, 'pointercancel', finishDrag);
+  const nodeFor = id => canvas.querySelector(`[data-dmt-node="${CSS.escape(id)}"]`);
+  const selectionHull = canvas.querySelector('[data-dmt-selection-hull]');
+  const marqueeElement = canvas.querySelector('[data-dmt-marquee]');
 
-    const port = node.querySelector('.dmt-node-port');
-    if (!port) continue;
-    let suppressPortClick = false;
-    let portDrag = null;
-    listen(port, 'click', event => {
+  function updateHull() {
+    const selectedNodes = [...items].map(nodeFor).filter(Boolean);
+    if (selectedNodes.length < 2 || !selectionHull) {
+      selectionHull?.setAttribute('hidden', '');
+      return;
+    }
+    const geometries = selectedNodes.map(nodeGeometry);
+    const left = Math.min(...geometries.map(value => value.x));
+    const top = Math.min(...geometries.map(value => value.y));
+    const right = Math.max(...geometries.map(value => value.x + value.width));
+    const bottom = Math.max(...geometries.map(value => value.y + value.height));
+    applyRectangle(selectionHull, {
+      x: left - 8,
+      y: top - 8,
+      width: right - left + 16,
+      height: bottom - top + 16,
+    });
+    selectionHull.removeAttribute('hidden');
+  }
+
+  function syncSelection({ announce = true } = {}) {
+    for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
+      node.classList.toggle('is-selected', items.has(node.dataset.dmtNode));
+      node.setAttribute('aria-pressed', String(items.has(node.dataset.dmtNode)));
+    }
+    for (const group of canvas.querySelectorAll('[data-dmt-edge-group]')) {
+      group.classList.toggle('is-selected', flows.has(group.dataset.dmtEdgeGroup));
+    }
+    updateHull();
+    onSelectionChange?.({
+      itemIds: [...items],
+      flowIds: [...flows],
+      primaryId,
+      announce,
+    });
+  }
+
+  function selectOnlyItem(id, announce = true) {
+    items.clear();
+    flows.clear();
+    if (id) items.add(id);
+    primaryId = id;
+    syncSelection({ announce });
+  }
+
+  function toggleItem(id) {
+    flows.clear();
+    if (items.has(id)) items.delete(id);
+    else items.add(id);
+    primaryId = items.has(id) ? id : ([...items].at(-1) || '');
+    syncSelection();
+  }
+
+  function selectEdge(id, additive) {
+    if (!additive) {
+      items.clear();
+      flows.clear();
+    }
+    if (additive && flows.has(id)) flows.delete(id);
+    else flows.add(id);
+    primaryId = '';
+    syncSelection();
+  }
+
+  function cancelConnection() {
+    connectionSource = '';
+    portDrag = null;
+    canvas.classList.remove('is-connecting');
+    canvas.querySelector('[data-dmt-preview]')?.setAttribute('hidden', '');
+    onConnectStart?.('');
+  }
+
+  function startConnection(id) {
+    connectionSource = connectionSource === id ? '' : id;
+    canvas.classList.toggle('is-connecting', !!connectionSource);
+    onConnectStart?.(connectionSource);
+  }
+
+  function visibleCenter() {
+    return {
+      x: Math.max(0, viewport.scrollLeft + (viewport.clientWidth / 2) - 120),
+      y: Math.max(0, viewport.scrollTop + (viewport.clientHeight / 2) - 58),
+    };
+  }
+
+  function finishNodeDrag(event) {
+    if (!nodeDrag) return;
+    const drag = nodeDrag;
+    nodeDrag = null;
+    if (!drag.moved) {
+      if (drag.collapseOnClick) selectOnlyItem(drag.primaryId);
+      return;
+    }
+    const primary = nodeFor(drag.primaryId);
+    const current = nodeGeometry(primary);
+    const snappedX = Math.max(0, Math.round(current.x / GRID) * GRID);
+    const snappedY = Math.max(0, Math.round(current.y / GRID) * GRID);
+    const snapDx = snappedX - current.x;
+    const snapDy = snappedY - current.y;
+    const updates = {};
+    for (const id of drag.ids) {
+      const node = nodeFor(id);
+      if (!node) continue;
+      const geometry = nodeGeometry(node);
+      const x = Math.max(0, geometry.x + snapDx);
+      const y = Math.max(0, geometry.y + snapDy);
+      node.style.left = `${x}px`;
+      node.style.top = `${y}px`;
+      updates[id] = { x, y };
+    }
+    redraw(canvas);
+    updateHull();
+    onMove?.(updates);
+    event.preventDefault();
+  }
+
+  listen(root, 'click', event => {
+    const tool = event.target.closest('[data-dmt-create-kind]');
+    if (tool) {
+      onCreate?.(tool.dataset.dmtCreateKind, tool.dataset.dmtCreateSubtype || '', visibleCenter());
+      return;
+    }
+    const command = event.target.closest('[data-dmt-command]')?.dataset.dmtCommand;
+    if (command) {
+      if (command === 'edit' && items.size === 1 && !flows.size) onEdit?.([...items][0]);
+      if (command === 'open' && items.size === 1 && !flows.size) onOpen?.([...items][0]);
+      if (command === 'connect' && items.size === 1 && !flows.size) startConnection([...items][0]);
+      if (command === 'delete') onDeleteSelection?.([...items], [...flows]);
+      if (command === 'undo') onUndo?.();
+      if (command === 'shortcuts') {
+        const modal = root.querySelector('[data-dmt-shortcuts-modal]');
+        modal?.removeAttribute('hidden');
+        modal?.querySelector('[data-dmt-shortcuts-close]')?.focus();
+      }
+      return;
+    }
+    if (event.target.closest('[data-dmt-shortcuts-close]')) {
+      root.querySelector('[data-dmt-shortcuts-modal]')?.setAttribute('hidden', '');
+      return;
+    }
+    const tab = event.target.closest('[data-dmt-dialog-tab]');
+    if (tab && !tab.disabled) {
+      root.querySelectorAll('[data-dmt-dialog-tab]').forEach(button => {
+        button.setAttribute('aria-selected', String(button === tab));
+      });
+      root.querySelectorAll('[data-dmt-dialog-panel]').forEach(panel => {
+        panel.toggleAttribute('hidden', panel.dataset.dmtDialogPanel !== tab.dataset.dmtDialogTab);
+      });
+      onDialogTab?.(tab.dataset.dmtDialogTab);
+      return;
+    }
+    if (event.target.closest('[data-dmt-modal-close]')) {
+      onCancelEdit?.();
+      return;
+    }
+    const port = event.target.closest('.dmt-node-port');
+    if (port) {
       event.preventDefault();
       event.stopPropagation();
-      if (suppressPortClick) {
-        suppressPortClick = false;
-        return;
+      if (suppressPortClick) suppressPortClick = false;
+      else startConnection(port.closest('[data-dmt-node]').dataset.dmtNode);
+      return;
+    }
+    const edge = event.target.closest('[data-dmt-edge-hit]');
+    if (edge) {
+      selectEdge(edge.dataset.dmtEdgeHit, event.shiftKey);
+      return;
+    }
+    const node = event.target.closest('[data-dmt-node]');
+    if (!node || event.target.closest('button, a, input, textarea, select')) return;
+    const id = node.dataset.dmtNode;
+    if (connectionSource) {
+      if (connectionSource !== id) {
+        const source = connectionSource;
+        cancelConnection();
+        onConnect?.(source, id);
       }
-      connectionSource = connectionSource === itemId ? '' : itemId;
-      canvas.classList.toggle('is-connecting', !!connectionSource);
-      onConnectStart(connectionSource);
-    });
-    let preview = null;
-    listen(port, 'pointerdown', event => {
-      if (event.button !== 0) return;
+    }
+  });
+
+  listen(root, 'dblclick', event => {
+    const node = event.target.closest('[data-dmt-node]');
+    if (!node || event.target.closest('button, a, input, textarea, select')) return;
+    event.preventDefault();
+    onEdit?.(node.dataset.dmtNode);
+  });
+
+  listen(canvas, 'pointerdown', event => {
+    if (event.button !== 0) return;
+    const port = event.target.closest('.dmt-node-port');
+    if (port) {
       event.stopPropagation();
-      connectionSource = itemId;
+      const node = port.closest('[data-dmt-node]');
+      const id = node.dataset.dmtNode;
+      const wasActive = connectionSource === id;
+      connectionSource = id;
       canvas.classList.add('is-connecting');
-      portDrag = { x: event.clientX, y: event.clientY, moved: false };
-      preview = canvas.querySelector('[data-dmt-preview]');
+      portDrag = { id, startClient: { x: event.clientX, y: event.clientY }, moved: false, wasActive };
+      const preview = canvas.querySelector('[data-dmt-preview]');
       preview?.removeAttribute('hidden');
       port.setPointerCapture?.(event.pointerId);
-      onConnectStart(itemId);
-    });
-    listen(port, 'pointermove', event => {
-      if (!preview || connectionSource !== itemId) return;
-      if (portDrag && Math.abs(event.clientX - portDrag.x) + Math.abs(event.clientY - portDrag.y) > 4) {
-        portDrag.moved = true;
+      onConnectStart?.(id);
+      return;
+    }
+    const node = event.target.closest('[data-dmt-node]');
+    if (node && !event.target.closest('button, a, input, textarea, select')) {
+      if (connectionSource) return;
+      const id = node.dataset.dmtNode;
+      if (event.shiftKey) {
+        toggleItem(id);
+        if (!items.has(id)) return;
+      } else if (!items.has(id)) {
+        selectOnlyItem(id);
       }
-      const source = nodeGeometry(node);
-      const targetPoint = pointInCanvas(event, canvas);
-      preview.setAttribute('d', orthogonalPath(source, {
-        x: targetPoint.x,
-        y: targetPoint.y,
+      primaryId = id;
+      const start = pointInCanvas(event, canvas);
+      const ids = [...items];
+      nodeDrag = {
+        start,
+        primaryId: id,
+        ids,
+        positions: new Map(ids.map(itemId => [itemId, nodeGeometry(nodeFor(itemId))])),
+        moved: false,
+        collapseOnClick: !event.shiftKey && (items.size > 1 || flows.size > 0),
+      };
+      node.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (event.target.closest('[data-dmt-edge-hit]')) return;
+    canvas.focus({ preventScroll: true });
+    const start = pointInCanvas(event, canvas);
+    marquee = {
+      start,
+      additive: event.shiftKey,
+      initial: new Set(event.shiftKey ? items : []),
+      moved: false,
+    };
+    if (!event.shiftKey) {
+      items.clear();
+      flows.clear();
+      primaryId = '';
+      syncSelection({ announce: false });
+    }
+    canvas.setPointerCapture?.(event.pointerId);
+  });
+
+  listen(canvas, 'pointermove', event => {
+    if (portDrag) {
+      const distance = Math.abs(event.clientX - portDrag.startClient.x)
+        + Math.abs(event.clientY - portDrag.startClient.y);
+      if (distance > DRAG_THRESHOLD) portDrag.moved = true;
+      const source = nodeGeometry(nodeFor(portDrag.id));
+      const target = pointInCanvas(event, canvas);
+      canvas.querySelector('[data-dmt-preview]')?.setAttribute('d', orthogonalPath(source, {
+        x: target.x,
+        y: target.y,
         width: 0,
         height: 0,
       }));
-    });
-    const finishConnection = event => {
-      if (!preview || connectionSource !== itemId) return;
-      preview.setAttribute('hidden', '');
+      return;
+    }
+    if (nodeDrag) {
+      const current = pointInCanvas(event, canvas);
+      const startGeometries = [...nodeDrag.positions.values()];
+      const minimumX = Math.min(...startGeometries.map(value => value.x));
+      const minimumY = Math.min(...startGeometries.map(value => value.y));
+      const dx = Math.max(current.x - nodeDrag.start.x, -minimumX);
+      const dy = Math.max(current.y - nodeDrag.start.y, -minimumY);
+      if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) nodeDrag.moved = true;
+      if (!nodeDrag.moved) return;
+      for (const id of nodeDrag.ids) {
+        const node = nodeFor(id);
+        const start = nodeDrag.positions.get(id);
+        if (!node || !start) continue;
+        node.style.left = `${Math.max(0, start.x + dx)}px`;
+        node.style.top = `${Math.max(0, start.y + dy)}px`;
+      }
+      redraw(canvas);
+      updateHull();
+      event.preventDefault();
+      return;
+    }
+    if (!marquee) return;
+    const current = pointInCanvas(event, canvas);
+    const rectangle = selectionRectangle(marquee.start, current);
+    if (rectangle.width + rectangle.height > DRAG_THRESHOLD) marquee.moved = true;
+    if (!marquee.moved) return;
+    applyRectangle(marqueeElement, rectangle);
+    marqueeElement?.removeAttribute('hidden');
+    items.clear();
+    marquee.initial.forEach(id => items.add(id));
+    for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
+      if (rectanglesIntersect(rectangle, nodeGeometry(node))) items.add(node.dataset.dmtNode);
+    }
+    primaryId = [...items].at(-1) || '';
+    syncSelection({ announce: false });
+    event.preventDefault();
+  });
+
+  listen(canvas, 'pointerup', event => {
+    if (portDrag) {
+      const sourceId = portDrag.id;
+      const moved = portDrag.moved;
+      const wasActive = portDrag.wasActive;
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-dmt-node]');
       const targetId = target?.dataset.dmtNode || '';
-      const sourceId = connectionSource;
-      connectionSource = '';
-      canvas.classList.remove('is-connecting');
-      onConnectStart('');
-      suppressPortClick = !!portDrag?.moved;
-      if (targetId && targetId !== sourceId) {
-        suppressPortClick = true;
-        onConnect(sourceId, targetId);
-      }
       portDrag = null;
-      preview = null;
+      suppressPortClick = true;
+      canvas.querySelector('[data-dmt-preview]')?.setAttribute('hidden', '');
+      if (moved) {
+        cancelConnection();
+        if (targetId && targetId !== sourceId) onConnect?.(sourceId, targetId);
+      } else if (wasActive) {
+        cancelConnection();
+      }
       event.preventDefault();
-    };
-    listen(port, 'pointerup', finishConnection);
-    listen(port, 'pointercancel', finishConnection);
-  }
+      return;
+    }
+    if (nodeDrag) {
+      finishNodeDrag(event);
+      return;
+    }
+    if (!marquee) return;
+    const moved = marquee.moved;
+    marquee = null;
+    marqueeElement?.setAttribute('hidden', '');
+    if (moved) syncSelection();
+  });
 
+  listen(canvas, 'pointercancel', event => {
+    if (nodeDrag) finishNodeDrag(event);
+    marquee = null;
+    marqueeElement?.setAttribute('hidden', '');
+    if (portDrag) cancelConnection();
+  });
+
+  listen(root, 'dragstart', event => {
+    const tool = event.target.closest('[data-dmt-create-kind]');
+    if (!tool) return;
+    draggedTool = {
+      kind: tool.dataset.dmtCreateKind,
+      subtype: tool.dataset.dmtCreateSubtype || '',
+    };
+    event.dataTransfer?.setData('text/plain', `${draggedTool.kind}:${draggedTool.subtype}`);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
+  });
+  listen(viewport, 'dragover', event => {
+    if (!draggedTool) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  });
+  listen(viewport, 'drop', event => {
+    if (!draggedTool) return;
+    event.preventDefault();
+    const position = pointInCanvas(event, canvas);
+    onCreate?.(draggedTool.kind, draggedTool.subtype, {
+      x: Math.max(0, position.x - 120),
+      y: Math.max(0, position.y - 58),
+    });
+    draggedTool = null;
+  });
+  listen(root, 'dragend', () => { draggedTool = null; });
+
+  listen(root, 'keydown', event => {
+    if (isTypingTarget(event.target)) return;
+    const shortcutModal = root.querySelector('[data-dmt-shortcuts-modal]');
+    const editModal = root.querySelector('[data-dmt-modal]');
+    const activeModal = editModal
+      || (shortcutModal && !shortcutModal.hasAttribute('hidden') ? shortcutModal : null);
+    if (trapModalTab(event, activeModal)) return;
+    const focusedNode = event.target.closest?.('[data-dmt-node]');
+    const focusedEdge = event.target.closest?.('[data-dmt-edge-hit]');
+    if (event.key === ' ' && focusedNode) {
+      if (event.shiftKey) toggleItem(focusedNode.dataset.dmtNode);
+      else selectOnlyItem(focusedNode.dataset.dmtNode);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Enter' && focusedNode) {
+      const id = focusedNode.dataset.dmtNode;
+      if (!items.has(id) || items.size !== 1 || flows.size) selectOnlyItem(id, false);
+      if (event.shiftKey) onOpen?.(id);
+      else onEdit?.(id);
+      event.preventDefault();
+      return;
+    }
+    if ((event.key === ' ' || event.key === 'Enter') && focusedEdge) {
+      selectEdge(focusedEdge.dataset.dmtEdgeHit, event.shiftKey);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape') {
+      if (shortcutModal && !shortcutModal.hasAttribute('hidden')) shortcutModal.setAttribute('hidden', '');
+      else if (editModal) onCancelEdit?.();
+      else if (connectionSource) cancelConnection();
+      else {
+        items.clear();
+        flows.clear();
+        primaryId = '';
+        syncSelection();
+      }
+      event.preventDefault();
+      return;
+    }
+    if (editModal || (shortcutModal && !shortcutModal.hasAttribute('hidden'))) return;
+    if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
+      shortcutModal?.removeAttribute('hidden');
+      event.preventDefault();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      items.clear();
+      flows.clear();
+      canvas.querySelectorAll('[data-dmt-node]').forEach(node => items.add(node.dataset.dmtNode));
+      primaryId = [...items][0] || '';
+      syncSelection();
+      event.preventDefault();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      onUndo?.();
+      event.preventDefault();
+      return;
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && (items.size || flows.size)) {
+      onDeleteSelection?.([...items], [...flows]);
+      event.preventDefault();
+      return;
+    }
+    if (event.key.toLowerCase() === 'c' && items.size === 1 && !flows.size) {
+      startConnection([...items][0]);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Enter' && items.size === 1 && !flows.size) {
+      if (event.shiftKey) onOpen?.([...items][0]);
+      else onEdit?.([...items][0]);
+      event.preventDefault();
+      return;
+    }
+    const offsets = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    if (!offsets[event.key] || !items.size) return;
+    const distance = event.shiftKey ? GRID * 4 : GRID;
+    const [dx, dy] = offsets[event.key];
+    const selectedGeometries = [...items].map(nodeFor).filter(Boolean).map(nodeGeometry);
+    const requestedX = dx * distance;
+    const requestedY = dy * distance;
+    const moveX = Math.max(requestedX, -Math.min(...selectedGeometries.map(value => value.x)));
+    const moveY = Math.max(requestedY, -Math.min(...selectedGeometries.map(value => value.y)));
+    const updates = {};
+    for (const id of items) {
+      const node = nodeFor(id);
+      if (!node) continue;
+      const geometry = nodeGeometry(node);
+      const x = geometry.x + moveX;
+      const y = geometry.y + moveY;
+      node.style.left = `${x}px`;
+      node.style.top = `${y}px`;
+      updates[id] = { x, y };
+    }
+    redraw(canvas);
+    updateHull();
+    onMove?.(updates);
+    event.preventDefault();
+  });
+
+  const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
+    || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
+  if (firstDialogControl) firstDialogControl.focus({ preventScroll: true });
+  else if (items.size === 1 && !flows.size) nodeFor([...items][0])?.focus({ preventScroll: true });
   redraw(canvas);
+  updateHull();
   return () => removers.splice(0).reverse().forEach(remove => remove());
 }

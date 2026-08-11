@@ -467,53 +467,50 @@ function notesSection(item, data, host) {
   </section>`;
 }
 
-export function renderInspector({
+export function renderPlannerDialog({
   host,
   data,
-  selectedId,
   draft,
   errors,
+  dialogTab = 'details',
 }) {
   const { esc, dataAction } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
-  if (draft) {
-    return `${validationHtml(errors, esc, t)}
-      <p class="dmt-inspector-eyebrow">${esc(t(draft.isNew ? 'planner.item.new' : 'planner.item.edit'))}</p>
-      <h2>${esc(draft.item.title || t('planner.item.untitled'))}</h2>
-      ${itemForm({
-        host,
-        item: draft.item,
-        data,
-        isNew: draft.isNew,
-      })}`;
-  }
-  const item = data.items.find(value => value.id === selectedId);
-  if (!item) {
-    return `<div>
-      <p class="dmt-inspector-eyebrow">${esc(t('planner.inspector.title'))}</p>
-      <h2>${esc(t('planner.inspector.emptyTitle'))}</h2>
-      <p class="settings-hint">${esc(t('planner.inspector.emptyBody'))}</p>
-    </div>`;
-  }
-  const canEnter = item.kind === 'plotline' || item.kind === 'quest';
-  const canOpen = canEnter || (item.kind === 'event' && ['encounter', 'puzzle'].includes(item.eventType));
-  return `<div>
-    <p class="dmt-inspector-eyebrow">${esc(itemTypeLabel(item, t))}</p>
-    <h2>${esc(item.title)}</h2>
-    <div class="dmt-inspector-badges">
-      ${(item.tags || []).map(tag => `<span class="codex-badge">${esc(tag)}</span>`).join('')}
-    </div>
-    ${item.summary ? `<p>${esc(item.summary)}</p>` : `<p class="settings-hint">${esc(t('planner.item.noSummary'))}</p>`}
-    ${item.objective ? `<section><h3>${esc(t('planner.item.objective'))}</h3><div>${host.h.renderMarkdown(item.objective)}</div></section>` : ''}
-    ${item.body ? `<section><h3>${esc(t('planner.item.body'))}</h3><div>${host.h.renderMarkdown(item.body)}</div></section>` : ''}
-    <div class="dmt-inspector-actions">
-      <button class="inline-create-btn" type="button"${dataAction(host.action('plannerEditItem'), item.id)}>${esc(t('planner.action.edit'))}</button>
-      ${canOpen ? `<button class="edit-save-btn" type="button"${dataAction(host.action('plannerOpenItem'), item.id)}>${esc(t(canEnter ? 'planner.action.enter' : 'planner.action.open'))}</button>` : ''}
-    </div>
-    ${flowSection(item, data, host)}
-    ${referencesSection(item, data, host)}
-    ${consequenceSection(item, data, host)}
-    ${notesSection(item, data, host)}
+  if (!draft) return '';
+  const item = draft.item;
+  const tabs = [
+    ['details', 'planner.dialog.details'],
+    ['links', 'planner.dialog.links'],
+    ['notes', 'planner.dialog.notes'],
+  ];
+  const savedOnly = !draft.isNew;
+  return `<div class="dmt-planner-modal" data-dmt-modal role="presentation">
+    <button class="dmt-planner-modal-backdrop" type="button" data-dmt-modal-close tabindex="-1" aria-label="${esc(t('planner.action.cancel'))}"></button>
+    <section class="dmt-planner-dialog" role="dialog" aria-modal="true" aria-labelledby="dmt-planner-dialog-title">
+      <header class="dmt-planner-dialog-header">
+        <div>
+          <p class="dmt-inspector-eyebrow">${esc(t(draft.isNew ? 'planner.item.new' : 'planner.item.edit'))}</p>
+          <h2 id="dmt-planner-dialog-title">${esc(item.title || t('planner.item.untitled'))}</h2>
+        </div>
+        <button class="dmt-dialog-close" type="button" aria-label="${esc(t('planner.action.cancel'))}"${dataAction(host.action('plannerCancelEdit'))}>×</button>
+      </header>
+      <div class="dmt-dialog-tabs" role="tablist" aria-label="${esc(t('planner.dialog.tabs'))}">
+        ${tabs.map(([id, key]) => `<button type="button" role="tab" data-dmt-dialog-tab="${id}"
+          aria-selected="${dialogTab === id}"${!savedOnly && id !== 'details' ? ' disabled' : ''}>${esc(t(key))}</button>`).join('')}
+      </div>
+      <div class="dmt-planner-dialog-body">
+        ${validationHtml(errors, esc, t)}
+        <section role="tabpanel" data-dmt-dialog-panel="details"${dialogTab === 'details' ? '' : ' hidden'}>
+          ${itemForm({ host, item, data, isNew: draft.isNew })}
+        </section>
+        <section role="tabpanel" data-dmt-dialog-panel="links"${dialogTab === 'links' ? '' : ' hidden'}>
+          ${savedOnly ? `${flowSection(item, data, host)}${referencesSection(item, data, host)}${consequenceSection(item, data, host)}` : `<p class="settings-hint">${esc(t('planner.dialog.saveFirst'))}</p>`}
+        </section>
+        <section role="tabpanel" data-dmt-dialog-panel="notes"${dialogTab === 'notes' ? '' : ' hidden'}>
+          ${savedOnly ? notesSection(item, data, host) : `<p class="settings-hint">${esc(t('planner.dialog.saveFirst'))}</p>`}
+        </section>
+      </div>
+    </section>
   </div>`;
 }
 
@@ -536,11 +533,11 @@ function breadcrumbs(host, data, scopeId, detailItem = null) {
   return host.h.breadcrumb(values);
 }
 
-function nodeHtml(node, selectedId, host) {
+function nodeHtml(node, selectedItemIds, host) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const item = node.item;
-  return `<article class="dmt-story-node${item.id === selectedId ? ' is-selected' : ''}"
+  return `<article class="dmt-story-node${selectedItemIds.has(item.id) ? ' is-selected' : ''}"
       data-dmt-node="${esc(item.id)}" data-kind="${esc(item.kind)}"
       ${item.eventType ? `data-event-type="${esc(item.eventType)}"` : ''}
       tabindex="0" role="button" aria-label="${esc(t('planner.node.label', {
@@ -563,13 +560,13 @@ function nodeHtml(node, selectedId, host) {
   </article>`;
 }
 
-export function renderStoryCanvas(projection, selectedId, host) {
+export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const byId = new Map(projection.nodes.map(node => [node.item.id, node]));
   return `<div class="dmt-story-viewport">
-    <div class="dmt-story-canvas" style="width:${projection.width}px;height:${projection.height}px">
-      <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" aria-hidden="true">
+    <div class="dmt-story-canvas" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}" style="width:${projection.width}px;height:${projection.height}px">
+      <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
@@ -582,32 +579,70 @@ export function renderStoryCanvas(projection, selectedId, host) {
           const targetBox = { ...target.position, width: 240, height: 116 };
           const labelX = (sourceBox.x + sourceBox.width + targetBox.x) / 2;
           const labelY = (sourceBox.y + targetBox.y) / 2 + 58;
-          return `<path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
-            ${flow.label ? `<text class="dmt-story-edge-label" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}`;
+          const label = flow.label || t(`planner.flow.${flow.kind}`);
+          return `<g class="dmt-story-edge-group${selectedFlowIds.has(flow.id) ? ' is-selected' : ''}" data-dmt-edge-group="${esc(flow.id)}">
+              <path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
+              <path class="dmt-story-edge-hit" data-dmt-edge-hit="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" tabindex="0" role="button" aria-label="${esc(label)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
+              ${flow.label ? `<text class="dmt-story-edge-label" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}
+            </g>`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>
       </svg>
-      ${projection.nodes.map(node => nodeHtml(node, selectedId, host)).join('')}
+      <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
+      <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
+      ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host)).join('')}
       ${projection.nodes.length ? '' : `<div class="dmt-empty-canvas"><strong>${esc(t('planner.canvas.emptyTitle'))}</strong><p>${esc(t('planner.canvas.emptyBody'))}</p></div>`}
     </div>
   </div>`;
 }
 
-function toolbar(host) {
-  const { esc, dataAction } = host.h;
+function atlasDock(host) {
+  const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const actions = [
-    ['plotline', '', 'planner.kind.plotline'],
-    ['quest', '', 'planner.kind.quest'],
-    ['event', 'story', 'planner.eventType.story'],
-    ['event', 'encounter', 'planner.eventType.encounter'],
-    ['event', 'puzzle', 'planner.eventType.puzzle'],
-    ['branch', 'decision', 'planner.branchType.decision'],
-    ['branch', 'condition', 'planner.branchType.condition'],
-    ['branch', 'random', 'planner.branchType.random'],
+    ['structure', 'plotline', '', 'planner.kind.plotline'],
+    ['structure', 'quest', '', 'planner.kind.quest'],
+    ['events', 'event', 'story', 'planner.eventType.story'],
+    ['events', 'event', 'encounter', 'planner.eventType.encounter'],
+    ['events', 'event', 'puzzle', 'planner.eventType.puzzle'],
+    ['branches', 'branch', 'decision', 'planner.branchType.decision'],
+    ['branches', 'branch', 'condition', 'planner.branchType.condition'],
+    ['branches', 'branch', 'random', 'planner.branchType.random'],
   ];
-  return `<div class="dmt-planner-toolbar" aria-label="${esc(t('planner.toolbar.label'))}">
-    ${actions.map(([kind, subtype, key]) => `<button class="inline-create-btn" type="button"${dataAction(host.action('plannerCreateItem'), kind, subtype)}>+ ${esc(t(key))}</button>`).join('')}
+  return `<aside class="dmt-atlas-dock" aria-label="${esc(t('planner.toolbar.label'))}">
+    <div class="dmt-atlas-title"><span>✦</span><strong>${esc(t('planner.dock.title'))}</strong></div>
+    ${['structure', 'events', 'branches'].map(group => `<section class="dmt-atlas-group">
+      <h2>${esc(t(`planner.dock.${group}`))}</h2>
+      <div class="dmt-atlas-tools">
+        ${actions.filter(action => action[0] === group).map(([, kind, subtype, key]) => `<button class="dmt-atlas-tool" type="button" draggable="true"
+          data-dmt-create-kind="${kind}" data-dmt-create-subtype="${subtype}" data-kind="${kind}"
+          ${kind === 'event' ? `data-event-type="${subtype}"` : ''}${kind === 'branch' ? ` data-branch-type="${subtype}"` : ''}>
+          <span aria-hidden="true">+</span>${esc(t(key))}
+        </button>`).join('')}
+      </div>
+    </section>`).join('')}
+    <p class="dmt-atlas-hint">${esc(t('planner.dock.hint'))}</p>
+  </aside>`;
+}
+
+export function renderSelectionToolbar(host, data, selectedItemIds, selectedFlowIds) {
+  const { esc } = host.h;
+  const t = (key, params) => host.i18n.t(key, params);
+  const count = selectedItemIds.size + selectedFlowIds.size;
+  if (!count) return '';
+  const selectedItem = selectedItemIds.size === 1 && !selectedFlowIds.size
+    ? data.items.find(item => selectedItemIds.has(item.id))
+    : null;
+  const canOpen = selectedItem && (
+    selectedItem.kind === 'plotline' || selectedItem.kind === 'quest'
+    || (selectedItem.kind === 'event' && ['encounter', 'puzzle'].includes(selectedItem.eventType))
+  );
+  return `<div class="dmt-selection-toolbar" role="toolbar" aria-label="${esc(t('planner.selection.actions'))}">
+    <span>${esc(t('planner.selection.count', { n: count }))}</span>
+    ${selectedItem ? `<button type="button" data-dmt-command="edit">${esc(t('planner.action.edit'))}</button>` : ''}
+    ${canOpen ? `<button type="button" data-dmt-command="open">${esc(t(selectedItem.kind === 'plotline' || selectedItem.kind === 'quest' ? 'planner.action.enter' : 'planner.action.open'))}</button>` : ''}
+    ${selectedItem ? `<button type="button" data-dmt-command="connect">${esc(t('planner.action.connect'))}</button>` : ''}
+    <button class="is-danger" type="button" data-dmt-command="delete">${esc(t('planner.action.delete'))}</button>
   </div>`;
 }
 
@@ -616,10 +651,13 @@ export function renderCanvasPage({
   data,
   projection,
   scopeId,
-  selectedId,
+  selectedItemIds,
+  selectedFlowIds,
   draft,
   errors,
   connectionSource,
+  dialogTab,
+  canUndo,
 }) {
   const { esc, dataAction } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
@@ -629,10 +667,10 @@ export function renderCanvasPage({
     ${breadcrumbs(host, data, scopeId)}
     <div class="dmt-planner-heading">
       <div><h1>${esc(title)}</h1><p class="settings-hint">${esc(t('planner.page.description'))}</p></div>
-      ${toolbar(host)}
     </div>
-    ${validationHtml(errors, esc, t)}
+    ${draft ? '' : validationHtml(errors, esc, t)}
     <section class="dmt-planner-workbench">
+      ${atlasDock(host)}
       <div class="dmt-planner-stage">
         <div class="dmt-planner-stagebar">
           <span>${esc(connectionSource ? t('planner.canvas.connecting') : t('planner.canvas.hint'))}</span>
@@ -641,24 +679,34 @@ export function renderCanvasPage({
               nodes: projection.nodes.length,
               links: projection.flowLinks.length,
             }))}
+            ${canUndo ? `<button class="inline-create-btn" type="button" data-dmt-command="undo">${esc(t('planner.action.undo'))}</button>` : ''}
             <button class="inline-create-btn" type="button"${dataAction(host.action('plannerResetLayout'))}>${esc(t('planner.action.resetLayout'))}</button>
+            <button class="inline-create-btn" type="button" data-dmt-command="shortcuts" aria-label="${esc(t('planner.action.shortcuts'))}">?</button>
           </span>
         </div>
-        ${renderStoryCanvas(projection, selectedId, host)}
+        <div class="dmt-stage-canvas-wrap">
+          ${renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host)}
+          <div data-dmt-selection-actions>${renderSelectionToolbar(host, data, selectedItemIds, selectedFlowIds)}</div>
+        </div>
       </div>
-      <aside id="dm-story-inspector" class="dmt-planner-inspector" aria-label="${esc(t('planner.inspector.title'))}">
-        ${renderInspector({ host, data, selectedId, draft, errors })}
-      </aside>
     </section>
-    <details class="settings-panel">
-      <summary><strong>${esc(t('planner.legend.title'))}</strong></summary>
-      <p class="settings-hint">${esc(t('planner.legend.body'))}</p>
-      <div class="dmt-inspector-badges">
-        ${PLANNING_KINDS.map(kind => `<span class="codex-badge">${esc(t(`planner.kind.${kind}`))}</span>`).join('')}
-        ${EVENT_TYPES.map(kind => `<span class="codex-badge">${esc(t(`planner.eventType.${kind}`))}</span>`).join('')}
-        ${BRANCH_TYPES.map(kind => `<span class="codex-badge">${esc(t(`planner.branchType.${kind}`))}</span>`).join('')}
-      </div>
-    </details>
+    ${renderPlannerDialog({ host, data, draft, errors, dialogTab })}
+    <div class="dmt-shortcuts-modal" data-dmt-shortcuts-modal hidden>
+      <button class="dmt-planner-modal-backdrop" type="button" data-dmt-shortcuts-close tabindex="-1"></button>
+      <section class="dmt-shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="dmt-shortcuts-title">
+        <header><h2 id="dmt-shortcuts-title">${esc(t('planner.shortcuts.title'))}</h2><button type="button" data-dmt-shortcuts-close aria-label="${esc(t('planner.action.cancel'))}">×</button></header>
+        <dl>
+          <div><dt><kbd>Enter</kbd></dt><dd>${esc(t('planner.shortcuts.edit'))}</dd></div>
+          <div><dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>${esc(t('planner.shortcuts.open'))}</dd></div>
+          <div><dt><kbd>Shift</kbd> + ${esc(t('planner.shortcuts.click'))}</dt><dd>${esc(t('planner.shortcuts.multi'))}</dd></div>
+          <div><dt><kbd>C</kbd></dt><dd>${esc(t('planner.shortcuts.connect'))}</dd></div>
+          <div><dt><kbd>Delete</kbd></dt><dd>${esc(t('planner.shortcuts.delete'))}</dd></div>
+          <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>A</kbd></dt><dd>${esc(t('planner.shortcuts.all'))}</dd></div>
+          <div><dt><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd>${esc(t('planner.shortcuts.nudge'))}</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>${esc(t('planner.shortcuts.escape'))}</dd></div>
+        </dl>
+      </section>
+    </div>
   </main>`;
 }
 
@@ -668,6 +716,7 @@ export function renderDetailPage({
   item,
   draft,
   errors,
+  dialogTab = 'details',
 }) {
   const { esc, dataAction } = host.h;
   const t = key => host.i18n.t(key);
@@ -685,18 +734,16 @@ export function renderDetailPage({
       </div>
       <a class="back-btn" href="${parentHref}">← ${esc(t('planner.action.backToCanvas'))}</a>
     </div>
-    ${validationHtml(errors, esc, t)}
+    ${draft ? '' : validationHtml(errors, esc, t)}
     <div class="dmt-detail-grid">
       <section class="settings-panel">
-        ${draft
-          ? itemForm({ host, item: draft.item, data, isNew: false })
-          : `<div class="dmt-inspector-actions">
-              <button class="edit-save-btn" type="button"${dataAction(host.action('plannerEditItem'), item.id)}>${esc(t('planner.action.edit'))}</button>
-            </div>
-            ${item.objective ? `<h2>${esc(t('planner.item.objective'))}</h2><div>${host.h.renderMarkdown(item.objective)}</div>` : ''}
-            ${item.body ? `<h2>${esc(t('planner.item.body'))}</h2><div>${host.h.renderMarkdown(item.body)}</div>` : ''}
-            ${item.setup ? `<h2>${esc(t(item.eventType === 'encounter' ? 'planner.detail.environment' : 'planner.detail.clues'))}</h2><div>${host.h.renderMarkdown(item.setup)}</div>` : ''}
-            ${item.resolution ? `<h2>${esc(t(item.eventType === 'encounter' ? 'planner.detail.outcome' : 'planner.detail.solution'))}</h2><div>${host.h.renderMarkdown(item.resolution)}</div>` : ''}`}
+        <div class="dmt-inspector-actions">
+          <button class="edit-save-btn" type="button"${dataAction(host.action('plannerEditItem'), item.id)}>${esc(t('planner.action.edit'))}</button>
+        </div>
+        ${item.objective ? `<h2>${esc(t('planner.item.objective'))}</h2><div>${host.h.renderMarkdown(item.objective)}</div>` : ''}
+        ${item.body ? `<h2>${esc(t('planner.item.body'))}</h2><div>${host.h.renderMarkdown(item.body)}</div>` : ''}
+        ${item.setup ? `<h2>${esc(t(item.eventType === 'encounter' ? 'planner.detail.environment' : 'planner.detail.clues'))}</h2><div>${host.h.renderMarkdown(item.setup)}</div>` : ''}
+        ${item.resolution ? `<h2>${esc(t(item.eventType === 'encounter' ? 'planner.detail.outcome' : 'planner.detail.solution'))}</h2><div>${host.h.renderMarkdown(item.resolution)}</div>` : ''}
       </section>
       <aside class="dmt-detail-aside">
         <section class="settings-panel">${referencesSection(item, data, host)}</section>
@@ -704,6 +751,7 @@ export function renderDetailPage({
         <section class="settings-panel">${notesSection(item, data, host)}</section>
       </aside>
     </div>
+    ${renderPlannerDialog({ host, data, draft, errors, dialogTab })}
   </main>`;
 }
 

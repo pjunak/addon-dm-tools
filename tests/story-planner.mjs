@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
+import { rectanglesIntersect } from '../story-planner-interactions.js';
 import {
   itemAncestors,
   itemSubtreeIds,
@@ -145,10 +146,10 @@ test('item subtrees include every nested descendant once', () => {
   ]);
 });
 
-test('desktop canvas height is independent from inspector content', () => {
+test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens', () => {
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.dmt-planner-workbench\{[^}]*height:max\(42rem,calc\(72vh \+ 3rem\)\)/,
+    /\.dmt-planner-workbench\{[^}]*grid-template-columns:13\.5rem minmax\(0,1fr\)[^}]*height:max\(42rem,75vh\)/,
   );
   assert.match(
     STORY_PLANNER_STYLES,
@@ -156,12 +157,31 @@ test('desktop canvas height is independent from inspector content', () => {
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.dmt-planner-inspector\{min-height:0;overflow:auto/,
+    /\.dmt-atlas-tool\[data-kind="quest"\]\{border-color:var\(--color-info\)\}/,
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /@media\(max-width:1100px\)\{[\s\S]*?\.dmt-planner-workbench\{[^}]*height:auto/,
+    /\.dmt-atlas-tool\[data-event-type="encounter"\]\{border-color:var\(--color-danger\)\}/,
   );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-atlas-tool\[data-kind="branch"\]\{border-style:dashed;border-color:var\(--accent-gold\)\}/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /@media\(max-width:900px\)\{[\s\S]*?\.dmt-atlas-dock\{[^}]*overflow-x:auto/,
+  );
+});
+
+test('selection rectangles include cards that touch their boundary', () => {
+  assert.equal(rectanglesIntersect(
+    { x: 0, y: 0, width: 100, height: 100 },
+    { x: 100, y: 40, width: 20, height: 20 },
+  ), true);
+  assert.equal(rectanglesIntersect(
+    { x: 0, y: 0, width: 99, height: 100 },
+    { x: 100, y: 40, width: 20, height: 20 },
+  ), false);
 });
 
 function fixture() {
@@ -284,10 +304,14 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   const rootHtml = value.planner.render();
   assert.match(rootHtml, /Story Planner/);
   assert.match(rootHtml, /dmt-story-canvas/);
+  assert.match(rootHtml, /class="dmt-atlas-dock"/);
+  assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
+  assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);
 
   value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']);
-  value.planner.createItem('quest');
+  value.planner.createItem('quest', '', { x: 264, y: 168 });
+  assert.match(value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']), /role="dialog" aria-modal="true"/);
   const draft = value.planner.getState().draft.item;
   await value.planner.saveItem(event({
     id: draft.id,
@@ -304,6 +328,10 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.equal(value.stores.planning_items.get(draft.id).parentId, 'plotline-dragons');
   assert.equal(value.stores.planning_items.get(draft.id).kind, 'quest');
   assert.deepEqual(value.stores.planning_items.get(draft.id).tags, ['dragon', 'mystery']);
+  assert.deepEqual(value.stores.planning_views.get('scope-plotline-dragons').positions[draft.id], {
+    x: 264,
+    y: 168,
+  });
 });
 
 test('manual flow stays local while named references may cross canvas scopes', async t => {
@@ -339,6 +367,7 @@ test('manual flow stays local while named references may cross canvas scopes', a
     tags: [],
     updatedAt: 100,
   });
+  value.planner.editItem('branch-choice');
   const rootHtml = value.planner.render();
   const flowTargetOptions = rootHtml.match(
     /<select class="edit-input" name="targetId" required>([\s\S]*?)<\/select>/,
@@ -559,6 +588,23 @@ test('deleting a populated plotline confirms and removes only its planning subtr
   assert.deepEqual(value.stores.dm_notes.get('shared-note').anchorIds, ['plotline-survivor']);
   assert.equal(value.stores.planning_views.has('scope-plotline-dragons'), false);
   assert.deepEqual(value.stores.planning_views.get('scope-campaign').positions, {
+    'plotline-survivor': { x: 384, y: 72 },
+  });
+
+  await value.planner.undoLastDelete();
+  assert.equal(value.stores.planning_items.has('plotline-dragons'), true);
+  assert.equal(value.stores.planning_items.has('quest-child'), true);
+  assert.equal(value.stores.planning_items.has('event-grandchild'), true);
+  assert.equal(value.stores.planning_flow_links.has('flow-out'), true);
+  assert.equal(value.stores.planning_references.has('reference-out'), true);
+  assert.equal(value.stores.planning_consequences.has('consequence-out'), true);
+  assert.deepEqual(value.stores.dm_notes.get('shared-note').anchorIds, [
+    'event-grandchild',
+    'plotline-survivor',
+  ]);
+  assert.equal(value.stores.planning_views.has('scope-plotline-dragons'), true);
+  assert.deepEqual(value.stores.planning_views.get('scope-campaign').positions, {
+    'plotline-dragons': { x: 72, y: 72 },
     'plotline-survivor': { x: 384, y: 72 },
   });
 });
