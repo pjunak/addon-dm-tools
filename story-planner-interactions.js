@@ -48,10 +48,21 @@ function redraw(canvas) {
     const source = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.source)}"]`);
     const target = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.target)}"]`);
     if (!source || !target) continue;
-    const path = orthogonalPath(nodeGeometry(source), nodeGeometry(target));
+    const sourceBox = nodeGeometry(source);
+    const targetBox = nodeGeometry(target);
+    const path = orthogonalPath(sourceBox, targetBox);
     edge.setAttribute('d', path);
     canvas.querySelector(`[data-dmt-edge-hit="${CSS.escape(edge.dataset.dmtEdge)}"]`)
       ?.setAttribute('d', path);
+    const label = canvas.querySelector(
+      `[data-dmt-edge-label="${CSS.escape(edge.dataset.dmtEdge)}"]`,
+    );
+    if (label) {
+      label.setAttribute('x', String((sourceBox.x + sourceBox.width + targetBox.x) / 2));
+      label.setAttribute('y', String(
+        (sourceBox.y + targetBox.y) / 2 + ((sourceBox.height + targetBox.height) / 4),
+      ));
+    }
   }
 }
 

@@ -566,7 +566,7 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
   const byId = new Map(projection.nodes.map(node => [node.item.id, node]));
   return `<div class="dmt-story-viewport">
     <div class="dmt-story-canvas" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}" style="width:${projection.width}px;height:${projection.height}px">
-      <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" aria-label="${esc(t('planner.flow.title'))}">
+      <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
@@ -578,12 +578,13 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
           const sourceBox = { ...source.position, width: 240, height: 116 };
           const targetBox = { ...target.position, width: 240, height: 116 };
           const labelX = (sourceBox.x + sourceBox.width + targetBox.x) / 2;
-          const labelY = (sourceBox.y + targetBox.y) / 2 + 58;
+          const labelY = (sourceBox.y + targetBox.y) / 2
+            + ((sourceBox.height + targetBox.height) / 4);
           const label = flow.label || t(`planner.flow.${flow.kind}`);
           return `<g class="dmt-story-edge-group${selectedFlowIds.has(flow.id) ? ' is-selected' : ''}" data-dmt-edge-group="${esc(flow.id)}">
               <path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
               <path class="dmt-story-edge-hit" data-dmt-edge-hit="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" tabindex="0" role="button" aria-label="${esc(label)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
-              ${flow.label ? `<text class="dmt-story-edge-label" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}
+              ${flow.label ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}
             </g>`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>
@@ -591,9 +592,9 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
       <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
       <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
       ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host)).join('')}
-      ${projection.nodes.length ? '' : `<div class="dmt-empty-canvas"><strong>${esc(t('planner.canvas.emptyTitle'))}</strong><p>${esc(t('planner.canvas.emptyBody'))}</p></div>`}
     </div>
-  </div>`;
+  </div>
+  ${projection.nodes.length ? '' : `<div class="dmt-empty-canvas"><strong>${esc(t('planner.canvas.emptyTitle'))}</strong><p>${esc(t('planner.canvas.emptyBody'))}</p></div>`}`;
 }
 
 function atlasDock(host) {
@@ -692,7 +693,7 @@ export function renderCanvasPage({
     </section>
     ${renderPlannerDialog({ host, data, draft, errors, dialogTab })}
     <div class="dmt-shortcuts-modal" data-dmt-shortcuts-modal hidden>
-      <button class="dmt-planner-modal-backdrop" type="button" data-dmt-shortcuts-close tabindex="-1"></button>
+      <button class="dmt-planner-modal-backdrop" type="button" data-dmt-shortcuts-close tabindex="-1" aria-label="${esc(t('planner.action.cancel'))}"></button>
       <section class="dmt-shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="dmt-shortcuts-title">
         <header><h2 id="dmt-shortcuts-title">${esc(t('planner.shortcuts.title'))}</h2><button type="button" data-dmt-shortcuts-close aria-label="${esc(t('planner.action.cancel'))}">×</button></header>
         <dl>

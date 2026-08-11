@@ -78,6 +78,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-flow-list{display:grid;gap:var(--space-1)}
     .addon-dm-tools .dmt-flow-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--space-2);padding:var(--space-2);border-bottom:1px solid var(--border-subtle)}
     .addon-dm-tools .dmt-planner-modal,.addon-dm-tools .dmt-shortcuts-modal{position:fixed;z-index:var(--z-modal,1000);inset:0;display:grid;place-items:center;padding:var(--space-4)}
+    .addon-dm-tools .dmt-shortcuts-modal[hidden]{display:none}
     .addon-dm-tools .dmt-planner-modal-backdrop{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;border-radius:0;background:color-mix(in srgb,#000 72%,transparent);cursor:default}
     .addon-dm-tools .dmt-planner-dialog,.addon-dm-tools .dmt-shortcuts-dialog{position:relative;display:grid;grid-template-rows:auto auto minmax(0,1fr);width:min(58rem,100%);max-height:min(52rem,calc(100vh - 2rem));border:1px solid var(--accent-gold-dim);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-surface);box-shadow:var(--shadow-lg)}
     .addon-dm-tools .dmt-planner-dialog-header,.addon-dm-tools .dmt-shortcuts-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);padding:var(--space-4);border-bottom:1px solid var(--border-subtle)}
@@ -96,7 +97,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools kbd{display:inline-block;min-width:1.7rem;padding:.18rem .4rem;border:1px solid var(--border-subtle);border-bottom-width:2px;border-radius:var(--radius-sm);background:var(--bg-raised);color:var(--text-parchment);font:inherit;font-size:var(--text-xs);text-align:center}
     .addon-dm-tools .dmt-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:var(--space-4);align-items:start}
     .addon-dm-tools .dmt-detail-aside{display:grid;gap:var(--space-4);position:sticky;top:var(--space-3)}
-    .addon-dm-tools .dmt-empty-canvas{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;padding:var(--space-5);text-align:center;color:var(--text-muted)}
+    .addon-dm-tools .dmt-empty-canvas{position:absolute;z-index:3;inset:0;display:grid;place-content:center;justify-items:center;padding:var(--space-5);text-align:center;color:var(--text-muted);pointer-events:none}
     @media(max-width:900px){
       .addon-dm-tools .dmt-planner-workbench{grid-template-columns:1fr;grid-template-rows:auto minmax(36rem,65vh);height:auto}
       .addon-dm-tools .dmt-atlas-dock{display:flex;align-items:flex-start;gap:var(--space-3);overflow-x:auto;padding:var(--space-2);border-right:0;border-bottom:1px solid var(--border-subtle)}

@@ -171,6 +171,10 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
     STORY_PLANNER_STYLES,
     /@media\(max-width:900px\)\{[\s\S]*?\.dmt-atlas-dock\{[^}]*overflow-x:auto/,
   );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-shortcuts-modal\[hidden\]\{display:none\}/,
+  );
 });
 
 test('selection rectangles include cards that touch their boundary', () => {
@@ -305,11 +309,16 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /Story Planner/);
   assert.match(rootHtml, /dmt-story-canvas/);
   assert.match(rootHtml, /class="dmt-atlas-dock"/);
+  assert.match(rootHtml, /class="dmt-story-edges"[^>]*role="group"/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
   assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);
 
-  value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']);
+  const emptyCanvasHtml = value.planner.render(
+    'plotline-dragons',
+    ['dm-plans', 'plotline-dragons'],
+  );
+  assert.match(emptyCanvasHtml, /<\/div>\s*<div class="dmt-empty-canvas">/);
   value.planner.createItem('quest', '', { x: 264, y: 168 });
   assert.match(value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']), /role="dialog" aria-modal="true"/);
   const draft = value.planner.getState().draft.item;
@@ -388,6 +397,7 @@ test('manual flow stays local while named references may cross canvas scopes', a
   const [flow] = value.stores.planning_flow_links.values();
   assert.equal(flow.kind, 'option');
   assert.equal(flow.label, 'Wake the dragon');
+  assert.match(value.planner.render(), /data-dmt-edge-label="[^"]+"/);
 
   await value.planner.saveFlow(event({
     targetId: 'branch-choice',

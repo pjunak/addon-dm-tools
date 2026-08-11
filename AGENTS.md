@@ -28,7 +28,7 @@ entry.js                         composition and role-conditioned registration
 planning-contract.js             pure schema and complete-dataset validation
 story-planner-model.js           ownership projection, layout, orthogonal paths
 story-planner-interactions.js    pointer/keyboard drag and connection lifecycle
-story-planner-render.js          escaped canvas, inspector, and detail HTML
+story-planner-render.js          escaped canvas, dock, modal, and detail HTML
 story-planner-styles.js          addon-scoped host-token styles
 story-planner.js                 planner state, CRUD, transactions, navigation
 dashboard.js                     live dm:dashboard planning overview
@@ -94,8 +94,8 @@ tests/                           contract, provider, UI, dashboard, lifecycle
 - Render only direct children and their real local flow on an open canvas.
   Never roll up or infer edges from nested content, ownership, prose, tags,
   proximity, or timestamps.
-- Selection must update the inspector without a route rerender so the canvas
-  scroll position remains stable.
+- Selection must update canvas styling and contextual actions without a route
+  rerender so the canvas scroll position remains stable.
 - Clean up every scheduled mount and DOM listener on rerender, navigation,
   role change, update, and disposal.
 - Escape user and translated text at HTML boundaries. Markdown must use the
