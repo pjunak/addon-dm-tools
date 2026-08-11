@@ -125,8 +125,9 @@ additions require the per-addon production wizard. Run relevant host import,
 transaction, lifecycle, slot, authorization, and visibility tests when their
 contracts change.
 
-Do not create branches, stage, commit, push, release, or deploy unless the
-maintainer asks. The only durable suite backlog is
+The global Codex instructions govern task commits. Do not create branches,
+push, release, or deploy unless the maintainer asks. The only durable suite
+backlog is
 [`../ttrpg-codex/docs/BACKLOG.md`](../ttrpg-codex/docs/BACKLOG.md). Temporary
 implementation plans belong only in the host's ignored `docs/plans/` directory
 and must be deleted when the task closes.

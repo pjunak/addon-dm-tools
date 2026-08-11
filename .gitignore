@@ -1,6 +1,3 @@
-# Local agent-tool compatibility file; shared guidance lives in AGENTS.md.
-CLAUDE.md
-
 # Secrets and private keys
 .env
 .env.*
