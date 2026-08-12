@@ -55,6 +55,9 @@ reference when the precise relationship matters but is not story flow.
 - The Atlas dock is both the creation palette and visual legend. Each tool uses
   the same shape, border color, and line treatment as the card it creates.
   Clicking creates at the visible center; dragging creates at the drop point.
+  Creation immediately persists a valid placeholder without opening the edit
+  dialog, so a DM can lay out several cards before filling them in. Cards with
+  no planning detail use a subtle drafting hatch and a **Needs details** badge.
 - Single click or Space selects a card. Shift-click toggles membership and a
   drag on empty canvas creates a marquee selection. Selection updates card and
   edge styling plus the contextual toolbar without remounting the canvas, so
@@ -71,8 +74,9 @@ reference when the precise relationship matters but is not story flow.
   immediately; deleting cards confirms the semantic subtree cleanup. The most
   recent deletion can be restored with Undo or Ctrl/Cmd+Z.
 - The editing modal provides labelled native forms under Details,
-  Links & consequences, and Notes tabs. Flow target controls list siblings
-  from the active canvas only.
+  Links & consequences, and Notes tabs. Save and Cancel remain in its fixed
+  header while the form body scrolls. Flow target controls list siblings from
+  the active canvas only.
 - Moving an item to another owner is rejected while any attached flow would be
   left on a different canvas. The DM must remove those links explicitly; the
   planner never deletes or retargets them as a side effect.

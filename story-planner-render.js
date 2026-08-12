@@ -59,7 +59,7 @@ function validationHtml(errors, esc, t) {
   </section>`;
 }
 
-function itemForm({ host, item, data, isNew = false }) {
+function itemForm({ host, item, data, formId, isNew = false }) {
   const { esc, dataAction, dataOn } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
   const unavailableParents = new Set([item.id]);
@@ -83,7 +83,7 @@ function itemForm({ host, item, data, isNew = false }) {
     .sort((left, right) => left.title.localeCompare(right.title))
     .map(value => option(value.id, item.parentId, esc(value.title)))
     .join('');
-  return `<form class="dmt-planner-form"${dataOn('submit', host.action('plannerSaveItem'), '$ev')}>
+  return `<form class="dmt-planner-form" id="${esc(formId)}"${dataOn('submit', host.action('plannerSaveItem'), '$ev')}>
     <input type="hidden" name="id" value="${esc(item.id)}">
     <div class="dmt-planner-form-row">
       <label>${esc(t('planner.item.kind'))}
@@ -144,8 +144,6 @@ function itemForm({ host, item, data, isNew = false }) {
       <input class="edit-input" name="tags" maxlength="2400" value="${esc((item.tags || []).join(', '))}">
     </label>
     <div class="dmt-planner-form-actions">
-      <button class="edit-save-btn" type="submit">${esc(t('planner.action.save'))}</button>
-      <button class="inline-create-btn" type="button"${dataAction(host.action('plannerCancelEdit'))}>${esc(t('planner.action.cancel'))}</button>
       ${!isNew ? `<button class="edit-delete-btn" type="button"${dataAction(host.action('plannerDeleteItem'), item.id)}>${esc(t('planner.action.delete'))}</button>` : ''}
     </div>
   </form>`;
@@ -484,15 +482,19 @@ export function renderPlannerDialog({
     ['notes', 'planner.dialog.notes'],
   ];
   const savedOnly = !draft.isNew;
+  const formId = 'dmt-planner-item-form';
   return `<div class="dmt-planner-modal" data-dmt-modal role="presentation">
     <button class="dmt-planner-modal-backdrop" type="button" data-dmt-modal-close tabindex="-1" aria-label="${esc(t('planner.action.cancel'))}"></button>
     <section class="dmt-planner-dialog" role="dialog" aria-modal="true" aria-labelledby="dmt-planner-dialog-title">
       <header class="dmt-planner-dialog-header">
-        <div>
+        <div class="dmt-planner-dialog-heading">
           <p class="dmt-inspector-eyebrow">${esc(t(draft.isNew ? 'planner.item.new' : 'planner.item.edit'))}</p>
           <h2 id="dmt-planner-dialog-title">${esc(item.title || t('planner.item.untitled'))}</h2>
         </div>
-        <button class="dmt-dialog-close" type="button" aria-label="${esc(t('planner.action.cancel'))}"${dataAction(host.action('plannerCancelEdit'))}>×</button>
+        <div class="dmt-planner-dialog-actions">
+          <button class="inline-create-btn" type="button"${dataAction(host.action('plannerCancelEdit'))}>${esc(t('planner.action.cancel'))}</button>
+          <button class="edit-save-btn" type="submit" form="${formId}">${esc(t('planner.action.save'))}</button>
+        </div>
       </header>
       <div class="dmt-dialog-tabs" role="tablist" aria-label="${esc(t('planner.dialog.tabs'))}">
         ${tabs.map(([id, key]) => `<button type="button" role="tab" data-dmt-dialog-tab="${id}"
@@ -501,7 +503,7 @@ export function renderPlannerDialog({
       <div class="dmt-planner-dialog-body">
         ${validationHtml(errors, esc, t)}
         <section role="tabpanel" data-dmt-dialog-panel="details"${dialogTab === 'details' ? '' : ' hidden'}>
-          ${itemForm({ host, item, data, isNew: draft.isNew })}
+          ${itemForm({ host, item, data, formId, isNew: draft.isNew })}
         </section>
         <section role="tabpanel" data-dmt-dialog-panel="links"${dialogTab === 'links' ? '' : ' hidden'}>
           ${savedOnly ? `${flowSection(item, data, host)}${referencesSection(item, data, host)}${consequenceSection(item, data, host)}` : `<p class="settings-hint">${esc(t('planner.dialog.saveFirst'))}</p>`}
@@ -537,8 +539,21 @@ function nodeHtml(node, selectedItemIds, host) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const item = node.item;
+  const needsDetails = ![
+    item.summary,
+    item.objective,
+    item.body,
+    item.setup,
+    item.resolution,
+  ].some(value => String(value || '').trim())
+    && !(item.tags || []).length
+    && !node.childCount
+    && !node.referenceCount
+    && !node.consequenceCount
+    && !node.noteCount;
   return `<article class="dmt-story-node${selectedItemIds.has(item.id) ? ' is-selected' : ''}"
       data-dmt-node="${esc(item.id)}" data-kind="${esc(item.kind)}"
+      data-needs-details="${needsDetails}"
       ${item.eventType ? `data-event-type="${esc(item.eventType)}"` : ''}
       tabindex="0" role="button" aria-label="${esc(t('planner.node.label', {
         kind: itemTypeLabel(item, t),
@@ -552,6 +567,7 @@ function nodeHtml(node, selectedItemIds, host) {
     <h3>${esc(item.title)}</h3>
     <p>${esc(item.summary || item.objective || t('planner.item.noSummary'))}</p>
     <div class="dmt-node-meta">
+      ${needsDetails ? `<span class="dmt-node-incomplete">${esc(t('planner.item.needsDetails'))}</span>` : ''}
       ${node.childCount ? `<span class="codex-badge">${esc(t('planner.node.children', { n: node.childCount }))}</span>` : ''}
       ${node.referenceCount ? `<span class="codex-badge">${esc(t('planner.node.references', { n: node.referenceCount }))}</span>` : ''}
       ${node.consequenceCount ? `<span class="codex-badge">${esc(t('planner.node.consequences', { n: node.consequenceCount }))}</span>` : ''}

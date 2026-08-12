@@ -178,6 +178,14 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
     STORY_PLANNER_STYLES,
     /\.dmt-shortcuts-modal\[hidden\]\{display:none!important\}/,
   );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-story-node\[data-needs-details="true"\]\{background-image:repeating-linear-gradient/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-planner-dialog-actions\{[^}]*display:flex[^}]*flex:0 0 auto/,
+  );
 });
 
 test('shortcut popup synchronizes hidden, inert, accessibility, and focus state', () => {
@@ -366,8 +374,30 @@ test('unified route renders one canvas and manually creates a nested quest', asy
     ['dm-plans', 'plotline-dragons'],
   );
   assert.match(emptyCanvasHtml, /<\/div>\s*<div class="dmt-empty-canvas">/);
-  value.planner.createItem('quest', '', { x: 264, y: 168 });
-  assert.match(value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']), /role="dialog" aria-modal="true"/);
+  await value.planner.createItem('quest', '', { x: 264, y: 168 });
+  const createdId = [...value.stores.planning_items.keys()]
+    .find(id => id !== 'plotline-dragons');
+  const placedHtml = value.planner.render(
+    'plotline-dragons',
+    ['dm-plans', 'plotline-dragons'],
+  );
+  assert.equal(value.planner.getState().draft, null);
+  assert.doesNotMatch(placedHtml, /class="dmt-planner-modal"/);
+  assert.match(placedHtml, /data-needs-details="true"/);
+  assert.match(placedHtml, /Needs details/);
+  assert.equal(value.stores.planning_items.get(createdId).title, 'Untitled Quest');
+  assert.deepEqual(value.stores.planning_views.get('scope-plotline-dragons').positions[createdId], {
+    x: 264,
+    y: 168,
+  });
+
+  value.planner.editItem(createdId);
+  const dialogHtml = value.planner.render(
+    'plotline-dragons',
+    ['dm-plans', 'plotline-dragons'],
+  );
+  assert.match(dialogHtml, /dmt-planner-dialog-actions[\s\S]*?>Cancel<\/button>[\s\S]*?type="submit" form="dmt-planner-item-form"/);
+  assert.match(dialogHtml, /<form class="dmt-planner-form" id="dmt-planner-item-form"/);
   const draft = value.planner.getState().draft.item;
   await value.planner.saveItem(event({
     id: draft.id,
@@ -384,10 +414,10 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.equal(value.stores.planning_items.get(draft.id).parentId, 'plotline-dragons');
   assert.equal(value.stores.planning_items.get(draft.id).kind, 'quest');
   assert.deepEqual(value.stores.planning_items.get(draft.id).tags, ['dragon', 'mystery']);
-  assert.deepEqual(value.stores.planning_views.get('scope-plotline-dragons').positions[draft.id], {
-    x: 264,
-    y: 168,
-  });
+  assert.match(
+    value.planner.render('plotline-dragons', ['dm-plans', 'plotline-dragons']),
+    /<article class="dmt-story-node[^"]*"[\s\S]*?data-needs-details="false"/,
+  );
 });
 
 test('manual flow stays local while named references may cross canvas scopes', async t => {

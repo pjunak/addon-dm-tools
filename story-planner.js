@@ -375,14 +375,19 @@ export function createStoryPlanner(host, options = {}) {
     });
   }
 
-  function createItem(kind, subtype = '', position = null) {
+  async function createItem(kind, subtype = '', position = null) {
     const id = host.store.generateId(`${kind}-${Date.now()}`);
+    const typeKey = kind === 'event'
+      ? `planner.eventType.${subtype || 'story'}`
+      : kind === 'branch'
+        ? `planner.branchType.${subtype || 'decision'}`
+        : `planner.kind.${kind}`;
     const item = {
       id,
       schemaVersion: PLANNING_SCHEMA_VERSION,
       kind,
       parentId: scopeId,
-      title: '',
+      title: t('planner.item.placeholderTitle', { kind: t(typeKey) }),
       summary: '',
       body: '',
       objective: '',
@@ -393,12 +398,24 @@ export function createStoryPlanner(host, options = {}) {
       tags: [],
       updatedAt: Date.now(),
     };
+    const result = normalizePlanningItem(item, ['items', id]);
+    if (!result.value) return report(result.errors);
+    const data = readData();
+    const validation = validateCandidate({ ...data, items: [...data.items, result.value] });
+    if (validation.length) return report(validation);
+    try {
+      await collection('items').save(result.value);
+      if (position) await persistPositions({ [id]: position });
+    } catch {
+      host.ui.toast(t('planner.item.createFailed'));
+      return;
+    }
     selectedId = id;
-    selectedItemIds = new Set();
+    selectedItemIds = new Set([id]);
     selectedFlowIds.clear();
-    draft = { isNew: true, item, position };
-    dialogTab = 'details';
+    draft = null;
     errors = [];
+    host.ui.announce(t('planner.item.created', { title: result.value.title }));
     host.ui.rerender();
   }
 
