@@ -95,10 +95,12 @@ export function createStoryPlanner(host, options = {}) {
   let connectionSource = '';
   let dialogTab = 'details';
   let undoDelete = null;
+  let fullscreen = false;
   let cleanupInteractions = () => {};
   let scheduled = null;
   let viewWrite = Promise.resolve();
   const viewportScroll = new Map();
+  const viewportZoom = new Map();
   let disposed = false;
 
   const collection = key => host.store.collection(COLLECTIONS[key]);
@@ -120,6 +122,10 @@ export function createStoryPlanner(host, options = {}) {
 
   function viewId(value = scopeId) {
     return `scope-${value || 'campaign'}`;
+  }
+
+  function currentZoom() {
+    return viewportZoom.get(viewId()) || 1;
   }
 
   function readPositions() {
@@ -287,6 +293,8 @@ export function createStoryPlanner(host, options = {}) {
       onUndo: undoLastDelete,
       onDialogTab: setDialogTab,
       onCancelEdit: cancelEdit,
+      onZoom: value => viewportZoom.set(viewId(), value),
+      onFullscreen: value => { fullscreen = value; },
     });
     const savedScroll = viewportScroll.get(viewId());
     const viewport = root.querySelector('.dmt-story-viewport');
@@ -305,6 +313,7 @@ export function createStoryPlanner(host, options = {}) {
     detailId = parts[2] === 'detail' ? sub : '';
     scopeId = detailId ? null : (sub || null);
     if (detailId) {
+      fullscreen = false;
       const item = data.items.find(value => value.id === detailId);
       if (!item || item.kind !== 'event' || !['encounter', 'puzzle'].includes(item.eventType)) {
         return `<main class="addon-dm-tools"><section class="settings-panel" role="alert">
@@ -361,6 +370,8 @@ export function createStoryPlanner(host, options = {}) {
       connectionSource,
       dialogTab,
       canUndo: !!undoDelete,
+      zoom: currentZoom(),
+      fullscreen,
     });
   }
 
@@ -910,6 +921,7 @@ export function createStoryPlanner(host, options = {}) {
   function leave() {
     cleanupMount();
     connectionSource = '';
+    fullscreen = false;
   }
 
   return Object.freeze({
@@ -955,6 +967,8 @@ export function createStoryPlanner(host, options = {}) {
       connectionSource,
       dialogTab,
       canUndo: !!undoDelete,
+      zoom: currentZoom(),
+      fullscreen,
     }),
   });
 }

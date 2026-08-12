@@ -5,7 +5,10 @@ import test from 'node:test';
 import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
+  anchoredZoomScroll,
+  clampCanvasZoom,
   rectanglesIntersect,
+  setPlannerFullscreen,
   setShortcutModalOpen,
 } from '../story-planner-interactions.js';
 import {
@@ -156,7 +159,7 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.dmt-planner-stage\{[^}]*grid-template-rows:auto minmax\(0,1fr\)[^}]*min-height:0/,
+    /\.dmt-stage-canvas-wrap\{[^}]*grid-column:2[^}]*grid-row:2[^}]*min-height:0[^}]*overflow:hidden/,
   );
   assert.match(
     STORY_PLANNER_STYLES,
@@ -185,6 +188,18 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
   assert.match(
     STORY_PLANNER_STYLES,
     /\.dmt-planner-dialog-actions\{[^}]*display:flex[^}]*flex:0 0 auto/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.is-fullscreen \.dmt-builder-controls\{[^}]*bottom:0[^}]*transform:translateY\(calc\(100% - 8px\)\)/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.is-fullscreen \.dmt-builder-controls::before\{[^}]*top:-12px[^}]*height:20px/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.dmt-fullscreen-toggle\{[^}]*top:var\(--space-3\)[^}]*right:var\(--space-3\)/,
   );
 });
 
@@ -229,6 +244,64 @@ test('shortcut popup synchronizes hidden, inert, accessibility, and focus state'
   assert.equal(attributes.has('inert'), true);
   assert.equal(attributes.get('aria-hidden'), 'true');
   assert.equal(triggerFocusCount, 1);
+});
+
+test('fullscreen uses one pressed-state control for entry and exit', () => {
+  const classes = new Set();
+  const attributes = new Map();
+  const button = {
+    dataset: {
+      enterLabel: 'Expand builder to fullscreen',
+      exitLabel: 'Exit fullscreen builder',
+    },
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+  };
+  const root = {
+    classList: {
+      toggle(name, force) {
+        if (force) classes.add(name);
+        else classes.delete(name);
+      },
+      remove(name) {
+        classes.delete(name);
+      },
+    },
+    querySelector(selector) {
+      return selector === '[data-dmt-command="fullscreen"]' ? button : null;
+    },
+  };
+
+  assert.equal(setPlannerFullscreen(root, true), true);
+  assert.equal(classes.has('is-fullscreen'), true);
+  assert.equal(attributes.get('aria-pressed'), 'true');
+  assert.equal(attributes.get('aria-label'), 'Exit fullscreen builder');
+
+  classes.add('is-controls-open');
+  assert.equal(setPlannerFullscreen(root, false), true);
+  assert.equal(classes.has('is-fullscreen'), false);
+  assert.equal(classes.has('is-controls-open'), false);
+  assert.equal(attributes.get('aria-pressed'), 'false');
+  assert.equal(attributes.get('aria-label'), 'Expand builder to fullscreen');
+});
+
+test('canvas zoom clamps its range and keeps the pointer anchored', () => {
+  assert.equal(clampCanvasZoom(0.2), 0.5);
+  assert.equal(clampCanvasZoom(1.25), 1.25);
+  assert.equal(clampCanvasZoom(4), 2);
+  assert.equal(clampCanvasZoom('invalid'), 1);
+  assert.deepEqual(anchoredZoomScroll({
+    oldZoom: 1,
+    newZoom: 1.5,
+    scrollLeft: 100,
+    scrollTop: 200,
+    pointerX: 50,
+    pointerY: 50,
+  }), {
+    left: 175,
+    top: 325,
+  });
 });
 
 test('selection rectangles include cards that touch their boundary', () => {
@@ -362,10 +435,15 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   const rootHtml = value.planner.render();
   assert.match(rootHtml, /Story Planner/);
   assert.match(rootHtml, /dmt-story-canvas/);
+  assert.match(rootHtml, /data-dmt-canvas-surface/);
   assert.match(rootHtml, /class="dmt-atlas-dock"/);
   assert.match(rootHtml, /class="dmt-story-edges"[^>]*role="group"/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
   assert.match(rootHtml, /data-dmt-shortcuts-modal hidden inert aria-hidden="true"/);
+  assert.match(rootHtml, /data-dmt-command="fullscreen"/);
+  assert.match(rootHtml, /data-dmt-command="zoom-out"/);
+  assert.match(rootHtml, /data-dmt-command="zoom-reset"[^>]*><output data-dmt-zoom-label>100%<\/output>/);
+  assert.match(rootHtml, /data-dmt-command="zoom-in"/);
   assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);
 

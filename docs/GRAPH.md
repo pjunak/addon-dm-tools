@@ -73,6 +73,17 @@ reference when the precise relationship matters but is not story flow.
 - Flow lines are focusable and selectable. Delete removes selected lines
   immediately; deleting cards confirms the semantic subtree cleanup. The most
   recent deletion can be restored with Undo or Ctrl/Cmd+Z.
+- The top-right fullscreen control expands the workbench over the host UI and
+  the same control returns it to the normal layout. In fullscreen, the Atlas,
+  stage actions, and selection actions live in a bottom drawer. Only its gold
+  edge remains visible until the pointer enters the approximately 18 px bottom
+  reveal zone, a control receives keyboard focus, or an Atlas tool is dragged.
+  Escape also exits fullscreen after any open modal or connection gesture has
+  been dismissed.
+- The stage controls zoom from 50% to 200% and reset to 100%. Ctrl/Cmd+wheel
+  applies the same zoom while the pointer is inside the canvas and keeps the
+  story position under the pointer stationary. Each scope keeps its zoom for
+  the current planner session; it is intentionally not campaign content.
 - The editing modal provides labelled native forms under Details,
   Links & consequences, and Notes tabs. Save and Cancel remain in its fixed
   header while the form body scrolls. Flow target controls list siblings from
@@ -102,7 +113,7 @@ nodes. Deeply nested quests therefore remain focused and readable.
 | Linked DM note | notebook marker in the card corner |
 
 Line geometry uses right angles with rounded corners. `planning_views` stores
-only `{x,y}` positions per scope:
+only `{x,y}` positions per scope; fullscreen and zoom are transient UI state:
 
 ```json
 {
@@ -125,7 +136,9 @@ records are read; older layouts are ignored rather than converted.
 Every card and flow line is keyboard-focusable and has a plain-text accessible
 label. Connection, CRUD, selection, and detail operations remain available
 without drag gestures. The modal, breadcrumbs, badges, shortcut reference, and
-announcements use host components or tokens and localization.
+announcements use host components or tokens and localization. Zoom controls
+report their exact percentage, and fullscreen is an accessible pressed-state
+toggle with localized enter and exit labels.
 
 Each render removes the previous pointer/keyboard listeners and cancels a
 pending mount. Navigation away, role changes, addon replacement, and disposal

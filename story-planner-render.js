@@ -576,12 +576,15 @@ function nodeHtml(node, selectedItemIds, host) {
   </article>`;
 }
 
-export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host) {
+export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host, zoom = 1) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const byId = new Map(projection.nodes.map(node => [node.item.id, node]));
   return `<div class="dmt-story-viewport">
-    <div class="dmt-story-canvas" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}" style="width:${projection.width}px;height:${projection.height}px">
+    <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="${projection.width}" data-base-height="${projection.height}"
+      style="width:${projection.width * zoom}px;height:${projection.height * zoom}px">
+    <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
+      style="--dmt-canvas-zoom:${zoom};width:${projection.width}px;height:${projection.height}px;transform:scale(${zoom})">
       <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -608,6 +611,7 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
       <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
       <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
       ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host)).join('')}
+    </div>
     </div>
   </div>
   ${projection.nodes.length ? '' : `<div class="dmt-empty-canvas"><strong>${esc(t('planner.canvas.emptyTitle'))}</strong><p>${esc(t('planner.canvas.emptyBody'))}</p></div>`}`;
@@ -675,11 +679,14 @@ export function renderCanvasPage({
   connectionSource,
   dialogTab,
   canUndo,
+  zoom = 1,
+  fullscreen = false,
 }) {
   const { esc, dataAction } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
   const title = projection.scope?.title || t('planner.campaign');
-  return `<main class="addon-dm-tools dmt-planner-shell">
+  const zoomPercent = Math.round(zoom * 100);
+  return `<main class="addon-dm-tools dmt-planner-shell${fullscreen ? ' is-fullscreen' : ''}">
     ${STORY_PLANNER_STYLES}
     ${breadcrumbs(host, data, scopeId)}
     <div class="dmt-planner-heading">
@@ -687,25 +694,39 @@ export function renderCanvasPage({
     </div>
     ${draft ? '' : validationHtml(errors, esc, t)}
     <section class="dmt-planner-workbench">
-      ${atlasDock(host)}
-      <div class="dmt-planner-stage">
+      <div class="dmt-builder-controls">
+        ${atlasDock(host)}
         <div class="dmt-planner-stagebar">
           <span>${esc(connectionSource ? t('planner.canvas.connecting') : t('planner.canvas.hint'))}</span>
-          <span>
+          <span class="dmt-stage-actions">
             ${esc(t('planner.canvas.counts', {
               nodes: projection.nodes.length,
               links: projection.flowLinks.length,
             }))}
+            <span class="dmt-zoom-controls" role="group" aria-label="${esc(t('planner.zoom.controls'))}">
+              <button class="inline-create-btn" type="button" data-dmt-command="zoom-out" aria-label="${esc(t('planner.zoom.out'))}"${zoom <= 0.5 ? ' disabled' : ''}>−</button>
+              <button class="dmt-zoom-level" type="button" data-dmt-command="zoom-reset" aria-label="${esc(t('planner.zoom.reset'))}"><output data-dmt-zoom-label>${zoomPercent}%</output></button>
+              <button class="inline-create-btn" type="button" data-dmt-command="zoom-in" aria-label="${esc(t('planner.zoom.in'))}"${zoom >= 2 ? ' disabled' : ''}>+</button>
+            </span>
             ${canUndo ? `<button class="inline-create-btn" type="button" data-dmt-command="undo">${esc(t('planner.action.undo'))}</button>` : ''}
             <button class="inline-create-btn" type="button"${dataAction(host.action('plannerResetLayout'))}>${esc(t('planner.action.resetLayout'))}</button>
             <button class="inline-create-btn" type="button" data-dmt-command="shortcuts" aria-label="${esc(t('planner.action.shortcuts'))}">?</button>
           </span>
         </div>
-        <div class="dmt-stage-canvas-wrap">
-          ${renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host)}
-          <div data-dmt-selection-actions>${renderSelectionToolbar(host, data, selectedItemIds, selectedFlowIds)}</div>
-        </div>
+        <div class="dmt-builder-selection" data-dmt-selection-actions>${renderSelectionToolbar(host, data, selectedItemIds, selectedFlowIds)}</div>
       </div>
+      <div class="dmt-stage-canvas-wrap">
+        ${renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host, zoom)}
+        <button class="dmt-fullscreen-toggle" type="button" data-dmt-command="fullscreen"
+          data-enter-label="${esc(t('planner.fullscreen.enter'))}" data-exit-label="${esc(t('planner.fullscreen.exit'))}"
+          aria-label="${esc(t(fullscreen ? 'planner.fullscreen.exit' : 'planner.fullscreen.enter'))}"
+          aria-pressed="${fullscreen}" title="${esc(t(fullscreen ? 'planner.fullscreen.exit' : 'planner.fullscreen.enter'))}">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="dmt-fullscreen-enter-icon" d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"></path>
+            <path class="dmt-fullscreen-exit-icon" d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"></path>
+          </svg>
+        </button>
+        </div>
     </section>
     ${renderPlannerDialog({ host, data, draft, errors, dialogTab })}
     <div class="dmt-shortcuts-modal" data-dmt-shortcuts-modal hidden inert aria-hidden="true">
@@ -720,6 +741,7 @@ export function renderCanvasPage({
           <div><dt><kbd>Delete</kbd></dt><dd>${esc(t('planner.shortcuts.delete'))}</dd></div>
           <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>A</kbd></dt><dd>${esc(t('planner.shortcuts.all'))}</dd></div>
           <div><dt><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd>${esc(t('planner.shortcuts.nudge'))}</dd></div>
+          <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + ${esc(t('planner.shortcuts.wheel'))}</dt><dd>${esc(t('planner.shortcuts.zoom'))}</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>${esc(t('planner.shortcuts.escape'))}</dd></div>
         </dl>
       </section>

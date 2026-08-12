@@ -2,12 +2,42 @@ import { orthogonalPath } from './story-planner-model.js';
 
 const GRID = 24;
 const DRAG_THRESHOLD = 4;
+export const MIN_CANVAS_ZOOM = 0.5;
+export const MAX_CANVAS_ZOOM = 2;
+const CANVAS_ZOOM_STEP = 0.1;
+
+export function clampCanvasZoom(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, numeric));
+}
+
+export function anchoredZoomScroll({
+  oldZoom,
+  newZoom,
+  scrollLeft,
+  scrollTop,
+  pointerX,
+  pointerY,
+}) {
+  const from = clampCanvasZoom(oldZoom);
+  const to = clampCanvasZoom(newZoom);
+  return {
+    left: Math.max(0, ((scrollLeft + pointerX) / from) * to - pointerX),
+    top: Math.max(0, ((scrollTop + pointerY) / from) * to - pointerY),
+  };
+}
+
+function canvasZoom(canvas) {
+  return clampCanvasZoom(canvas?.dataset.dmtZoom);
+}
 
 function pointInCanvas(event, canvas) {
   const bounds = canvas.getBoundingClientRect();
+  const zoom = canvasZoom(canvas);
   return {
-    x: event.clientX - bounds.left,
-    y: event.clientY - bounds.top,
+    x: (event.clientX - bounds.left) / zoom,
+    y: (event.clientY - bounds.top) / zoom,
   };
 }
 
@@ -99,6 +129,19 @@ export function setShortcutModalOpen(root, open) {
   return true;
 }
 
+export function setPlannerFullscreen(root, open) {
+  if (!root) return false;
+  root.classList.toggle('is-fullscreen', open);
+  root.classList.remove('is-controls-open');
+  const button = root.querySelector('[data-dmt-command="fullscreen"]');
+  if (button) {
+    button.setAttribute('aria-pressed', String(open));
+    button.setAttribute('aria-label', open ? button.dataset.exitLabel : button.dataset.enterLabel);
+    button.setAttribute('title', open ? button.dataset.exitLabel : button.dataset.enterLabel);
+  }
+  return true;
+}
+
 export function mountPlannerDialog({ root, onDialogTab, onCancelEdit }) {
   if (!root?.querySelector('[data-dmt-modal]')) return () => {};
   const click = event => {
@@ -147,6 +190,8 @@ export function mountStoryCanvas({
   onUndo,
   onDialogTab,
   onCancelEdit,
+  onZoom,
+  onFullscreen,
 }) {
   const canvas = root?.querySelector('.dmt-story-canvas');
   const viewport = root?.querySelector('.dmt-story-viewport');
@@ -170,6 +215,53 @@ export function mountStoryCanvas({
   const nodeFor = id => canvas.querySelector(`[data-dmt-node="${CSS.escape(id)}"]`);
   const selectionHull = canvas.querySelector('[data-dmt-selection-hull]');
   const marqueeElement = canvas.querySelector('[data-dmt-marquee]');
+  const surface = canvas.closest('[data-dmt-canvas-surface]');
+
+  function syncCanvasViewportSize(zoom = canvasZoom(canvas)) {
+    const minimumWidth = Math.max(0, viewport.clientWidth / zoom);
+    const minimumHeight = Math.max(0, viewport.clientHeight / zoom);
+    canvas.style.minWidth = `${minimumWidth}px`;
+    canvas.style.minHeight = `${minimumHeight}px`;
+    if (!surface) return;
+    const baseWidth = Math.max(Number(surface.dataset.baseWidth || 0), minimumWidth);
+    const baseHeight = Math.max(Number(surface.dataset.baseHeight || 0), minimumHeight);
+    surface.style.width = `${baseWidth * zoom}px`;
+    surface.style.height = `${baseHeight * zoom}px`;
+  }
+
+  function applyZoom(nextZoom, client = null) {
+    const previous = canvasZoom(canvas);
+    const next = clampCanvasZoom(nextZoom);
+    if (Math.abs(previous - next) < 0.001) return previous;
+    const bounds = viewport.getBoundingClientRect();
+    const pointerX = client ? client.x - bounds.left : viewport.clientWidth / 2;
+    const pointerY = client ? client.y - bounds.top : viewport.clientHeight / 2;
+    const scroll = anchoredZoomScroll({
+      oldZoom: previous,
+      newZoom: next,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      pointerX,
+      pointerY,
+    });
+    canvas.dataset.dmtZoom = String(next);
+    canvas.style.setProperty('--dmt-canvas-zoom', String(next));
+    canvas.style.transform = `scale(${next})`;
+    syncCanvasViewportSize(next);
+    viewport.scrollLeft = scroll.left;
+    viewport.scrollTop = scroll.top;
+    root.querySelectorAll('[data-dmt-zoom-label]').forEach(label => {
+      label.textContent = `${Math.round(next * 100)}%`;
+    });
+    root.querySelectorAll('[data-dmt-command="zoom-out"]').forEach(button => {
+      button.disabled = next <= MIN_CANVAS_ZOOM;
+    });
+    root.querySelectorAll('[data-dmt-command="zoom-in"]').forEach(button => {
+      button.disabled = next >= MAX_CANVAS_ZOOM;
+    });
+    onZoom?.(next);
+    return next;
+  }
 
   function updateHull() {
     const selectedNodes = [...items].map(nodeFor).filter(Boolean);
@@ -250,9 +342,10 @@ export function mountStoryCanvas({
   }
 
   function visibleCenter() {
+    const zoom = canvasZoom(canvas);
     return {
-      x: Math.max(0, viewport.scrollLeft + (viewport.clientWidth / 2) - 120),
-      y: Math.max(0, viewport.scrollTop + (viewport.clientHeight / 2) - 58),
+      x: Math.max(0, (viewport.scrollLeft + (viewport.clientWidth / 2)) / zoom - 120),
+      y: Math.max(0, (viewport.scrollTop + (viewport.clientHeight / 2)) / zoom - 58),
     };
   }
 
@@ -301,6 +394,15 @@ export function mountStoryCanvas({
       if (command === 'delete') onDeleteSelection?.([...items], [...flows]);
       if (command === 'undo') onUndo?.();
       if (command === 'shortcuts') setShortcutModalOpen(root, true);
+      if (command === 'zoom-in') applyZoom(canvasZoom(canvas) + CANVAS_ZOOM_STEP);
+      if (command === 'zoom-out') applyZoom(canvasZoom(canvas) - CANVAS_ZOOM_STEP);
+      if (command === 'zoom-reset') applyZoom(1);
+      if (command === 'fullscreen') {
+        const open = !root.classList.contains('is-fullscreen');
+        setPlannerFullscreen(root, open);
+        syncCanvasViewportSize();
+        onFullscreen?.(open);
+      }
       return;
     }
     if (event.target.closest('[data-dmt-shortcuts-close]')) {
@@ -512,6 +614,7 @@ export function mountStoryCanvas({
     };
     event.dataTransfer?.setData('text/plain', `${draggedTool.kind}:${draggedTool.subtype}`);
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
+    root.classList.add('is-controls-open');
   });
   listen(viewport, 'dragover', event => {
     if (!draggedTool) return;
@@ -528,7 +631,17 @@ export function mountStoryCanvas({
     });
     draggedTool = null;
   });
-  listen(root, 'dragend', () => { draggedTool = null; });
+  listen(root, 'dragend', () => {
+    draggedTool = null;
+    root.classList.remove('is-controls-open');
+  });
+
+  listen(viewport, 'wheel', event => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const factor = Math.exp(-event.deltaY * 0.0015);
+    applyZoom(canvasZoom(canvas) * factor, { x: event.clientX, y: event.clientY });
+  }, { passive: false });
 
   listen(root, 'keydown', event => {
     if (isTypingTarget(event.target)) return;
@@ -562,6 +675,11 @@ export function mountStoryCanvas({
       if (shortcutModal && !shortcutModal.hasAttribute('hidden')) setShortcutModalOpen(root, false);
       else if (editModal) onCancelEdit?.();
       else if (connectionSource) cancelConnection();
+      else if (root.classList.contains('is-fullscreen')) {
+        setPlannerFullscreen(root, false);
+        syncCanvasViewportSize();
+        onFullscreen?.(false);
+      }
       else {
         items.clear();
         flows.clear();
@@ -640,6 +758,14 @@ export function mountStoryCanvas({
 
   const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
     || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
+  syncCanvasViewportSize();
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => syncCanvasViewportSize());
+    observer.observe(viewport);
+    removers.push(() => observer.disconnect());
+  } else if (typeof window !== 'undefined') {
+    listen(window, 'resize', syncCanvasViewportSize);
+  }
   if (firstDialogControl) firstDialogControl.focus({ preventScroll: true });
   else if (items.size === 1 && !flows.size) nodeFor([...items][0])?.focus({ preventScroll: true });
   redraw(canvas);
