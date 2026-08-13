@@ -7,7 +7,9 @@ import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
   anchoredZoomScroll,
   clampCanvasZoom,
+  pannedCanvasScroll,
   rectanglesIntersect,
+  requestPlannerFullscreen,
   setPlannerFullscreen,
   setShortcutModalOpen,
 } from '../story-planner-interactions.js';
@@ -286,6 +288,36 @@ test('fullscreen uses one pressed-state control for entry and exit', () => {
   assert.equal(attributes.get('aria-label'), 'Expand builder to fullscreen');
 });
 
+test('fullscreen requests the physical display and exits through the document', async () => {
+  let requestCount = 0;
+  let exitCount = 0;
+  const doc = {
+    fullscreenElement: null,
+    exitFullscreen() {
+      exitCount++;
+      this.fullscreenElement = null;
+      return Promise.resolve();
+    },
+  };
+  const target = {
+    ownerDocument: doc,
+    requestFullscreen() {
+      requestCount++;
+      doc.fullscreenElement = target;
+      return Promise.resolve();
+    },
+  };
+  doc.documentElement = target;
+  const root = { ownerDocument: doc };
+
+  assert.equal(await requestPlannerFullscreen(root, true), true);
+  assert.equal(requestCount, 1);
+  assert.equal(doc.fullscreenElement, target);
+  assert.equal(await requestPlannerFullscreen(root, false), false);
+  assert.equal(exitCount, 1);
+  assert.equal(doc.fullscreenElement, null);
+});
+
 test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   assert.equal(clampCanvasZoom(0.2), 0.5);
   assert.equal(clampCanvasZoom(1.25), 1.25);
@@ -301,6 +333,31 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   }), {
     left: 175,
     top: 325,
+  });
+});
+
+test('middle-button panning translates pointer travel into viewport scroll', () => {
+  assert.deepEqual(pannedCanvasScroll({
+    scrollLeft: 500,
+    scrollTop: 300,
+    startX: 200,
+    startY: 180,
+    currentX: 140,
+    currentY: 230,
+  }), {
+    left: 560,
+    top: 250,
+  });
+  assert.deepEqual(pannedCanvasScroll({
+    scrollLeft: 10,
+    scrollTop: 10,
+    startX: 0,
+    startY: 0,
+    currentX: 100,
+    currentY: 100,
+  }), {
+    left: 0,
+    top: 0,
   });
 });
 

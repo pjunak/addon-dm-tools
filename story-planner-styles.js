@@ -32,6 +32,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-zoom-level{min-width:4rem!important;font-variant-numeric:tabular-nums}
     .addon-dm-tools .dmt-stage-canvas-wrap{position:relative;grid-column:2;grid-row:2;min-width:0;min-height:0;overflow:hidden;background:var(--bg-base)}
     .addon-dm-tools .dmt-story-viewport{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain;background-color:var(--bg-base)}
+    .addon-dm-tools .dmt-story-viewport.is-panning,.addon-dm-tools .dmt-story-viewport.is-panning *{cursor:grabbing!important;user-select:none}
     .addon-dm-tools .dmt-story-surface{position:relative;min-width:100%;min-height:100%}
     .addon-dm-tools .dmt-story-canvas{position:absolute;inset:0 auto auto 0;transform-origin:top left;background-image:linear-gradient(to right,color-mix(in srgb,var(--border-subtle) 34%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--border-subtle) 34%,transparent) 1px,transparent 1px);background-size:24px 24px}
     .addon-dm-tools .dmt-fullscreen-toggle{position:absolute;z-index:12;top:var(--space-3);right:var(--space-3);display:grid;place-items:center;width:2.75rem;height:2.75rem;padding:0;border:1px solid var(--accent-gold-dim);border-radius:50%;background:color-mix(in srgb,var(--bg-surface) 92%,transparent);color:var(--accent-gold);box-shadow:var(--shadow-md);font-size:var(--text-xl);cursor:pointer;backdrop-filter:blur(8px)}

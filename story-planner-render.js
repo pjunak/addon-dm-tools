@@ -742,6 +742,7 @@ export function renderCanvasPage({
           <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>A</kbd></dt><dd>${esc(t('planner.shortcuts.all'))}</dd></div>
           <div><dt><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd>${esc(t('planner.shortcuts.nudge'))}</dd></div>
           <div><dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + ${esc(t('planner.shortcuts.wheel'))}</dt><dd>${esc(t('planner.shortcuts.zoom'))}</dd></div>
+          <div><dt>${esc(t('planner.shortcuts.middleDrag'))}</dt><dd>${esc(t('planner.shortcuts.pan'))}</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>${esc(t('planner.shortcuts.escape'))}</dd></div>
         </dl>
       </section>

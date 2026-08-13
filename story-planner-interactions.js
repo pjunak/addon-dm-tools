@@ -28,6 +28,20 @@ export function anchoredZoomScroll({
   };
 }
 
+export function pannedCanvasScroll({
+  scrollLeft,
+  scrollTop,
+  startX,
+  startY,
+  currentX,
+  currentY,
+}) {
+  return {
+    left: Math.max(0, scrollLeft - (currentX - startX)),
+    top: Math.max(0, scrollTop - (currentY - startY)),
+  };
+}
+
 function canvasZoom(canvas) {
   return clampCanvasZoom(canvas?.dataset.dmtZoom);
 }
@@ -142,6 +156,33 @@ export function setPlannerFullscreen(root, open) {
   return true;
 }
 
+function fullscreenElement(doc) {
+  return doc?.fullscreenElement || doc?.webkitFullscreenElement || null;
+}
+
+export async function requestPlannerFullscreen(root, open) {
+  if (!root) return false;
+  const doc = root.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  const target = doc?.documentElement || root;
+  try {
+    if (open) {
+      if (fullscreenElement(doc) === target) return true;
+      const request = target.requestFullscreen || target.webkitRequestFullscreen;
+      if (typeof request !== 'function') return true;
+      await request.call(target);
+      return fullscreenElement(doc) === target;
+    }
+    const active = fullscreenElement(doc);
+    if (active) {
+      const exit = doc?.exitFullscreen || doc?.webkitExitFullscreen;
+      if (typeof exit === 'function') await exit.call(doc);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function mountPlannerDialog({ root, onDialogTab, onCancelEdit }) {
   if (!root?.querySelector('[data-dmt-modal]')) return () => {};
   const click = event => {
@@ -204,6 +245,7 @@ export function mountStoryCanvas({
   let nodeDrag = null;
   let marquee = null;
   let portDrag = null;
+  let canvasPan = null;
   let suppressPortClick = false;
   let draggedTool = null;
 
@@ -216,6 +258,22 @@ export function mountStoryCanvas({
   const selectionHull = canvas.querySelector('[data-dmt-selection-hull]');
   const marqueeElement = canvas.querySelector('[data-dmt-marquee]');
   const surface = canvas.closest('[data-dmt-canvas-surface]');
+  const ownerDocument = root.ownerDocument || (typeof document !== 'undefined' ? document : null);
+
+  function nativeFullscreenActive() {
+    return fullscreenElement(ownerDocument) === ownerDocument?.documentElement;
+  }
+
+  function syncFullscreenState(open) {
+    setPlannerFullscreen(root, open);
+    syncCanvasViewportSize();
+    onFullscreen?.(open);
+  }
+
+  async function changeFullscreen(open) {
+    const active = await requestPlannerFullscreen(root, open);
+    syncFullscreenState(active);
+  }
 
   function syncCanvasViewportSize(zoom = canvasZoom(canvas)) {
     const minimumWidth = Math.max(0, viewport.clientWidth / zoom);
@@ -399,9 +457,7 @@ export function mountStoryCanvas({
       if (command === 'zoom-reset') applyZoom(1);
       if (command === 'fullscreen') {
         const open = !root.classList.contains('is-fullscreen');
-        setPlannerFullscreen(root, open);
-        syncCanvasViewportSize();
-        onFullscreen?.(open);
+        void changeFullscreen(open);
       }
       return;
     }
@@ -457,6 +513,19 @@ export function mountStoryCanvas({
   });
 
   listen(canvas, 'pointerdown', event => {
+    if (event.button === 1) {
+      canvasPan = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        scrollLeft: viewport.scrollLeft,
+        scrollTop: viewport.scrollTop,
+      };
+      viewport.classList.add('is-panning');
+      canvas.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     if (event.button !== 0) return;
     const port = event.target.closest('.dmt-node-port');
     if (port) {
@@ -516,6 +585,17 @@ export function mountStoryCanvas({
   });
 
   listen(canvas, 'pointermove', event => {
+    if (canvasPan) {
+      const scroll = pannedCanvasScroll({
+        ...canvasPan,
+        currentX: event.clientX,
+        currentY: event.clientY,
+      });
+      viewport.scrollLeft = scroll.left;
+      viewport.scrollTop = scroll.top;
+      event.preventDefault();
+      return;
+    }
     if (portDrag) {
       const distance = Math.abs(event.clientX - portDrag.startClient.x)
         + Math.abs(event.clientY - portDrag.startClient.y);
@@ -569,6 +649,15 @@ export function mountStoryCanvas({
   });
 
   listen(canvas, 'pointerup', event => {
+    if (canvasPan && canvasPan.pointerId === event.pointerId) {
+      canvasPan = null;
+      viewport.classList.remove('is-panning');
+      if (canvas.hasPointerCapture?.(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+      event.preventDefault();
+      return;
+    }
     if (portDrag) {
       const sourceId = portDrag.id;
       const moved = portDrag.moved;
@@ -599,6 +688,13 @@ export function mountStoryCanvas({
   });
 
   listen(canvas, 'pointercancel', event => {
+    if (canvasPan && canvasPan.pointerId === event.pointerId) {
+      canvasPan = null;
+      viewport.classList.remove('is-panning');
+      if (canvas.hasPointerCapture?.(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    }
     if (nodeDrag) finishNodeDrag(event);
     marquee = null;
     marqueeElement?.setAttribute('hidden', '');
@@ -643,6 +739,10 @@ export function mountStoryCanvas({
     applyZoom(canvasZoom(canvas) * factor, { x: event.clientX, y: event.clientY });
   }, { passive: false });
 
+  listen(viewport, 'auxclick', event => {
+    if (event.button === 1) event.preventDefault();
+  });
+
   listen(root, 'keydown', event => {
     if (isTypingTarget(event.target)) return;
     const shortcutModal = root.querySelector('[data-dmt-shortcuts-modal]');
@@ -676,9 +776,7 @@ export function mountStoryCanvas({
       else if (editModal) onCancelEdit?.();
       else if (connectionSource) cancelConnection();
       else if (root.classList.contains('is-fullscreen')) {
-        setPlannerFullscreen(root, false);
-        syncCanvasViewportSize();
-        onFullscreen?.(false);
+        void changeFullscreen(false);
       }
       else {
         items.clear();
@@ -759,6 +857,17 @@ export function mountStoryCanvas({
   const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
     || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
   syncCanvasViewportSize();
+  if (ownerDocument) {
+    const fullscreenChange = () => syncFullscreenState(nativeFullscreenActive());
+    listen(ownerDocument, 'fullscreenchange', fullscreenChange);
+    listen(ownerDocument, 'webkitfullscreenchange', fullscreenChange);
+    listen(ownerDocument, 'fullscreenerror', () => syncFullscreenState(false));
+    const target = ownerDocument.documentElement;
+    const supportsNativeFullscreen = typeof (target?.requestFullscreen
+      || target?.webkitRequestFullscreen) === 'function';
+    if (supportsNativeFullscreen && root.classList.contains('is-fullscreen')
+      && !nativeFullscreenActive()) syncFullscreenState(false);
+  }
   if (typeof ResizeObserver === 'function') {
     const observer = new ResizeObserver(() => syncCanvasViewportSize());
     observer.observe(viewport);
@@ -770,5 +879,8 @@ export function mountStoryCanvas({
   else if (items.size === 1 && !flows.size) nodeFor([...items][0])?.focus({ preventScroll: true });
   redraw(canvas);
   updateHull();
-  return () => removers.splice(0).reverse().forEach(remove => remove());
+  return () => {
+    viewport.classList.remove('is-panning');
+    removers.splice(0).reverse().forEach(remove => remove());
+  };
 }

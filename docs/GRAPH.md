@@ -73,8 +73,10 @@ reference when the precise relationship matters but is not story flow.
 - Flow lines are focusable and selectable. Delete removes selected lines
   immediately; deleting cards confirms the semantic subtree cleanup. The most
   recent deletion can be restored with Undo or Ctrl/Cmd+Z.
-- The top-right fullscreen control expands the workbench over the host UI and
-  the same control returns it to the normal layout. In fullscreen, the Atlas,
+- The top-right fullscreen control uses the browser Fullscreen API to expand
+  the workbench across the physical display, including the space normally used
+  by browser chrome. The same control returns it to the normal layout. In
+  fullscreen, the Atlas,
   stage actions, and selection actions live in a bottom drawer. Only its gold
   edge remains visible until the pointer enters the approximately 18 px bottom
   reveal zone, a control receives keyboard focus, or an Atlas tool is dragged.
@@ -84,6 +86,10 @@ reference when the precise relationship matters but is not story flow.
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
   the current planner session; it is intentionally not campaign content.
+- Holding the middle mouse button and dragging pans the viewport in either
+  standard or fullscreen mode, matching the established CAD interaction. It
+  does not alter selection or card positions and shows a grabbing cursor while
+  active.
 - The editing modal provides labelled native forms under Details,
   Links & consequences, and Notes tabs. Save and Cancel remain in its fixed
   header while the form body scrolls. Flow target controls list siblings from

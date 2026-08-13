@@ -7,7 +7,11 @@ import {
   normalizePlanningReference,
   validatePlanningDataset,
 } from './planning-contract.js';
-import { mountPlannerDialog, mountStoryCanvas } from './story-planner-interactions.js';
+import {
+  mountPlannerDialog,
+  mountStoryCanvas,
+  requestPlannerFullscreen,
+} from './story-planner-interactions.js';
 import {
   itemSubtreeIds,
   normalizePositions,
@@ -126,6 +130,14 @@ export function createStoryPlanner(host, options = {}) {
 
   function currentZoom() {
     return viewportZoom.get(viewId()) || 1;
+  }
+
+  function exitPlannerFullscreen() {
+    if (!fullscreen || typeof document === 'undefined') return;
+    const root = document.querySelector(
+      '.addon-route-page[data-addon-id="dm-tools"] .dmt-planner-shell',
+    );
+    if (root) void requestPlannerFullscreen(root, false);
   }
 
   function readPositions() {
@@ -313,6 +325,7 @@ export function createStoryPlanner(host, options = {}) {
     detailId = parts[2] === 'detail' ? sub : '';
     scopeId = detailId ? null : (sub || null);
     if (detailId) {
+      exitPlannerFullscreen();
       fullscreen = false;
       const item = data.items.find(value => value.id === detailId);
       if (!item || item.kind !== 'event' || !['encounter', 'puzzle'].includes(item.eventType)) {
@@ -919,6 +932,7 @@ export function createStoryPlanner(host, options = {}) {
   }
 
   function leave() {
+    exitPlannerFullscreen();
     cleanupMount();
     connectionSource = '';
     fullscreen = false;
