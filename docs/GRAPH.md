@@ -76,20 +76,22 @@ reference when the precise relationship matters but is not story flow.
 - The top-right fullscreen control uses the browser Fullscreen API to expand
   the workbench across the physical display, including the space normally used
   by browser chrome. The same control returns it to the normal layout. In
-  fullscreen, the Atlas,
-  stage actions, and selection actions live in a bottom drawer. Only its gold
-  edge remains visible until the pointer enters the approximately 18 px bottom
+  fullscreen, view and arrangement controls live in a top drawer while the
+  Atlas and selection actions remain in a bottom drawer. Only their gold edges
+  remain visible until the pointer enters the approximately 18 px top or bottom
   reveal zone, a control receives keyboard focus, or an Atlas tool is dragged.
   Escape also exits fullscreen after any open modal or connection gesture has
   been dismissed.
-- The stage controls zoom from 50% to 200% and reset to 100%. Ctrl/Cmd+wheel
+- The stage controls zoom from 50% to 200% and reset to 100%. The scroll wheel
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
   the current planner session; it is intentionally not campaign content.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while
-  active.
+  active. A 480 px working margin surrounds the rendered plan and the initial
+  viewport starts at that margin, so even an empty canvas can pan in every
+  direction instead of being clamped at its origin.
 - The editing modal provides labelled native forms under Details,
   Links & consequences, and Notes tabs. Save and Cancel remain in its fixed
   header while the form body scrolls. Flow target controls list siblings from

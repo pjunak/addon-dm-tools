@@ -197,7 +197,7 @@
   "planner.shortcuts.delete": "Delete selected items or connections",
   "planner.shortcuts.all": "Select every item on this canvas",
   "planner.shortcuts.nudge": "Move selected items by one grid step; hold Shift for four",
-  "planner.shortcuts.wheel": "wheel",
+  "planner.shortcuts.wheel": "Scroll wheel",
   "planner.shortcuts.zoom": "Zoom around the pointer",
   "planner.shortcuts.middleDrag": "Middle-drag",
   "planner.shortcuts.pan": "Pan across the canvas",

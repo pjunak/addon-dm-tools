@@ -4,7 +4,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-planner-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap}
     .addon-dm-tools .dmt-planner-heading h1{margin-bottom:var(--space-1)}
     .addon-dm-tools .dmt-planner-workbench{position:relative;display:grid;grid-template-columns:13.5rem minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:max(42rem,75vh);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-raised);box-shadow:var(--shadow-md)}
-    .addon-dm-tools .dmt-builder-controls{display:contents}
+    .addon-dm-tools .dmt-builder-controls,.addon-dm-tools .dmt-builder-top-controls,.addon-dm-tools .dmt-builder-bottom-controls{display:contents}
     .addon-dm-tools .dmt-atlas-dock{grid-column:1;grid-row:1/3;min-width:0;overflow:auto;padding:var(--space-3);border-right:1px solid var(--border-subtle);background:linear-gradient(180deg,color-mix(in srgb,var(--bg-surface) 92%,var(--accent-gold) 8%),var(--bg-surface))}
     .addon-dm-tools .dmt-atlas-title{display:flex;align-items:center;gap:var(--space-2);padding-bottom:var(--space-3);border-bottom:1px solid var(--border-subtle);color:var(--accent-gold);font-family:var(--font-title);letter-spacing:.04em}
     .addon-dm-tools .dmt-atlas-title span{display:grid;place-items:center;width:1.8rem;height:1.8rem;border:1px solid var(--accent-gold-dim);border-radius:50%}
@@ -145,9 +145,14 @@ export const STORY_PLANNER_STYLES = `
     }
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-planner-workbench{position:fixed;z-index:calc(var(--z-modal,1000) - 2);inset:0;display:grid;grid-template-columns:1fr;grid-template-rows:1fr;width:100vw;height:100dvh;border:0;border-radius:0;background:var(--bg-base);box-shadow:none}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-stage-canvas-wrap{grid-column:1;grid-row:1}
-    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls{position:absolute;z-index:14;right:0;bottom:0;left:0;display:grid;grid-template-columns:1fr;grid-template-rows:auto auto auto;max-height:min(20rem,70dvh);border-top:3px solid var(--accent-gold-dim);background:color-mix(in srgb,var(--bg-surface) 96%,transparent);box-shadow:0 -12px 36px color-mix(in srgb,#000 44%,transparent);transform:translateY(calc(100% - 8px));transition:transform var(--dur-normal,180ms) var(--ease-out);backdrop-filter:blur(14px)}
-    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls::before{content:"";position:absolute;right:0;left:0;top:-12px;height:20px}
-    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls:hover,.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls:focus-within,.addon-dm-tools.dmt-planner-shell.is-fullscreen.is-controls-open .dmt-builder-controls{transform:translateY(0)}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls{display:contents}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls,.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls{position:absolute;z-index:14;right:0;left:0;display:grid;grid-template-columns:1fr;background:color-mix(in srgb,var(--bg-surface) 96%,transparent);backdrop-filter:blur(14px);transition:transform var(--dur-normal,180ms) var(--ease-out)}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls{top:0;border-bottom:3px solid var(--accent-gold-dim);box-shadow:0 12px 36px color-mix(in srgb,#000 44%,transparent);transform:translateY(calc(-100% + 8px))}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls::after{content:"";position:absolute;right:0;bottom:-12px;left:0;height:20px}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls:hover,.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls:focus-within{transform:translateY(0)}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls{bottom:0;grid-template-rows:auto auto;max-height:min(20rem,70dvh);border-top:3px solid var(--accent-gold-dim);box-shadow:0 -12px 36px color-mix(in srgb,#000 44%,transparent);transform:translateY(calc(100% - 8px))}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls::before{content:"";position:absolute;right:0;left:0;top:-12px;height:20px}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls:hover,.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls:focus-within,.addon-dm-tools.dmt-planner-shell.is-fullscreen.is-controls-open .dmt-builder-bottom-controls{transform:translateY(0)}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-dock{grid-column:1;grid-row:1;display:flex;align-items:flex-start;gap:var(--space-3);max-height:12rem;overflow:auto;padding:var(--space-2) var(--space-3);border-right:0;border-bottom:1px solid var(--border-subtle)}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-title{flex:0 0 auto;padding:var(--space-2);border:0}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-group{flex:0 0 auto;margin:0}
@@ -155,10 +160,10 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-tools{display:flex}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-tool{width:auto;min-width:max-content}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-atlas-hint{display:none}
-    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-planner-stagebar{grid-column:1;grid-row:2;flex-direction:row;align-items:center;flex-wrap:wrap;border-bottom:0;background:transparent}
-    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-selection{position:static;grid-column:1;grid-row:3;justify-self:center;max-width:calc(100vw - 2rem);margin:0 0 var(--space-2);transform:none}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-planner-stagebar{grid-column:1;grid-row:1;flex-direction:row;align-items:center;flex-wrap:wrap;padding-right:4.75rem;border-bottom:0;background:transparent}
+    .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-selection{position:static;grid-column:1;grid-row:2;justify-self:center;max-width:calc(100vw - 2rem);margin:0 0 var(--space-2);transform:none}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-selection-toolbar{max-width:100%;overflow-x:auto}
     .addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-fullscreen-toggle{position:fixed;top:var(--space-3);right:var(--space-3)}
-    @media(prefers-reduced-motion:reduce){.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-controls{transition:none}}
+    @media(prefers-reduced-motion:reduce){.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-top-controls,.addon-dm-tools.dmt-planner-shell.is-fullscreen .dmt-builder-bottom-controls{transition:none}}
   </style>
 `;

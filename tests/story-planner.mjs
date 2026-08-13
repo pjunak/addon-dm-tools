@@ -6,6 +6,7 @@ import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
   anchoredZoomScroll,
+  canvasSurfaceSize,
   clampCanvasZoom,
   pannedCanvasScroll,
   rectanglesIntersect,
@@ -193,11 +194,19 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.is-fullscreen \.dmt-builder-controls\{[^}]*bottom:0[^}]*transform:translateY\(calc\(100% - 8px\)\)/,
+    /\.is-fullscreen \.dmt-builder-top-controls\{[^}]*top:0[^}]*transform:translateY\(calc\(-100% \+ 8px\)\)/,
   );
   assert.match(
     STORY_PLANNER_STYLES,
-    /\.is-fullscreen \.dmt-builder-controls::before\{[^}]*top:-12px[^}]*height:20px/,
+    /\.is-fullscreen \.dmt-builder-top-controls::after\{[^}]*bottom:-12px[^}]*height:20px/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.is-fullscreen \.dmt-builder-bottom-controls\{[^}]*bottom:0[^}]*transform:translateY\(calc\(100% - 8px\)\)/,
+  );
+  assert.match(
+    STORY_PLANNER_STYLES,
+    /\.is-fullscreen \.dmt-builder-bottom-controls::before\{[^}]*top:-12px[^}]*height:20px/,
   );
   assert.match(
     STORY_PLANNER_STYLES,
@@ -333,6 +342,33 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   }), {
     left: 175,
     top: 325,
+  });
+  assert.deepEqual(anchoredZoomScroll({
+    oldZoom: 1,
+    newZoom: 1.5,
+    scrollLeft: 480,
+    scrollTop: 480,
+    pointerX: 50,
+    pointerY: 50,
+    originX: 480,
+    originY: 480,
+  }), {
+    left: 505,
+    top: 505,
+  });
+});
+
+test('canvas working margin keeps a viewport-sized canvas pannable in every direction', () => {
+  assert.deepEqual(canvasSurfaceSize({
+    baseWidth: 1200,
+    baseHeight: 720,
+    viewportWidth: 1280,
+    viewportHeight: 720,
+    zoom: 1,
+    panMargin: 480,
+  }), {
+    width: 2240,
+    height: 1680,
   });
 });
 
@@ -493,6 +529,9 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /Story Planner/);
   assert.match(rootHtml, /dmt-story-canvas/);
   assert.match(rootHtml, /data-dmt-canvas-surface/);
+  assert.match(rootHtml, /data-pan-margin="480"/);
+  assert.match(rootHtml, /class="dmt-builder-top-controls"/);
+  assert.match(rootHtml, /class="dmt-builder-bottom-controls"/);
   assert.match(rootHtml, /class="dmt-atlas-dock"/);
   assert.match(rootHtml, /class="dmt-story-edges"[^>]*role="group"/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
@@ -501,6 +540,7 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /data-dmt-command="zoom-out"/);
   assert.match(rootHtml, /data-dmt-command="zoom-reset"[^>]*><output data-dmt-zoom-label>100%<\/output>/);
   assert.match(rootHtml, /data-dmt-command="zoom-in"/);
+  assert.match(rootHtml, /<dt>Scroll wheel<\/dt><dd>Zoom around the pointer/);
   assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);
 

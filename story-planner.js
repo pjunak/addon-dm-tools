@@ -101,6 +101,7 @@ export function createStoryPlanner(host, options = {}) {
   let undoDelete = null;
   let fullscreen = false;
   let cleanupInteractions = () => {};
+  let mountedViewId = '';
   let scheduled = null;
   let viewWrite = Promise.resolve();
   const viewportScroll = new Map();
@@ -150,17 +151,18 @@ export function createStoryPlanner(host, options = {}) {
   }
 
   function cleanupMount() {
-    if (typeof document !== 'undefined') {
+    if (mountedViewId && typeof document !== 'undefined') {
       const viewport = document.querySelector(
         '.addon-route-page[data-addon-id="dm-tools"] .dmt-planner-shell .dmt-story-viewport',
       );
-      if (viewport) viewportScroll.set(viewId(), {
+      if (viewport) viewportScroll.set(mountedViewId, {
         left: viewport.scrollLeft,
         top: viewport.scrollTop,
       });
     }
     cleanupInteractions();
     cleanupInteractions = () => {};
+    mountedViewId = '';
     if (scheduled !== null) {
       cancelSchedule(scheduled);
       scheduled = null;
@@ -308,12 +310,14 @@ export function createStoryPlanner(host, options = {}) {
       onZoom: value => viewportZoom.set(viewId(), value),
       onFullscreen: value => { fullscreen = value; },
     });
-    const savedScroll = viewportScroll.get(viewId());
+    const activeViewId = viewId();
+    const savedScroll = viewportScroll.get(activeViewId);
     const viewport = root.querySelector('.dmt-story-viewport');
     if (savedScroll && viewport) {
       viewport.scrollLeft = savedScroll.left;
       viewport.scrollTop = savedScroll.top;
     }
+    mountedViewId = activeViewId;
   }
 
   function render(sub = '', parts = []) {

@@ -19,12 +19,30 @@ export function anchoredZoomScroll({
   scrollTop,
   pointerX,
   pointerY,
+  originX = 0,
+  originY = 0,
 }) {
   const from = clampCanvasZoom(oldZoom);
   const to = clampCanvasZoom(newZoom);
   return {
-    left: Math.max(0, ((scrollLeft + pointerX) / from) * to - pointerX),
-    top: Math.max(0, ((scrollTop + pointerY) / from) * to - pointerY),
+    left: Math.max(0, originX + ((scrollLeft + pointerX - originX) / from) * to - pointerX),
+    top: Math.max(0, originY + ((scrollTop + pointerY - originY) / from) * to - pointerY),
+  };
+}
+
+export function canvasSurfaceSize({
+  baseWidth,
+  baseHeight,
+  viewportWidth,
+  viewportHeight,
+  zoom,
+  panMargin,
+}) {
+  const scale = clampCanvasZoom(zoom);
+  const margin = Math.max(0, Number(panMargin) || 0);
+  return {
+    width: Math.max(Number(baseWidth) * scale, Number(viewportWidth)) + margin * 2,
+    height: Math.max(Number(baseHeight) * scale, Number(viewportHeight)) + margin * 2,
   };
 }
 
@@ -258,6 +276,7 @@ export function mountStoryCanvas({
   const selectionHull = canvas.querySelector('[data-dmt-selection-hull]');
   const marqueeElement = canvas.querySelector('[data-dmt-marquee]');
   const surface = canvas.closest('[data-dmt-canvas-surface]');
+  const panMargin = Math.max(0, Number(surface?.dataset.panMargin) || 0);
   const ownerDocument = root.ownerDocument || (typeof document !== 'undefined' ? document : null);
 
   function nativeFullscreenActive() {
@@ -281,10 +300,16 @@ export function mountStoryCanvas({
     canvas.style.minWidth = `${minimumWidth}px`;
     canvas.style.minHeight = `${minimumHeight}px`;
     if (!surface) return;
-    const baseWidth = Math.max(Number(surface.dataset.baseWidth || 0), minimumWidth);
-    const baseHeight = Math.max(Number(surface.dataset.baseHeight || 0), minimumHeight);
-    surface.style.width = `${baseWidth * zoom}px`;
-    surface.style.height = `${baseHeight * zoom}px`;
+    const size = canvasSurfaceSize({
+      baseWidth: surface.dataset.baseWidth,
+      baseHeight: surface.dataset.baseHeight,
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+      zoom,
+      panMargin,
+    });
+    surface.style.width = `${size.width}px`;
+    surface.style.height = `${size.height}px`;
   }
 
   function applyZoom(nextZoom, client = null) {
@@ -301,6 +326,8 @@ export function mountStoryCanvas({
       scrollTop: viewport.scrollTop,
       pointerX,
       pointerY,
+      originX: panMargin,
+      originY: panMargin,
     });
     canvas.dataset.dmtZoom = String(next);
     canvas.style.setProperty('--dmt-canvas-zoom', String(next));
@@ -402,8 +429,8 @@ export function mountStoryCanvas({
   function visibleCenter() {
     const zoom = canvasZoom(canvas);
     return {
-      x: Math.max(0, (viewport.scrollLeft + (viewport.clientWidth / 2)) / zoom - 120),
-      y: Math.max(0, (viewport.scrollTop + (viewport.clientHeight / 2)) / zoom - 58),
+      x: Math.max(0, (viewport.scrollLeft + (viewport.clientWidth / 2) - panMargin) / zoom - 120),
+      y: Math.max(0, (viewport.scrollTop + (viewport.clientHeight / 2) - panMargin) / zoom - 58),
     };
   }
 
@@ -733,7 +760,6 @@ export function mountStoryCanvas({
   });
 
   listen(viewport, 'wheel', event => {
-    if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     const factor = Math.exp(-event.deltaY * 0.0015);
     applyZoom(canvasZoom(canvas) * factor, { x: event.clientX, y: event.clientY });
@@ -857,6 +883,8 @@ export function mountStoryCanvas({
   const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
     || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
   syncCanvasViewportSize();
+  viewport.scrollLeft = panMargin;
+  viewport.scrollTop = panMargin;
   if (ownerDocument) {
     const fullscreenChange = () => syncFullscreenState(nativeFullscreenActive());
     listen(ownerDocument, 'fullscreenchange', fullscreenChange);
