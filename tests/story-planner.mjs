@@ -25,6 +25,8 @@ import {
 } from '../story-planner-model.js';
 import {
   flowLabelFirstLineOffset,
+  flowLabelLayoutKey,
+  flowLabelLayoutWidth,
   layoutFlowLabel,
 } from '../story-planner-labels.js';
 
@@ -246,6 +248,9 @@ test('flow labels use the longest straight connector segment and exact host line
   assert.equal(receivedOptions.maxWidth, 240);
   assert.deepEqual(label.lines, ['Wake the', 'sleeping dragon']);
   assert.equal(flowLabelFirstLineOffset(label.lines.length), -8);
+  assert.equal(flowLabelLayoutWidth(96.24), 96);
+  assert.equal(flowLabelLayoutWidth(96.26), 96.5);
+  assert.equal(flowLabelLayoutKey('Wake the dragon', 96.24), '["Wake the dragon",96]');
 
   assert.deepEqual(
     layoutFlowLabel('Fallback label', source, horizontal, () => { throw new Error('old host'); }).lines,

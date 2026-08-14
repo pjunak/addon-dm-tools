@@ -147,7 +147,11 @@ connector, rotate with a vertical segment, and wrap within that segment's
 length. When the host provides `host.h.layoutText`, DM Tools renders its exact
 Unicode-aware line strings so measurement and visible breaks agree. On older
 hosts the same geometry retains a single-line label instead of blocking the
-planner.
+planner. Moving a node reuses the materialized lines until the usable segment
+width crosses a half-pixel boundary. The mounted canvas borrows the host's
+optional text-layout invalidation subscription and releases it with its other
+route-owned listeners, so late font loading or a locale change refreshes the
+visible breaks without giving the addon ownership of the text engine.
 
 ## Lifecycle and accessibility
 

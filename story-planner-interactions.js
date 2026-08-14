@@ -1,8 +1,9 @@
-import { orthogonalPath } from './story-planner-model.js';
+import { flowLabelGeometry, orthogonalPath } from './story-planner-model.js';
 import {
   FLOW_LABEL_LINE_HEIGHT,
   flowLabelFirstLineOffset,
-  layoutFlowLabel,
+  flowLabelLayoutKey,
+  layoutFlowLabelLines,
 } from './story-planner-labels.js';
 
 const GRID = 24;
@@ -135,7 +136,7 @@ function applyRectangle(element, rectangle) {
   element.style.height = `${pixels.height}px`;
 }
 
-function redraw(canvas, layoutText) {
+function redraw(canvas, layoutText, { forceTextLayout = false } = {}) {
   for (const edge of canvas.querySelectorAll('[data-dmt-edge]')) {
     const source = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.source)}"]`);
     const target = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.target)}"]`);
@@ -150,32 +151,32 @@ function redraw(canvas, layoutText) {
       `[data-dmt-edge-label="${CSS.escape(edge.dataset.dmtEdge)}"]`,
     );
     if (label) {
-      const labelLayout = layoutFlowLabel(
-        label.dataset.dmtLabel,
-        sourceBox,
-        targetBox,
-        layoutText,
-      );
+      const geometry = flowLabelGeometry(sourceBox, targetBox);
       label.setAttribute(
         'transform',
-        `translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})`,
+        `translate(${geometry.x} ${geometry.y}) rotate(${geometry.angle})`,
       );
-      const signature = JSON.stringify(labelLayout.lines);
-      if (signature !== label.dataset.dmtLineSignature) {
-        const lineElements = labelLayout.lines.map((line, index) => {
+      const layoutKey = flowLabelLayoutKey(label.dataset.dmtLabel, geometry.maxWidth);
+      if (forceTextLayout || layoutKey !== label.dataset.dmtLayoutKey) {
+        const lines = layoutFlowLabelLines(
+          label.dataset.dmtLabel,
+          geometry.maxWidth,
+          layoutText,
+        );
+        const lineElements = lines.map((line, index) => {
           const span = label.ownerDocument.createElementNS(
             'http://www.w3.org/2000/svg',
             'tspan',
           );
           span.setAttribute('x', '0');
           span.setAttribute('dy', String(
-            index ? FLOW_LABEL_LINE_HEIGHT : flowLabelFirstLineOffset(labelLayout.lines.length),
+            index ? FLOW_LABEL_LINE_HEIGHT : flowLabelFirstLineOffset(lines.length),
           ));
           span.textContent = line;
           return span;
         });
         label.replaceChildren(...lineElements);
-        label.dataset.dmtLineSignature = signature;
+        label.dataset.dmtLayoutKey = layoutKey;
       }
     }
   }
@@ -303,6 +304,7 @@ export function mountStoryCanvas({
   onDialogTab,
   onCancelEdit,
   layoutText,
+  onTextLayoutInvalidated,
   onZoom,
   onFullscreen,
 }) {
@@ -325,6 +327,13 @@ export function mountStoryCanvas({
     target.addEventListener(event, handler, options);
     removers.push(() => target.removeEventListener(event, handler, options));
   };
+
+  if (typeof onTextLayoutInvalidated === 'function') {
+    const unsubscribe = onTextLayoutInvalidated(() => {
+      redraw(canvas, layoutText, { forceTextLayout: true });
+    });
+    if (typeof unsubscribe === 'function') removers.push(unsubscribe);
+  }
 
   const nodeFor = id => canvas.querySelector(`[data-dmt-node="${CSS.escape(id)}"]`);
   const selectionHull = canvas.querySelector('[data-dmt-selection-hull]');

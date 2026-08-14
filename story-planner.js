@@ -308,6 +308,7 @@ export function createStoryPlanner(host, options = {}) {
       onDialogTab: setDialogTab,
       onCancelEdit: cancelEdit,
       layoutText: host.h.layoutText,
+      onTextLayoutInvalidated: host.h.onTextLayoutInvalidated,
       onZoom: value => viewportZoom.set(viewId(), value),
       onFullscreen: value => { fullscreen = value; },
     });
