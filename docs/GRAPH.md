@@ -82,19 +82,21 @@ reference when the precise relationship matters but is not story flow.
   reveal zone, a control receives keyboard focus, or an Atlas tool is dragged.
   Escape also exits fullscreen after any open modal or connection gesture has
   been dismissed.
-- The stage controls zoom from 50% to 200% and reset to 100%. The scroll wheel
+- The stage controls zoom from 35% to 200% and reset to 100%. The scroll wheel
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
   the current planner session; it is intentionally not campaign content. Card
-  geometry follows every zoom change, while typography never shrinks below its
-  100% size and grows in 25% steps above 100%. The text-bearing canvas is never
-  compositor-scaled, so browsers rasterize every band at its real font size.
+  geometry follows every zoom change. Typography uses a native 75% overview
+  band below 50%, its 100% size from 50% through 124%, and 25% growth steps
+  above that. The text-bearing canvas is never compositor-scaled, so browsers
+  rasterize every band at its real font size.
 - Semantic detail changes independently from typography. Below 100% the
-  condensed level hides metadata, marginalia, and flow-label text; below 75%
-  compact also hides summaries; below 55% overview hides kind labels and keeps
-  only titles. Hidden elements use `visibility: hidden` so detail transitions
-  do not collapse card layout in the middle of a zoom gesture. Actual card
-  bounds still drive connector geometry after Pretext wrapping changes height.
+  condensed level hides metadata, marginalia, and flow-label text; below 60%
+  compact also hides summaries; below 45% overview hides kind labels and keeps
+  only titles. A description therefore remains visible at exactly 60%. Rows
+  removed by a semantic level do not reserve empty card height; detail changes
+  occur only at discrete thresholds, and actual card bounds drive connector
+  geometry after both row removal and Pretext wrapping change the height.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while

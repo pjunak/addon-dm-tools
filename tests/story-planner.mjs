@@ -387,21 +387,26 @@ test('fullscreen requests the physical display and exits through the document', 
 });
 
 test('canvas zoom clamps its range and keeps the pointer anchored', () => {
-  assert.equal(clampCanvasZoom(0.2), 0.5);
+  assert.equal(clampCanvasZoom(0.2), 0.35);
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
   assert.equal(clampCanvasZoom('invalid'), 1);
-  assert.equal(storyCanvasDetailLevel(0.5), 'overview');
-  assert.equal(storyCanvasDetailLevel(0.55), 'compact');
-  assert.equal(storyCanvasDetailLevel(0.749), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.35), 'overview');
+  assert.equal(storyCanvasDetailLevel(0.449), 'overview');
+  assert.equal(storyCanvasDetailLevel(0.45), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.599), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.6), 'condensed');
   assert.equal(storyCanvasDetailLevel(0.75), 'condensed');
   assert.equal(storyCanvasDetailLevel(0.999), 'condensed');
   assert.equal(storyCanvasDetailLevel(1), 'full');
+  assert.equal(storyCanvasTypographyScale(0.35), 0.75);
+  assert.equal(storyCanvasTypographyScale(0.499), 0.75);
   assert.equal(storyCanvasTypographyScale(0.5), 1);
   assert.equal(storyCanvasTypographyScale(1.24), 1);
   assert.equal(storyCanvasTypographyScale(1.25), 1.25);
   assert.equal(storyCanvasTypographyScale(1.99), 1.75);
   assert.equal(storyCanvasTypographyScale(2), 2);
+  assert.equal(storyCanvasEdgeTypographyScale(0.35), 0.75 / 0.35);
   assert.equal(storyCanvasEdgeTypographyScale(0.5), 2);
   assert.equal(storyCanvasEdgeTypographyScale(2), 1);
   assert.deepEqual(anchoredZoomScroll({
@@ -437,6 +442,11 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
 });
 
 test('planner node text keeps readable sizes and delegates fixed-band wrapping', () => {
+  const overviewMetrics = storyNodeTextMetrics('title', 0.35);
+  assert.ok(Math.abs(overviewMetrics.fontSize - 14.4) < 0.0001);
+  assert.ok(Math.abs(overviewMetrics.lineHeight - 16.56) < 0.0001);
+  assert.equal(overviewMetrics.maxWidth, 74);
+  assert.equal(overviewMetrics.typeScale, 0.75);
   assert.deepEqual(storyNodeTextMetrics('title', 0.5), {
     role: 'title',
     fontSize: 19.2,

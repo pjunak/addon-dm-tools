@@ -70,7 +70,7 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-node-marginalia{display:inline-grid;place-items:center;width:calc(1.75rem * var(--dmt-canvas-zoom,1));height:calc(1.75rem * var(--dmt-canvas-zoom,1));border:calc(1px * var(--dmt-canvas-zoom,1)) solid var(--accent-gold-dim);border-radius:50%;background:var(--bg-surface);color:var(--accent-gold);font-size:calc(var(--text-xs) * var(--dmt-type-zoom,1))}
     .addon-dm-tools .dmt-story-canvas[data-dmt-detail="overview"] :is(.dmt-node-kind,.dmt-story-node p,.dmt-node-meta,.dmt-node-marginalia,.dmt-story-edge-label),
     .addon-dm-tools .dmt-story-canvas[data-dmt-detail="compact"] :is(.dmt-story-node p,.dmt-node-meta,.dmt-node-marginalia,.dmt-story-edge-label),
-    .addon-dm-tools .dmt-story-canvas[data-dmt-detail="condensed"] :is(.dmt-node-meta,.dmt-node-marginalia,.dmt-story-edge-label){visibility:hidden}
+    .addon-dm-tools .dmt-story-canvas[data-dmt-detail="condensed"] :is(.dmt-node-meta,.dmt-node-marginalia,.dmt-story-edge-label){display:none}
     .addon-dm-tools .dmt-node-port{position:absolute;right:calc(-.7rem * var(--dmt-canvas-zoom,1));top:50%;display:grid;place-items:center;width:calc(1.4rem * var(--dmt-canvas-zoom,1));height:calc(1.4rem * var(--dmt-canvas-zoom,1));padding:0;transform:translateY(-50%);border:calc(2px * var(--dmt-canvas-zoom,1)) solid var(--accent-gold);border-radius:50%;background:var(--bg-raised);color:transparent;cursor:crosshair}
     .addon-dm-tools .dmt-node-port:hover,.addon-dm-tools .dmt-node-port:focus-visible{background:var(--accent-gold);box-shadow:0 0 0 calc(3px * var(--dmt-canvas-zoom,1)) color-mix(in srgb,var(--accent-gold) 25%,transparent)}
     .addon-dm-tools .dmt-story-canvas.is-connecting .dmt-story-node{cursor:crosshair}

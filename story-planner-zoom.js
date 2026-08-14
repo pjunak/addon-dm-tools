@@ -1,10 +1,12 @@
-export const MIN_CANVAS_ZOOM = 0.5;
+export const MIN_CANVAS_ZOOM = 0.35;
 export const MAX_CANVAS_ZOOM = 2;
 export const CANVAS_ZOOM_STEP = 0.1;
-export const OVERVIEW_DETAIL_ZOOM = 0.55;
-export const COMPACT_DETAIL_ZOOM = 0.75;
+export const OVERVIEW_DETAIL_ZOOM = 0.45;
+export const COMPACT_DETAIL_ZOOM = 0.6;
 export const FULL_DETAIL_ZOOM = 1;
 export const TYPOGRAPHY_ZOOM_STEP = 0.25;
+export const OVERVIEW_TYPOGRAPHY_ZOOM = 0.5;
+export const OVERVIEW_TYPOGRAPHY_SCALE = 0.75;
 
 export function clampCanvasZoom(value) {
   const numeric = Number(value);
@@ -21,12 +23,14 @@ export function storyCanvasDetailLevel(value) {
 }
 
 /**
- * Canvas geometry follows every zoom change, but text never shrinks below its
- * zoom-1 size. Above 100%, quarter-step sizes avoid continuous font reflow while
- * still letting typography grow with the surrounding cards.
+ * Canvas geometry follows every zoom change. Text uses a compact native band
+ * only for the extreme overview, stays at its zoom-1 size from 50% through
+ * 124%, and grows in quarter steps above that. Discrete bands avoid continuous
+ * font reflow without forcing dense plans to keep full-size titles at 35%.
  */
 export function storyCanvasTypographyScale(value) {
   const zoom = clampCanvasZoom(value);
+  if (zoom < OVERVIEW_TYPOGRAPHY_ZOOM) return OVERVIEW_TYPOGRAPHY_SCALE;
   if (zoom <= 1) return 1;
   return Math.min(
     MAX_CANVAS_ZOOM,

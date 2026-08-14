@@ -15,6 +15,8 @@ import {
 } from './story-planner-labels.js';
 import { STORY_PLANNER_STYLES } from './story-planner-styles.js';
 import {
+  MAX_CANVAS_ZOOM,
+  MIN_CANVAS_ZOOM,
   storyCanvasDetailLevel,
   storyCanvasEdgeTypographyScale,
   storyCanvasTypographyScale,
@@ -725,9 +727,9 @@ export function renderCanvasPage({
                 links: projection.flowLinks.length,
               }))}
               <span class="dmt-zoom-controls" role="group" aria-label="${esc(t('planner.zoom.controls'))}">
-                <button class="inline-create-btn" type="button" data-dmt-command="zoom-out" aria-label="${esc(t('planner.zoom.out'))}"${zoom <= 0.5 ? ' disabled' : ''}>−</button>
+                <button class="inline-create-btn" type="button" data-dmt-command="zoom-out" aria-label="${esc(t('planner.zoom.out'))}"${zoom <= MIN_CANVAS_ZOOM ? ' disabled' : ''}>−</button>
                 <button class="dmt-zoom-level" type="button" data-dmt-command="zoom-reset" aria-label="${esc(t('planner.zoom.reset'))}"><output data-dmt-zoom-label>${zoomPercent}%</output></button>
-                <button class="inline-create-btn" type="button" data-dmt-command="zoom-in" aria-label="${esc(t('planner.zoom.in'))}"${zoom >= 2 ? ' disabled' : ''}>+</button>
+                <button class="inline-create-btn" type="button" data-dmt-command="zoom-in" aria-label="${esc(t('planner.zoom.in'))}"${zoom >= MAX_CANVAS_ZOOM ? ' disabled' : ''}>+</button>
               </span>
               ${canUndo ? `<button class="inline-create-btn" type="button" data-dmt-command="undo">${esc(t('planner.action.undo'))}</button>` : ''}
               <button class="inline-create-btn" type="button"${dataAction(host.action('plannerResetLayout'))}>${esc(t('planner.action.resetLayout'))}</button>
