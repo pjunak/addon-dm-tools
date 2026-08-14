@@ -89,6 +89,11 @@ reference when the precise relationship matters but is not story flow.
   dimensions, spacing, and font sizes are recalculated at the requested zoom;
   the text-bearing canvas is never compositor-scaled, so browsers rasterize
   text at its actual displayed size.
+- Below 75% zoom the canvas enters a compact semantic level: card summaries,
+  metadata, marginalia counts, and flow-label text are hidden while kind,
+  title, card shape, ports, selection, and accessible flow targets remain.
+  These elements use `visibility: hidden`, so the 240×116 card footprint and
+  connector geometry never change when the threshold is crossed.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while

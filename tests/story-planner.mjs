@@ -8,13 +8,13 @@ import {
   anchoredZoomScroll,
   canvasPixelRectangle,
   canvasSurfaceSize,
-  clampCanvasZoom,
   pannedCanvasScroll,
   rectanglesIntersect,
   requestPlannerFullscreen,
   setPlannerFullscreen,
   setShortcutModalOpen,
 } from '../story-planner-interactions.js';
+import { clampCanvasZoom, storyCanvasDetailLevel } from '../story-planner-zoom.js';
 import {
   itemAncestors,
   itemSubtreeIds,
@@ -376,6 +376,9 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
   assert.equal(clampCanvasZoom('invalid'), 1);
+  assert.equal(storyCanvasDetailLevel(0.5), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.749), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.75), 'full');
   assert.deepEqual(anchoredZoomScroll({
     oldZoom: 1,
     newZoom: 1.5,

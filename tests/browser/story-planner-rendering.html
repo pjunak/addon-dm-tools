@@ -41,7 +41,7 @@
   <main id="planner" class="addon-dm-tools dmt-planner-shell">
     <div class="dmt-story-viewport fixture-viewport">
       <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
-        <div class="dmt-story-canvas" data-dmt-zoom="1" tabindex="0" style="--dmt-canvas-zoom:1;width:900px;height:500px">
+        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="--dmt-canvas-zoom:1;width:900px;height:500px">
           <svg class="dmt-story-edges" width="900" height="500" viewBox="0 0 900 500">
             <g class="dmt-story-edge-group" data-dmt-edge-group="edge-1">
               <path class="dmt-story-edge" data-dmt-edge="edge-1" data-source="node-a" data-target="node-b"></path>
@@ -56,6 +56,7 @@
             <span class="dmt-node-kind">Quest</span>
             <h3>The silver road</h3>
             <p>Cross the valley before the sleeping dragon wakes.</p>
+            <div class="dmt-node-meta"><span class="codex-badge">2 links</span></div>
           </article>
           <article class="dmt-story-node" data-dmt-node="node-b" data-dmt-x="420" data-dmt-y="40" style="left:420px;top:40px">
             <span class="dmt-node-kind">Encounter</span>
@@ -70,6 +71,7 @@
     import { mountStoryCanvas } from '../../story-planner-interactions.js';
     import { FLOW_LABEL_FONT } from '../../story-planner-labels.js';
     import { STORY_PLANNER_STYLES } from '../../story-planner-styles.js';
+    import { storyCanvasDetailLevel } from '../../story-planner-zoom.js';
 
     document.head.insertAdjacentHTML('beforeend', STORY_PLANNER_STYLES);
 
@@ -87,11 +89,13 @@
       const checks = [];
       const check = (name, pass, actual, expected) => checks.push({ name, pass, actual, expected });
       const root = document.querySelector('#planner');
+      const viewport = root.querySelector('.dmt-story-viewport');
       const canvas = root.querySelector('.dmt-story-canvas');
       const svg = root.querySelector('.dmt-story-edges');
       const node = root.querySelector('[data-dmt-node="node-a"]');
       const title = node.querySelector('h3');
       const summary = node.querySelector('p');
+      const meta = node.querySelector('.dmt-node-meta');
       const kind = node.querySelector('.dmt-node-kind');
       const edgeLabel = root.querySelector('[data-dmt-edge-label="edge-1"]');
       const measuredFontFamily = FLOW_LABEL_FONT.replace(/^\S+\s+/, '');
@@ -149,12 +153,39 @@
         { key: layoutKey, text: 'Refreshed after fonts' },
       );
 
+      const detailBoundaries = [0.5, 0.749, 0.75, 2].map(storyCanvasDetailLevel);
+      check(
+        'planner detail thresholds are stable',
+        JSON.stringify(detailBoundaries) === JSON.stringify(['compact', 'compact', 'full', 'full']),
+        detailBoundaries,
+        ['compact', 'compact', 'full', 'full'],
+      );
+      viewport.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 250,
+        deltaY: 500,
+      }));
+      await nextFrame();
+      check(
+        'wheel zoom applies compact detail through the mounted controller',
+        canvas.dataset.dmtDetail === 'compact',
+        canvas.dataset.dmtDetail,
+        'compact',
+      );
+
       let previousEdgeHeight = null;
-      for (const zoom of [0.5, 1, 2]) {
+      for (const zoom of [0.5, 0.7, 0.749, 0.75, 0.8, 1, 2]) {
         canvas.dataset.dmtZoom = String(zoom);
+        canvas.dataset.dmtDetail = 'full';
         canvas.style.setProperty('--dmt-canvas-zoom', String(zoom));
         svg.setAttribute('width', String(900 * zoom));
         svg.setAttribute('height', String(500 * zoom));
+        await nextFrame();
+        const fullDetailHeight = node.getBoundingClientRect().height;
+        const detailLevel = storyCanvasDetailLevel(zoom);
+        canvas.dataset.dmtDetail = detailLevel;
         await nextFrame();
         const expected = {
           kindFont: 12 * zoom,
@@ -171,18 +202,40 @@
         for (const property of Object.keys(expected)) {
           check(`planner ${property} at ${zoom}x`, closeTo(actual[property], expected[property]), actual[property], expected[property]);
         }
+        const expectedVisibility = detailLevel === 'full' ? 'visible' : 'hidden';
+        for (const [label, element] of [['summary', summary], ['metadata', meta], ['edge label', edgeLabel]]) {
+          const visibility = getComputedStyle(element).visibility;
+          check(
+            `planner ${label} visibility at ${zoom}x`,
+            visibility === expectedVisibility,
+            visibility,
+            expectedVisibility,
+          );
+        }
+        for (const [label, element] of [['kind', kind], ['title', title]]) {
+          const visibility = getComputedStyle(element).visibility;
+          check(`planner ${label} remains visible at ${zoom}x`, visibility === 'visible', visibility, 'visible');
+        }
+        check(
+          `planner semantic detail preserves geometry at ${zoom}x`,
+          closeTo(node.getBoundingClientRect().height, fullDetailHeight, 0.01),
+          node.getBoundingClientRect().height,
+          fullDetailHeight,
+        );
         for (const [label, element] of [['canvas', canvas], ['node', node]]) {
           const scales = transformScale(element);
           check(`${label} has no raster scale at ${zoom}x`, scales.every(scale => closeTo(scale, 1, 0.001)), scales, [1, 1]);
         }
-        const currentEdgeHeight = edgeLabel.getBoundingClientRect().height;
-        check(
-          `SVG label raster size grows at ${zoom}x`,
-          previousEdgeHeight === null || currentEdgeHeight > previousEdgeHeight,
-          currentEdgeHeight,
-          previousEdgeHeight === null ? '> 0' : `> ${previousEdgeHeight}`,
-        );
-        previousEdgeHeight = currentEdgeHeight;
+        if (detailLevel === 'full') {
+          const currentEdgeHeight = edgeLabel.getBoundingClientRect().height;
+          check(
+            `SVG label raster size grows at ${zoom}x`,
+            previousEdgeHeight === null || currentEdgeHeight > previousEdgeHeight,
+            currentEdgeHeight,
+            previousEdgeHeight === null ? '> 0' : `> ${previousEdgeHeight}`,
+          );
+          previousEdgeHeight = currentEdgeHeight;
+        }
       }
 
       cleanup();

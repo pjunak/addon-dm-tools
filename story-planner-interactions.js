@@ -5,18 +5,16 @@ import {
   flowLabelLayoutKey,
   layoutFlowLabelLines,
 } from './story-planner-labels.js';
+import {
+  CANVAS_ZOOM_STEP,
+  MAX_CANVAS_ZOOM,
+  MIN_CANVAS_ZOOM,
+  clampCanvasZoom,
+  storyCanvasDetailLevel,
+} from './story-planner-zoom.js';
 
 const GRID = 24;
 const DRAG_THRESHOLD = 4;
-export const MIN_CANVAS_ZOOM = 0.5;
-export const MAX_CANVAS_ZOOM = 2;
-const CANVAS_ZOOM_STEP = 0.1;
-
-export function clampCanvasZoom(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 1;
-  return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, numeric));
-}
 
 export function anchoredZoomScroll({
   oldZoom,
@@ -400,6 +398,7 @@ export function mountStoryCanvas({
       originY: panMargin,
     });
     canvas.dataset.dmtZoom = String(next);
+    canvas.dataset.dmtDetail = storyCanvasDetailLevel(next);
     canvas.style.setProperty('--dmt-canvas-zoom', String(next));
     for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
       setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, next);

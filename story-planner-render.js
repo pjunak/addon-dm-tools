@@ -14,6 +14,7 @@ import {
   layoutFlowLabel,
 } from './story-planner-labels.js';
 import { STORY_PLANNER_STYLES } from './story-planner-styles.js';
+import { storyCanvasDetailLevel } from './story-planner-zoom.js';
 
 const CANVAS_PAN_MARGIN = 480;
 
@@ -592,7 +593,7 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
     <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="${projection.width}" data-base-height="${projection.height}"
       data-pan-margin="${CANVAS_PAN_MARGIN}"
       style="width:${projection.width * zoom + CANVAS_PAN_MARGIN * 2}px;height:${projection.height * zoom + CANVAS_PAN_MARGIN * 2}px">
-    <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
+    <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" data-dmt-detail="${storyCanvasDetailLevel(zoom)}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
       style="--dmt-canvas-zoom:${zoom};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * zoom}px;height:${projection.height * zoom}px">
       <svg class="dmt-story-edges" width="${projection.width * zoom}" height="${projection.height * zoom}" viewBox="0 0 ${projection.width} ${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
