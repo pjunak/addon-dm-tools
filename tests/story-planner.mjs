@@ -14,7 +14,12 @@ import {
   setPlannerFullscreen,
   setShortcutModalOpen,
 } from '../story-planner-interactions.js';
-import { clampCanvasZoom, storyCanvasDetailLevel } from '../story-planner-zoom.js';
+import {
+  clampCanvasZoom,
+  storyCanvasDetailLevel,
+  storyCanvasEdgeTypographyScale,
+  storyCanvasTypographyScale,
+} from '../story-planner-zoom.js';
 import {
   itemAncestors,
   itemSubtreeIds,
@@ -28,6 +33,8 @@ import {
   flowLabelLayoutKey,
   flowLabelLayoutWidth,
   layoutFlowLabel,
+  layoutStoryNodeText,
+  storyNodeTextMetrics,
 } from '../story-planner-labels.js';
 
 const en = JSON.parse(await readFile(new URL('../locales/en.json', import.meta.url), 'utf8'));
@@ -250,7 +257,15 @@ test('flow labels use the longest straight connector segment and exact host line
   assert.equal(flowLabelFirstLineOffset(label.lines.length), -8);
   assert.equal(flowLabelLayoutWidth(96.24), 96);
   assert.equal(flowLabelLayoutWidth(96.26), 96.5);
-  assert.equal(flowLabelLayoutKey('Wake the dragon', 96.24), '["Wake the dragon",96]');
+  assert.equal(flowLabelLayoutKey('Wake the dragon', 96.24), '["Wake the dragon",96,12,16]');
+
+  let compactOptions = null;
+  layoutFlowLabel('Compact label', source, horizontal, (_text, options) => {
+    compactOptions = options;
+    return { lines: [{ text: 'Compact label' }] };
+  }, 0.5);
+  assert.equal(compactOptions.font, '24px Inter, "Helvetica Neue", sans-serif');
+  assert.equal(compactOptions.lineHeight, 32);
 
   assert.deepEqual(
     layoutFlowLabel('Fallback label', source, horizontal, () => { throw new Error('old host'); }).lines,
@@ -376,9 +391,19 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
   assert.equal(clampCanvasZoom('invalid'), 1);
-  assert.equal(storyCanvasDetailLevel(0.5), 'compact');
+  assert.equal(storyCanvasDetailLevel(0.5), 'overview');
+  assert.equal(storyCanvasDetailLevel(0.55), 'compact');
   assert.equal(storyCanvasDetailLevel(0.749), 'compact');
-  assert.equal(storyCanvasDetailLevel(0.75), 'full');
+  assert.equal(storyCanvasDetailLevel(0.75), 'condensed');
+  assert.equal(storyCanvasDetailLevel(0.999), 'condensed');
+  assert.equal(storyCanvasDetailLevel(1), 'full');
+  assert.equal(storyCanvasTypographyScale(0.5), 1);
+  assert.equal(storyCanvasTypographyScale(1.24), 1);
+  assert.equal(storyCanvasTypographyScale(1.25), 1.25);
+  assert.equal(storyCanvasTypographyScale(1.99), 1.75);
+  assert.equal(storyCanvasTypographyScale(2), 2);
+  assert.equal(storyCanvasEdgeTypographyScale(0.5), 2);
+  assert.equal(storyCanvasEdgeTypographyScale(2), 1);
   assert.deepEqual(anchoredZoomScroll({
     oldZoom: 1,
     newZoom: 1.5,
@@ -409,6 +434,52 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
     width: 120,
     height: 58,
   });
+});
+
+test('planner node text keeps readable sizes and delegates fixed-band wrapping', () => {
+  assert.deepEqual(storyNodeTextMetrics('title', 0.5), {
+    role: 'title',
+    fontSize: 19.2,
+    font: '19.2px Cinzel, Georgia, serif',
+    lineHeight: 22.08,
+    letterSpacing: 0.2304,
+    maxLines: 2,
+    maxWidth: 106,
+    typeScale: 1,
+  });
+  assert.equal(storyNodeTextMetrics('summary', 0.75).fontSize, 12);
+  assert.equal(storyNodeTextMetrics('title', 1.25).fontSize, 24);
+
+  const calls = [];
+  const layout = layoutStoryNodeText(
+    'Follow the silver road before dawn',
+    'title',
+    0.5,
+    (text, options) => {
+      calls.push({ text, options });
+      if (text.endsWith('…')) {
+        return text.length <= 12
+          ? { lines: [{ text }] }
+          : { lines: [{ text: text.slice(0, 8) }, { text: text.slice(8) }] };
+      }
+      return { lines: [
+        { text: 'Follow the' },
+        { text: 'silver road' },
+        { text: 'before dawn' },
+      ] };
+    },
+  );
+  assert.equal(layout.measured, true);
+  assert.equal(layout.lines.length, 2);
+  assert.match(layout.lines[1], /…$/);
+  assert.equal(calls[0].options.maxWidth, 106);
+  assert.equal(calls[0].options.font, '19.2px Cinzel, Georgia, serif');
+
+  const fallback = layoutStoryNodeText('Fallback wrapping', 'summary', 1, () => {
+    throw new Error('older host');
+  });
+  assert.equal(fallback.measured, false);
+  assert.deepEqual(fallback.lines, ['Fallback wrapping']);
 });
 
 test('canvas working margin keeps a viewport-sized canvas pannable in every direction', () => {

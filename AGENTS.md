@@ -112,13 +112,13 @@ Run in PowerShell from this repository:
 
 ```text
 node --test tests/*.mjs
-node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html
+node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html --browser all
 ```
 
 The browser contract borrows the sibling host's pinned Playwright runner; run
-`npm ci` and `npx playwright install chromium` in the host first. DM Tools owns
-the planner fixture and its assertions, and imports no host internals at
-runtime.
+`npm ci` and `npx playwright install chromium firefox` in the host first. DM
+Tools owns the planner fixture and its assertions, and imports no host internals
+at runtime.
 
 Then from the host:
 

@@ -86,14 +86,15 @@ reference when the precise relationship matters but is not story flow.
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
   the current planner session; it is intentionally not campaign content. Card
-  dimensions, spacing, and font sizes are recalculated at the requested zoom;
-  the text-bearing canvas is never compositor-scaled, so browsers rasterize
-  text at its actual displayed size.
-- Below 75% zoom the canvas enters a compact semantic level: card summaries,
-  metadata, marginalia counts, and flow-label text are hidden while kind,
-  title, card shape, ports, selection, and accessible flow targets remain.
-  These elements use `visibility: hidden`, so the 240×116 card footprint and
-  connector geometry never change when the threshold is crossed.
+  geometry follows every zoom change, while typography never shrinks below its
+  100% size and grows in 25% steps above 100%. The text-bearing canvas is never
+  compositor-scaled, so browsers rasterize every band at its real font size.
+- Semantic detail changes independently from typography. Below 100% the
+  condensed level hides metadata, marginalia, and flow-label text; below 75%
+  compact also hides summaries; below 55% overview hides kind labels and keeps
+  only titles. Hidden elements use `visibility: hidden` so detail transitions
+  do not collapse card layout in the middle of a zoom gesture. Actual card
+  bounds still drive connector geometry after Pretext wrapping changes height.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while
@@ -147,16 +148,19 @@ Auto-arrange removes that scope record and cannot change story meaning.
 Imported documents never contain view records. Only schema-version-3 view
 records are read; older layouts are ignored rather than converted.
 
-Flow labels choose the longest usable straight segment in their orthogonal
-connector, rotate with a vertical segment, and wrap within that segment's
-length. When the host provides `host.h.layoutText`, DM Tools renders its exact
-Unicode-aware line strings so measurement and visible breaks agree. On older
-hosts the same geometry retains a single-line label instead of blocking the
-planner. Moving a node reuses the materialized lines until the usable segment
-width crosses a half-pixel boundary. The mounted canvas borrows the host's
-optional text-layout invalidation subscription and releases it with its other
-route-owned listeners, so late font loading or a locale change refreshes the
-visible breaks without giving the addon ownership of the text engine.
+Card titles, summaries, and flow labels borrow `host.h.layoutText`, backed by
+Pretext. The planner owns the role-specific font descriptors, available width,
+line caps, ellipsis policy, and semantic levels; the host owns Unicode-aware
+measurement and caching. Returned line strings are rendered verbatim, and an
+older host falls back to native browser wrapping instead of blocking the
+planner. Flow labels still choose the longest usable straight connector
+segment and rotate with a vertical segment. Their graph-space font descriptor
+counterbalances SVG viewport scaling so the visible font follows the same
+stepped typography policy. Widths are bucketed to half-pixels and DOM children
+change only when the materialized lines change. The mounted canvas borrows the
+host's optional invalidation subscription and releases it with its other
+route-owned listeners, so late font loading or a locale change refreshes card
+and flow breaks without giving the addon ownership of the text engine.
 
 ## Lifecycle and accessibility
 

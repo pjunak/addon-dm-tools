@@ -9,12 +9,16 @@ import {
 } from './planning-contract.js';
 import { itemAncestors, orthogonalPath, records } from './story-planner-model.js';
 import {
-  FLOW_LABEL_LINE_HEIGHT,
   flowLabelFirstLineOffset,
   layoutFlowLabel,
+  layoutStoryNodeText,
 } from './story-planner-labels.js';
 import { STORY_PLANNER_STYLES } from './story-planner-styles.js';
-import { storyCanvasDetailLevel } from './story-planner-zoom.js';
+import {
+  storyCanvasDetailLevel,
+  storyCanvasEdgeTypographyScale,
+  storyCanvasTypographyScale,
+} from './story-planner-zoom.js';
 
 const CANVAS_PAN_MARGIN = 480;
 
@@ -559,6 +563,13 @@ function nodeHtml(node, selectedItemIds, host, zoom) {
     && !node.referenceCount
     && !node.consequenceCount
     && !node.noteCount;
+  const title = String(item.title || '');
+  const summary = String(item.summary || item.objective || t('planner.item.noSummary'));
+  const titleLayout = layoutStoryNodeText(title, 'title', zoom, host.h.layoutText);
+  const summaryLayout = layoutStoryNodeText(summary, 'summary', zoom, host.h.layoutText);
+  const textLines = layout => layout.measured
+    ? layout.lines.map(line => `<span class="dmt-node-text-line">${esc(line)}</span>`).join('')
+    : esc(layout.lines[0] || '');
   return `<article class="dmt-story-node${selectedItemIds.has(item.id) ? ' is-selected' : ''}"
       data-dmt-node="${esc(item.id)}" data-kind="${esc(item.kind)}"
       data-needs-details="${needsDetails}"
@@ -573,8 +584,8 @@ function nodeHtml(node, selectedItemIds, host, zoom) {
       <span class="dmt-node-kind">${esc(itemTypeLabel(item, t))}</span>
       ${node.noteCount ? `<span class="dmt-node-marginalia" title="${esc(t('planner.notes.count', { n: node.noteCount }))}" aria-label="${esc(t('planner.notes.count', { n: node.noteCount }))}">✎</span>` : ''}
     </div>
-    <h3>${esc(item.title)}</h3>
-    <p>${esc(item.summary || item.objective || t('planner.item.noSummary'))}</p>
+    <h3 data-dmt-text-role="title" data-dmt-text="${esc(title)}" data-dmt-layout-key="${esc(titleLayout.key)}" data-dmt-layout-measured="${titleLayout.measured}">${textLines(titleLayout)}</h3>
+    <p data-dmt-text-role="summary" data-dmt-text="${esc(summary)}" data-dmt-layout-key="${esc(summaryLayout.key)}" data-dmt-layout-measured="${summaryLayout.measured}">${textLines(summaryLayout)}</p>
     <div class="dmt-node-meta">
       ${needsDetails ? `<span class="dmt-node-incomplete">${esc(t('planner.item.needsDetails'))}</span>` : ''}
       ${node.childCount ? `<span class="codex-badge">${esc(t('planner.node.children', { n: node.childCount }))}</span>` : ''}
@@ -594,7 +605,7 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
       data-pan-margin="${CANVAS_PAN_MARGIN}"
       style="width:${projection.width * zoom + CANVAS_PAN_MARGIN * 2}px;height:${projection.height * zoom + CANVAS_PAN_MARGIN * 2}px">
     <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" data-dmt-detail="${storyCanvasDetailLevel(zoom)}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
-      style="--dmt-canvas-zoom:${zoom};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * zoom}px;height:${projection.height * zoom}px">
+      style="--dmt-canvas-zoom:${zoom};--dmt-type-zoom:${storyCanvasTypographyScale(zoom)};--dmt-edge-type-zoom:${storyCanvasEdgeTypographyScale(zoom)};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * zoom}px;height:${projection.height * zoom}px">
       <svg class="dmt-story-edges" width="${projection.width * zoom}" height="${projection.height * zoom}" viewBox="0 0 ${projection.width} ${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -608,12 +619,12 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
           const targetBox = { ...target.position, width: 240, height: 116 };
           const label = flow.label || t(`planner.flow.${flow.kind}`);
           const labelLayout = flow.label
-            ? layoutFlowLabel(flow.label, sourceBox, targetBox, host.h.layoutText)
+            ? layoutFlowLabel(flow.label, sourceBox, targetBox, host.h.layoutText, zoom)
             : null;
           return `<g class="dmt-story-edge-group${selectedFlowIds.has(flow.id) ? ' is-selected' : ''}" data-dmt-edge-group="${esc(flow.id)}">
               <path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
               <path class="dmt-story-edge-hit" data-dmt-edge-hit="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" tabindex="0" role="button" aria-label="${esc(label)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
-              ${labelLayout ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" data-dmt-label="${esc(flow.label)}" data-dmt-layout-key="${esc(labelLayout.layoutKey)}" transform="translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${labelLayout.lines.map((line, index) => `<tspan x="0" dy="${index ? FLOW_LABEL_LINE_HEIGHT : flowLabelFirstLineOffset(labelLayout.lines.length)}">${esc(line)}</tspan>`).join('')}</text>` : ''}
+               ${labelLayout ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" data-dmt-label="${esc(flow.label)}" data-dmt-layout-key="${esc(labelLayout.layoutKey)}" transform="translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${labelLayout.lines.map((line, index) => `<tspan x="0" dy="${index ? labelLayout.lineHeight : flowLabelFirstLineOffset(labelLayout.lines.length, zoom)}">${esc(line)}</tspan>`).join('')}</text>` : ''}
             </g>`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>

@@ -41,7 +41,7 @@
   <main id="planner" class="addon-dm-tools dmt-planner-shell">
     <div class="dmt-story-viewport fixture-viewport">
       <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
-        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="--dmt-canvas-zoom:1;width:900px;height:500px">
+        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="--dmt-canvas-zoom:1;--dmt-type-zoom:1;--dmt-edge-type-zoom:1;width:900px;height:500px">
           <svg class="dmt-story-edges" width="900" height="500" viewBox="0 0 900 500">
             <g class="dmt-story-edge-group" data-dmt-edge-group="edge-1">
               <path class="dmt-story-edge" data-dmt-edge="edge-1" data-source="node-a" data-target="node-b"></path>
@@ -54,14 +54,14 @@
           <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
           <article class="dmt-story-node" data-dmt-node="node-a" data-dmt-x="40" data-dmt-y="40" style="left:40px;top:40px">
             <span class="dmt-node-kind">Quest</span>
-            <h3>The silver road</h3>
-            <p>Cross the valley before the sleeping dragon wakes.</p>
+            <h3 data-dmt-text-role="title" data-dmt-text="The silver road" data-dmt-layout-key="" data-dmt-layout-measured="false">The silver road</h3>
+            <p data-dmt-text-role="summary" data-dmt-text="Cross the valley before the sleeping dragon wakes." data-dmt-layout-key="" data-dmt-layout-measured="false">Cross the valley before the sleeping dragon wakes.</p>
             <div class="dmt-node-meta"><span class="codex-badge">2 links</span></div>
           </article>
           <article class="dmt-story-node" data-dmt-node="node-b" data-dmt-x="420" data-dmt-y="40" style="left:420px;top:40px">
             <span class="dmt-node-kind">Encounter</span>
-            <h3>The sleeping dragon</h3>
-            <p>Reach the old gate without raising an alarm.</p>
+            <h3 data-dmt-text-role="title" data-dmt-text="The sleeping dragon" data-dmt-layout-key="" data-dmt-layout-measured="false">The sleeping dragon</h3>
+            <p data-dmt-text-role="summary" data-dmt-text="Reach the old gate without raising an alarm." data-dmt-layout-key="" data-dmt-layout-measured="false">Reach the old gate without raising an alarm.</p>
           </article>
         </div>
       </div>
@@ -71,13 +71,18 @@
     import { mountStoryCanvas } from '../../story-planner-interactions.js';
     import { FLOW_LABEL_FONT } from '../../story-planner-labels.js';
     import { STORY_PLANNER_STYLES } from '../../story-planner-styles.js';
-    import { storyCanvasDetailLevel } from '../../story-planner-zoom.js';
+    import {
+      storyCanvasDetailLevel,
+      storyCanvasEdgeTypographyScale,
+      storyCanvasTypographyScale,
+    } from '../../story-planner-zoom.js';
 
     document.head.insertAdjacentHTML('beforeend', STORY_PLANNER_STYLES);
 
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const closeTo = (actual, expected, tolerance = 0.08) => Math.abs(actual - expected) <= tolerance;
     const pixelValue = (element, property) => Number.parseFloat(getComputedStyle(element)[property]);
+    const normalizedFontFamily = value => String(value).replace(/[\s"]/g, '').toLowerCase();
     const transformScale = element => {
       const value = getComputedStyle(element).transform;
       if (value === 'none') return [1, 1];
@@ -103,10 +108,21 @@
       let subscriber = null;
       let subscriptions = 0;
       let unsubscriptions = 0;
-      const layoutText = () => {
-        const values = generation === 0
-          ? ['Follow the', 'silver thread']
-          : ['Refreshed after fonts'];
+      const layoutText = text => {
+        let values;
+        if (text === 'Follow the silver thread') {
+          values = generation === 0
+            ? ['Follow the', 'silver thread']
+            : ['Refreshed after fonts'];
+        } else if (text === 'The silver road') {
+          values = ['The silver', 'road'];
+        } else if (text === 'The sleeping dragon') {
+          values = ['The sleeping', 'dragon'];
+        } else if (text.startsWith('Cross the valley')) {
+          values = ['Cross the valley before', 'the sleeping dragon wakes.'];
+        } else {
+          values = ['Reach the old gate', 'without raising an alarm.'];
+        }
         return {
           lineCount: values.length,
           height: values.length * 16,
@@ -132,7 +148,7 @@
       check('planner subscribes once while mounted', subscriptions === 1 && typeof subscriber === 'function', subscriptions, 1);
       check(
         'flow label measurement uses the rendered font stack',
-        getComputedStyle(edgeLabel).fontFamily.replaceAll(' ', '') === measuredFontFamily.replaceAll(' ', ''),
+        normalizedFontFamily(getComputedStyle(edgeLabel).fontFamily) === normalizedFontFamily(measuredFontFamily),
         getComputedStyle(edgeLabel).fontFamily,
         measuredFontFamily,
       );
@@ -142,6 +158,18 @@
         JSON.stringify([...edgeLabel.children].map(line => line.textContent)) === JSON.stringify(['Follow the', 'silver thread']),
         [...edgeLabel.children].map(line => line.textContent),
         ['Follow the', 'silver thread'],
+      );
+      check(
+        'planner materializes Pretext card-title lines',
+        JSON.stringify([...title.children].map(line => line.textContent)) === JSON.stringify(['The silver', 'road']),
+        [...title.children].map(line => line.textContent),
+        ['The silver', 'road'],
+      );
+      check(
+        'planner materializes Pretext summary lines',
+        JSON.stringify([...summary.children].map(line => line.textContent)) === JSON.stringify(['Cross the valley before', 'the sleeping dragon wakes.']),
+        [...summary.children].map(line => line.textContent),
+        ['Cross the valley before', 'the sleeping dragon wakes.'],
       );
       generation = 1;
       subscriber?.({ reason: 'fonts', revision: 1, locale: 'en' });
@@ -153,12 +181,13 @@
         { key: layoutKey, text: 'Refreshed after fonts' },
       );
 
-      const detailBoundaries = [0.5, 0.749, 0.75, 2].map(storyCanvasDetailLevel);
+      const detailBoundaries = [0.5, 0.549, 0.55, 0.749, 0.75, 0.999, 1, 2]
+        .map(storyCanvasDetailLevel);
       check(
         'planner detail thresholds are stable',
-        JSON.stringify(detailBoundaries) === JSON.stringify(['compact', 'compact', 'full', 'full']),
+        JSON.stringify(detailBoundaries) === JSON.stringify(['overview', 'overview', 'compact', 'compact', 'condensed', 'condensed', 'full', 'full']),
         detailBoundaries,
-        ['compact', 'compact', 'full', 'full'],
+        ['overview', 'overview', 'compact', 'compact', 'condensed', 'condensed', 'full', 'full'],
       );
       viewport.dispatchEvent(new WheelEvent('wheel', {
         bubbles: true,
@@ -169,10 +198,10 @@
       }));
       await nextFrame();
       check(
-        'wheel zoom applies compact detail through the mounted controller',
-        canvas.dataset.dmtDetail === 'compact',
+        'wheel zoom applies overview detail through the mounted controller',
+        canvas.dataset.dmtDetail === 'overview',
         canvas.dataset.dmtDetail,
-        'compact',
+        'overview',
       );
 
       let previousEdgeHeight = null;
@@ -180,6 +209,8 @@
         canvas.dataset.dmtZoom = String(zoom);
         canvas.dataset.dmtDetail = 'full';
         canvas.style.setProperty('--dmt-canvas-zoom', String(zoom));
+        canvas.style.setProperty('--dmt-type-zoom', String(storyCanvasTypographyScale(zoom)));
+        canvas.style.setProperty('--dmt-edge-type-zoom', String(storyCanvasEdgeTypographyScale(zoom)));
         svg.setAttribute('width', String(900 * zoom));
         svg.setAttribute('height', String(500 * zoom));
         await nextFrame();
@@ -187,11 +218,12 @@
         const detailLevel = storyCanvasDetailLevel(zoom);
         canvas.dataset.dmtDetail = detailLevel;
         await nextFrame();
+        const typeScale = storyCanvasTypographyScale(zoom);
         const expected = {
-          kindFont: 12 * zoom,
+          kindFont: 12 * typeScale,
           nodeWidth: 240 * zoom,
-          summaryFont: 12 * zoom,
-          titleFont: 19.2 * zoom,
+          summaryFont: 12 * typeScale,
+          titleFont: 19.2 * typeScale,
         };
         const actual = {
           kindFont: pixelValue(kind, 'fontSize'),
@@ -202,19 +234,24 @@
         for (const property of Object.keys(expected)) {
           check(`planner ${property} at ${zoom}x`, closeTo(actual[property], expected[property]), actual[property], expected[property]);
         }
-        const expectedVisibility = detailLevel === 'full' ? 'visible' : 'hidden';
+        const expectedVisibility = {
+          summary: detailLevel === 'condensed' || detailLevel === 'full' ? 'visible' : 'hidden',
+          metadata: detailLevel === 'full' ? 'visible' : 'hidden',
+          'edge label': detailLevel === 'full' ? 'visible' : 'hidden',
+        };
         for (const [label, element] of [['summary', summary], ['metadata', meta], ['edge label', edgeLabel]]) {
           const visibility = getComputedStyle(element).visibility;
           check(
             `planner ${label} visibility at ${zoom}x`,
-            visibility === expectedVisibility,
+            visibility === expectedVisibility[label],
             visibility,
-            expectedVisibility,
+            expectedVisibility[label],
           );
         }
         for (const [label, element] of [['kind', kind], ['title', title]]) {
           const visibility = getComputedStyle(element).visibility;
-          check(`planner ${label} remains visible at ${zoom}x`, visibility === 'visible', visibility, 'visible');
+          const expectedValue = label === 'kind' && detailLevel === 'overview' ? 'hidden' : 'visible';
+          check(`planner ${label} semantic visibility at ${zoom}x`, visibility === expectedValue, visibility, expectedValue);
         }
         check(
           `planner semantic detail preserves geometry at ${zoom}x`,

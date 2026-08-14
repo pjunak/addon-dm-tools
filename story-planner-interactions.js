@@ -1,9 +1,10 @@
 import { flowLabelGeometry, orthogonalPath } from './story-planner-model.js';
 import {
-  FLOW_LABEL_LINE_HEIGHT,
   flowLabelFirstLineOffset,
   flowLabelLayoutKey,
+  flowLabelTextMetrics,
   layoutFlowLabelLines,
+  layoutStoryNodeText,
 } from './story-planner-labels.js';
 import {
   CANVAS_ZOOM_STEP,
@@ -11,6 +12,8 @@ import {
   MIN_CANVAS_ZOOM,
   clampCanvasZoom,
   storyCanvasDetailLevel,
+  storyCanvasEdgeTypographyScale,
+  storyCanvasTypographyScale,
 } from './story-planner-zoom.js';
 
 const GRID = 24;
@@ -134,7 +137,35 @@ function applyRectangle(element, rectangle) {
   element.style.height = `${pixels.height}px`;
 }
 
+function syncNodeTextLayouts(canvas, layoutText, zoom, { force = false } = {}) {
+  for (const element of canvas.querySelectorAll('[data-dmt-text-role][data-dmt-text]')) {
+    const layout = layoutStoryNodeText(
+      element.dataset.dmtText,
+      element.dataset.dmtTextRole,
+      zoom,
+      layoutText,
+    );
+    if (!force
+        && element.dataset.dmtLayoutKey === layout.key
+        && element.dataset.dmtLayoutMeasured === String(layout.measured)) continue;
+    if (layout.measured) {
+      const lines = layout.lines.map(line => {
+        const span = element.ownerDocument.createElement('span');
+        span.className = 'dmt-node-text-line';
+        span.textContent = line;
+        return span;
+      });
+      element.replaceChildren(...lines);
+    } else {
+      element.textContent = layout.lines[0] || '';
+    }
+    element.dataset.dmtLayoutKey = layout.key;
+    element.dataset.dmtLayoutMeasured = String(layout.measured);
+  }
+}
+
 function redraw(canvas, layoutText, { forceTextLayout = false } = {}) {
+  const zoom = canvasZoom(canvas);
   for (const edge of canvas.querySelectorAll('[data-dmt-edge]')) {
     const source = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.source)}"]`);
     const target = canvas.querySelector(`[data-dmt-node="${CSS.escape(edge.dataset.target)}"]`);
@@ -154,13 +185,15 @@ function redraw(canvas, layoutText, { forceTextLayout = false } = {}) {
         'transform',
         `translate(${geometry.x} ${geometry.y}) rotate(${geometry.angle})`,
       );
-      const layoutKey = flowLabelLayoutKey(label.dataset.dmtLabel, geometry.maxWidth);
+      const layoutKey = flowLabelLayoutKey(label.dataset.dmtLabel, geometry.maxWidth, zoom);
       if (forceTextLayout || layoutKey !== label.dataset.dmtLayoutKey) {
         const lines = layoutFlowLabelLines(
           label.dataset.dmtLabel,
           geometry.maxWidth,
           layoutText,
+          zoom,
         );
+        const metrics = flowLabelTextMetrics(zoom);
         const lineElements = lines.map((line, index) => {
           const span = label.ownerDocument.createElementNS(
             'http://www.w3.org/2000/svg',
@@ -168,7 +201,7 @@ function redraw(canvas, layoutText, { forceTextLayout = false } = {}) {
           );
           span.setAttribute('x', '0');
           span.setAttribute('dy', String(
-            index ? FLOW_LABEL_LINE_HEIGHT : flowLabelFirstLineOffset(lines.length),
+            index ? metrics.lineHeight : flowLabelFirstLineOffset(lines.length, zoom),
           ));
           span.textContent = line;
           return span;
@@ -328,6 +361,7 @@ export function mountStoryCanvas({
 
   if (typeof onTextLayoutInvalidated === 'function') {
     const unsubscribe = onTextLayoutInvalidated(() => {
+      syncNodeTextLayouts(canvas, layoutText, canvasZoom(canvas), { force: true });
       redraw(canvas, layoutText, { forceTextLayout: true });
     });
     if (typeof unsubscribe === 'function') removers.push(unsubscribe);
@@ -400,10 +434,13 @@ export function mountStoryCanvas({
     canvas.dataset.dmtZoom = String(next);
     canvas.dataset.dmtDetail = storyCanvasDetailLevel(next);
     canvas.style.setProperty('--dmt-canvas-zoom', String(next));
+    canvas.style.setProperty('--dmt-type-zoom', String(storyCanvasTypographyScale(next)));
+    canvas.style.setProperty('--dmt-edge-type-zoom', String(storyCanvasEdgeTypographyScale(next)));
     for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
       setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, next);
     }
     syncCanvasViewportSize(next);
+    syncNodeTextLayouts(canvas, layoutText, next);
     redraw(canvas, layoutText);
     updateHull();
     viewport.scrollLeft = scroll.left;
@@ -975,6 +1012,7 @@ export function mountStoryCanvas({
   }
   if (firstDialogControl) firstDialogControl.focus({ preventScroll: true });
   else if (items.size === 1 && !flows.size) nodeFor([...items][0])?.focus({ preventScroll: true });
+  syncNodeTextLayouts(canvas, layoutText, canvasZoom(canvas));
   redraw(canvas, layoutText);
   updateHull();
   return () => {
