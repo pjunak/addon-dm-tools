@@ -15,10 +15,15 @@ import {
   setShortcutModalOpen,
 } from '../story-planner-interactions.js';
 import {
+  snapToDevicePixel,
+  storyCanvasCardMetrics,
+  storyCanvasCssVariables,
+  storyCanvasRenderingMetrics,
+  storyCanvasTypography,
+} from '../story-planner-rendering.js';
+import {
   clampCanvasZoom,
   storyCanvasDetailLevel,
-  storyCanvasEdgeTypographyScale,
-  storyCanvasTypographyScale,
 } from '../story-planner-zoom.js';
 import {
   itemAncestors,
@@ -264,8 +269,8 @@ test('flow labels use the longest straight connector segment and exact host line
     compactOptions = options;
     return { lines: [{ text: 'Compact label' }] };
   }, 0.5);
-  assert.equal(compactOptions.font, '24px Inter, "Helvetica Neue", sans-serif');
-  assert.equal(compactOptions.lineHeight, 32);
+  assert.equal(compactOptions.font, '20px Inter, "Helvetica Neue", sans-serif');
+  assert.equal(compactOptions.lineHeight, 28);
 
   assert.deepEqual(
     layoutFlowLabel('Fallback label', source, horizontal, () => { throw new Error('old host'); }).lines,
@@ -386,7 +391,7 @@ test('fullscreen requests the physical display and exits through the document', 
   assert.equal(doc.fullscreenElement, null);
 });
 
-test('canvas zoom clamps its range and keeps the pointer anchored', () => {
+test('canvas zoom anchors the pointer and derives discrete rendering metrics', () => {
   assert.equal(clampCanvasZoom(0.2), 0.35);
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
@@ -396,19 +401,79 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   assert.equal(storyCanvasDetailLevel(0.45), 'compact');
   assert.equal(storyCanvasDetailLevel(0.599), 'compact');
   assert.equal(storyCanvasDetailLevel(0.6), 'condensed');
+  assert.equal(storyCanvasDetailLevel(0.6 - Number.EPSILON), 'condensed');
   assert.equal(storyCanvasDetailLevel(0.75), 'condensed');
   assert.equal(storyCanvasDetailLevel(0.999), 'condensed');
   assert.equal(storyCanvasDetailLevel(1), 'full');
-  assert.equal(storyCanvasTypographyScale(0.35), 0.75);
-  assert.equal(storyCanvasTypographyScale(0.499), 0.75);
-  assert.equal(storyCanvasTypographyScale(0.5), 1);
-  assert.equal(storyCanvasTypographyScale(1.24), 1);
-  assert.equal(storyCanvasTypographyScale(1.25), 1.25);
-  assert.equal(storyCanvasTypographyScale(1.99), 1.75);
-  assert.equal(storyCanvasTypographyScale(2), 2);
-  assert.equal(storyCanvasEdgeTypographyScale(0.35), 0.75 / 0.35);
-  assert.equal(storyCanvasEdgeTypographyScale(0.5), 2);
-  assert.equal(storyCanvasEdgeTypographyScale(2), 1);
+  assert.equal(storyCanvasTypography(0.35).id, 'minimum');
+  assert.equal(storyCanvasTypography(0.6).id, 'minimum');
+  assert.equal(storyCanvasTypography(0.6 + Number.EPSILON).id, 'minimum');
+  assert.equal(storyCanvasTypography(0.601).id, 'small');
+  assert.equal(storyCanvasTypography(0.8).id, 'small');
+  assert.equal(storyCanvasTypography(0.801).id, 'standard');
+  assert.equal(storyCanvasTypography(1).id, 'standard');
+  assert.equal(storyCanvasTypography(1.001).id, 'large');
+  assert.equal(storyCanvasTypography(1.25).id, 'large');
+  assert.equal(storyCanvasTypography(1.251).id, 'larger');
+  assert.equal(storyCanvasTypography(1.5).id, 'larger');
+  assert.equal(storyCanvasTypography(1.501).id, 'largest');
+  assert.equal(storyCanvasTypography(1.75).id, 'largest');
+  assert.equal(storyCanvasTypography(1.751).id, 'maximum');
+  assert.equal(storyCanvasTypography(2).id, 'maximum');
+  for (const zoom of [0.35, 0.6, 0.8, 1, 1.25, 1.5, 1.75, 2]) {
+    const typography = storyCanvasTypography(zoom);
+    for (const property of [
+      'titleFontSize',
+      'titleLineHeight',
+      'bodyFontSize',
+      'bodyLineHeight',
+      'edgeFontSize',
+      'edgeLineHeight',
+      'edgeStrokeWidth',
+    ]) assert.equal(Number.isInteger(typography[property]), true);
+  }
+  assert.equal(storyCanvasRenderingMetrics(0.5).edgeFontSize, 20);
+  assert.equal(storyCanvasRenderingMetrics(0.5).edgeLineHeight, 28);
+  assert.equal(storyCanvasRenderingMetrics(2).edgeFontSize, 12);
+  assert.equal(snapToDevicePixel(0.7), 1);
+  assert.equal(snapToDevicePixel(0.7, 2), 0.5);
+  assert.deepEqual(storyCanvasCardMetrics(0.35), {
+    width: 84,
+    minHeight: 41,
+    padding: 4,
+    borderWidth: 1,
+    contentWidth: 74,
+    titleMargin: 1,
+    headerGap: 3,
+    metaGap: 1,
+    metaMarginTop: 3,
+    badgePaddingBlock: 1,
+    badgePaddingInline: 3,
+    hairline: 1,
+    marginaliaSize: 10,
+  });
+  assert.equal(storyCanvasCardMetrics(0.35, 2).contentWidth, 75);
+  assert.deepEqual(storyCanvasCssVariables(0.6), {
+    '--dmt-canvas-zoom': '0.6',
+    '--dmt-title-font-size': '15px',
+    '--dmt-title-line-height': '18px',
+    '--dmt-body-font-size': '10px',
+    '--dmt-body-line-height': '14px',
+    '--dmt-edge-font-size': `${10 / 0.6}px`,
+    '--dmt-edge-stroke-width': `${5 / 0.6}px`,
+    '--dmt-node-width': '144px',
+    '--dmt-node-min-height': '70px',
+    '--dmt-node-padding': '7px',
+    '--dmt-node-border': '1px',
+    '--dmt-node-title-margin': '2px',
+    '--dmt-node-header-gap': '5px',
+    '--dmt-node-meta-gap': '2px',
+    '--dmt-node-meta-margin': '5px',
+    '--dmt-node-badge-padding-block': '1px',
+    '--dmt-node-badge-padding-inline': '4px',
+    '--dmt-node-hairline': '1px',
+    '--dmt-node-marginalia-size': '17px',
+  });
   assert.deepEqual(anchoredZoomScroll({
     oldZoom: 1,
     newZoom: 1.5,
@@ -441,30 +506,34 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
   });
 });
 
-test('planner node text keeps readable sizes and delegates fixed-band wrapping', () => {
-  const overviewMetrics = storyNodeTextMetrics('title', 0.35);
-  assert.ok(Math.abs(overviewMetrics.fontSize - 14.4) < 0.0001);
-  assert.ok(Math.abs(overviewMetrics.lineHeight - 16.56) < 0.0001);
+test('planner node text uses integer bands and delegates width-aware wrapping', () => {
+  const overviewMetrics = storyNodeTextMetrics('title', { zoom: 0.35 });
+  assert.equal(overviewMetrics.fontSize, 15);
+  assert.equal(overviewMetrics.lineHeight, 18);
   assert.equal(overviewMetrics.maxWidth, 74);
-  assert.equal(overviewMetrics.typeScale, 0.75);
-  assert.deepEqual(storyNodeTextMetrics('title', 0.5), {
+  assert.equal(overviewMetrics.typographyBand, 'minimum');
+  assert.deepEqual(storyNodeTextMetrics('title', { zoom: 0.5 }), {
     role: 'title',
-    fontSize: 19.2,
-    font: '19.2px Cinzel, Georgia, serif',
-    lineHeight: 22.08,
-    letterSpacing: 0.2304,
+    fontSize: 15,
+    font: '15px Cinzel, Georgia, serif',
+    lineHeight: 18,
+    letterSpacing: 0,
     maxLines: 2,
     maxWidth: 106,
-    typeScale: 1,
+    typographyBand: 'minimum',
   });
-  assert.equal(storyNodeTextMetrics('summary', 0.75).fontSize, 12);
-  assert.equal(storyNodeTextMetrics('title', 1.25).fontSize, 24);
+  assert.equal(storyNodeTextMetrics('summary', { zoom: 0.6 }).fontSize, 10);
+  assert.equal(storyNodeTextMetrics('summary', { zoom: 0.75 }).fontSize, 11);
+  assert.equal(storyNodeTextMetrics('title', { zoom: 1.25 }).fontSize, 24);
+  assert.equal(storyNodeTextMetrics('title', {
+    zoom: 0.35,
+    deviceScaleFactor: 2,
+  }).maxWidth, 75);
 
   const calls = [];
   const layout = layoutStoryNodeText(
     'Follow the silver road before dawn',
-    'title',
-    0.5,
+    { role: 'title', zoom: 0.5 },
     (text, options) => {
       calls.push({ text, options });
       if (text.endsWith('…')) {
@@ -483,11 +552,13 @@ test('planner node text keeps readable sizes and delegates fixed-band wrapping',
   assert.equal(layout.lines.length, 2);
   assert.match(layout.lines[1], /…$/);
   assert.equal(calls[0].options.maxWidth, 106);
-  assert.equal(calls[0].options.font, '19.2px Cinzel, Georgia, serif');
+  assert.equal(calls[0].options.font, '15px Cinzel, Georgia, serif');
 
-  const fallback = layoutStoryNodeText('Fallback wrapping', 'summary', 1, () => {
-    throw new Error('older host');
-  });
+  const fallback = layoutStoryNodeText(
+    'Fallback wrapping',
+    { role: 'summary', zoom: 1 },
+    () => { throw new Error('older host'); },
+  );
   assert.equal(fallback.measured, false);
   assert.deepEqual(fallback.lines, ['Fallback wrapping']);
 });
@@ -671,6 +742,10 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /class="dmt-story-edges"[^>]*viewBox="0 0 [^"]+"/);
   assert.match(rootHtml, /data-dmt-x="\d+" data-dmt-y="\d+"/);
   assert.doesNotMatch(rootHtml, /transform:scale\(/);
+  assert.match(rootHtml, /data-dmt-detail="full"[^>]*style="[^"]*--dmt-title-font-size:20px/);
+  assert.match(rootHtml, /data-dmt-detail="full"[^>]*style="[^"]*--dmt-body-font-size:12px/);
+  assert.match(rootHtml, /data-dmt-detail="full"[^>]*style="[^"]*--dmt-node-width:240px/);
+  assert.doesNotMatch(rootHtml, /--dmt-(?:type-zoom|edge-type-zoom)/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
   assert.match(rootHtml, /data-dmt-shortcuts-modal hidden inert aria-hidden="true"/);
   assert.match(rootHtml, /data-dmt-command="fullscreen"/);

@@ -41,7 +41,7 @@
   <main id="planner" class="addon-dm-tools dmt-planner-shell">
     <div class="dmt-story-viewport fixture-viewport">
       <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
-        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="--dmt-canvas-zoom:1;--dmt-type-zoom:1;--dmt-edge-type-zoom:1;width:900px;height:500px">
+        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="width:900px;height:500px">
           <svg class="dmt-story-edges" width="900" height="500" viewBox="0 0 900 500">
             <g class="dmt-story-edge-group" data-dmt-edge-group="edge-1">
               <path class="dmt-story-edge" data-dmt-edge="edge-1" data-source="node-a" data-target="node-b"></path>
@@ -69,13 +69,15 @@
   </main>
   <script type="module">
     import { mountStoryCanvas } from '../../story-planner-interactions.js';
-    import { FLOW_LABEL_FONT } from '../../story-planner-labels.js';
+    import { FLOW_LABEL_FONT_FAMILY } from '../../story-planner-labels.js';
     import { STORY_PLANNER_STYLES } from '../../story-planner-styles.js';
     import {
-      storyCanvasDetailLevel,
-      storyCanvasEdgeTypographyScale,
-      storyCanvasTypographyScale,
-    } from '../../story-planner-zoom.js';
+      snapToDevicePixel,
+      storyCanvasCardMetrics,
+      storyCanvasCssVariables,
+      storyCanvasRenderingMetrics,
+    } from '../../story-planner-rendering.js';
+    import { storyCanvasDetailLevel } from '../../story-planner-zoom.js';
 
     document.head.insertAdjacentHTML('beforeend', STORY_PLANNER_STYLES);
 
@@ -103,7 +105,7 @@
       const meta = node.querySelector('.dmt-node-meta');
       const kind = node.querySelector('.dmt-node-kind');
       const edgeLabel = root.querySelector('[data-dmt-edge-label="edge-1"]');
-      const measuredFontFamily = FLOW_LABEL_FONT.replace(/^\S+\s+/, '');
+      const measuredFontFamily = FLOW_LABEL_FONT_FAMILY;
       let generation = 0;
       let subscriber = null;
       let subscriptions = 0;
@@ -204,26 +206,55 @@
         'overview',
       );
 
-      let previousEdgeHeight = null;
-      for (const zoom of [0.35, 0.449, 0.45, 0.5, 0.599, 0.6, 0.75, 0.9, 1, 2]) {
+      for (const zoom of [
+        0.35,
+        0.449,
+        0.45,
+        0.599,
+        0.6,
+        0.601,
+        0.8,
+        0.801,
+        1,
+        1.001,
+        1.25,
+        1.251,
+        1.5,
+        1.501,
+        1.75,
+        1.751,
+        2,
+      ]) {
         canvas.dataset.dmtZoom = String(zoom);
         canvas.dataset.dmtDetail = 'full';
-        canvas.style.setProperty('--dmt-canvas-zoom', String(zoom));
-        canvas.style.setProperty('--dmt-type-zoom', String(storyCanvasTypographyScale(zoom)));
-        canvas.style.setProperty('--dmt-edge-type-zoom', String(storyCanvasEdgeTypographyScale(zoom)));
+        for (const [property, value] of Object.entries(
+          storyCanvasCssVariables(zoom, deviceScaleFactor),
+        )) canvas.style.setProperty(property, value);
+        for (const card of canvas.querySelectorAll('[data-dmt-node]')) {
+          card.style.left = `${snapToDevicePixel(
+            Number(card.dataset.dmtX) * zoom,
+            deviceScaleFactor,
+          )}px`;
+          card.style.top = `${snapToDevicePixel(
+            Number(card.dataset.dmtY) * zoom,
+            deviceScaleFactor,
+          )}px`;
+        }
         svg.setAttribute('width', String(900 * zoom));
         svg.setAttribute('height', String(500 * zoom));
+        subscriber?.({ reason: 'zoom', zoom });
         await nextFrame();
         const fullDetailHeight = node.getBoundingClientRect().height;
         const detailLevel = storyCanvasDetailLevel(zoom);
         canvas.dataset.dmtDetail = detailLevel;
         await nextFrame();
-        const typeScale = storyCanvasTypographyScale(zoom);
+        const rendering = storyCanvasRenderingMetrics(zoom, deviceScaleFactor);
+        const cardMetrics = storyCanvasCardMetrics(zoom, deviceScaleFactor);
         const expected = {
-          kindFont: 12 * typeScale,
-          nodeWidth: 240 * zoom,
-          summaryFont: 12 * typeScale,
-          titleFont: 19.2 * typeScale,
+          kindFont: rendering.typography.bodyFontSize,
+          nodeWidth: cardMetrics.width,
+          summaryFont: rendering.typography.bodyFontSize,
+          titleFont: rendering.typography.titleFontSize,
         };
         const actual = {
           kindFont: pixelValue(kind, 'fontSize'),
@@ -234,6 +265,35 @@
         for (const property of Object.keys(expected)) {
           check(`planner ${property} at ${zoom}x`, closeTo(actual[property], expected[property]), actual[property], expected[property]);
         }
+        check(
+          `planner fonts stay at integer CSS sizes at ${zoom}x`,
+          Number.isInteger(actual.kindFont)
+            && Number.isInteger(actual.summaryFont)
+            && Number.isInteger(actual.titleFont),
+          actual,
+          'integer font sizes',
+        );
+        const bounds = node.getBoundingClientRect();
+        for (const [property, value] of [
+          ['left', bounds.left],
+          ['top', bounds.top],
+          ['width', bounds.width],
+        ]) {
+          const physicalPixels = value * deviceScaleFactor;
+          check(
+            `planner node ${property} is device-pixel aligned at ${zoom}x`,
+            closeTo(physicalPixels, Math.round(physicalPixels), 0.001),
+            physicalPixels,
+            Math.round(physicalPixels),
+          );
+        }
+        const edgeGraphFont = pixelValue(edgeLabel, 'fontSize');
+        check(
+          `SVG label uses the band font size at ${zoom}x`,
+          closeTo(edgeGraphFont * zoom, rendering.typography.edgeFontSize),
+          edgeGraphFont * zoom,
+          rendering.typography.edgeFontSize,
+        );
         const expectedDisplay = {
           summary: detailLevel === 'condensed' || detailLevel === 'full' ? 'block' : 'none',
           metadata: detailLevel === 'full' ? 'flex' : 'none',
@@ -265,16 +325,6 @@
         for (const [label, element] of [['canvas', canvas], ['node', node]]) {
           const scales = transformScale(element);
           check(`${label} has no raster scale at ${zoom}x`, scales.every(scale => closeTo(scale, 1, 0.001)), scales, [1, 1]);
-        }
-        if (detailLevel === 'full') {
-          const currentEdgeHeight = edgeLabel.getBoundingClientRect().height;
-          check(
-            `SVG label raster size grows at ${zoom}x`,
-            previousEdgeHeight === null || currentEdgeHeight > previousEdgeHeight,
-            currentEdgeHeight,
-            previousEdgeHeight === null ? '> 0' : `> ${previousEdgeHeight}`,
-          );
-          previousEdgeHeight = currentEdgeHeight;
         }
       }
 

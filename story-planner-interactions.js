@@ -7,13 +7,15 @@ import {
   layoutStoryNodeText,
 } from './story-planner-labels.js';
 import {
+  snapToDevicePixel,
+  storyCanvasCssVariables,
+} from './story-planner-rendering.js';
+import {
   CANVAS_ZOOM_STEP,
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
   clampCanvasZoom,
   storyCanvasDetailLevel,
-  storyCanvasEdgeTypographyScale,
-  storyCanvasTypographyScale,
 } from './story-planner-zoom.js';
 
 const GRID = 24;
@@ -71,6 +73,21 @@ function canvasZoom(canvas) {
   return clampCanvasZoom(canvas?.dataset.dmtZoom);
 }
 
+function renderingScaleFactor(element) {
+  const factor = Number(element?.ownerDocument?.defaultView?.devicePixelRatio);
+  return Number.isFinite(factor) && factor > 0 ? factor : 1;
+}
+
+function applyCanvasCssVariables(canvas, zoom) {
+  const scaleFactor = renderingScaleFactor(canvas);
+  for (const [property, value] of Object.entries(
+    storyCanvasCssVariables(zoom, scaleFactor),
+  )) {
+    canvas.style.setProperty(property, value);
+  }
+  return scaleFactor;
+}
+
 export function canvasPixelRectangle(rectangle, zoom) {
   const scale = clampCanvasZoom(zoom);
   return {
@@ -104,10 +121,11 @@ function nodeGeometry(node) {
 function setNodePosition(node, x, y, zoom = canvasZoom(node?.closest?.('.dmt-story-canvas'))) {
   const logicalX = Math.max(0, Number(x) || 0);
   const logicalY = Math.max(0, Number(y) || 0);
+  const scaleFactor = renderingScaleFactor(node);
   node.dataset.dmtX = String(logicalX);
   node.dataset.dmtY = String(logicalY);
-  node.style.left = `${logicalX * zoom}px`;
-  node.style.top = `${logicalY * zoom}px`;
+  node.style.left = `${snapToDevicePixel(logicalX * zoom, scaleFactor)}px`;
+  node.style.top = `${snapToDevicePixel(logicalY * zoom, scaleFactor)}px`;
 }
 
 export function rectanglesIntersect(left, right) {
@@ -138,11 +156,15 @@ function applyRectangle(element, rectangle) {
 }
 
 function syncNodeTextLayouts(canvas, layoutText, zoom, { force = false } = {}) {
+  const deviceScaleFactor = renderingScaleFactor(canvas);
   for (const element of canvas.querySelectorAll('[data-dmt-text-role][data-dmt-text]')) {
     const layout = layoutStoryNodeText(
       element.dataset.dmtText,
-      element.dataset.dmtTextRole,
-      zoom,
+      {
+        role: element.dataset.dmtTextRole,
+        zoom,
+        deviceScaleFactor,
+      },
       layoutText,
     );
     if (!force
@@ -353,6 +375,7 @@ export function mountStoryCanvas({
   let canvasPan = null;
   let suppressPortClick = false;
   let draggedTool = null;
+  let activeScaleFactor = renderingScaleFactor(canvas);
 
   const listen = (target, event, handler, options) => {
     target.addEventListener(event, handler, options);
@@ -433,9 +456,7 @@ export function mountStoryCanvas({
     });
     canvas.dataset.dmtZoom = String(next);
     canvas.dataset.dmtDetail = storyCanvasDetailLevel(next);
-    canvas.style.setProperty('--dmt-canvas-zoom', String(next));
-    canvas.style.setProperty('--dmt-type-zoom', String(storyCanvasTypographyScale(next)));
-    canvas.style.setProperty('--dmt-edge-type-zoom', String(storyCanvasEdgeTypographyScale(next)));
+    activeScaleFactor = applyCanvasCssVariables(canvas, next);
     for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
       setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, next);
     }
@@ -989,7 +1010,12 @@ export function mountStoryCanvas({
 
   const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
     || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
-  syncCanvasViewportSize();
+  const initialZoom = canvasZoom(canvas);
+  activeScaleFactor = applyCanvasCssVariables(canvas, initialZoom);
+  for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
+    setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, initialZoom);
+  }
+  syncCanvasViewportSize(initialZoom);
   viewport.scrollLeft = panMargin;
   viewport.scrollTop = panMargin;
   if (ownerDocument) {
@@ -1003,16 +1029,29 @@ export function mountStoryCanvas({
     if (supportsNativeFullscreen && root.classList.contains('is-fullscreen')
       && !nativeFullscreenActive()) syncFullscreenState(false);
   }
+  const handleCanvasResize = () => {
+    const zoom = canvasZoom(canvas);
+    if (renderingScaleFactor(canvas) !== activeScaleFactor) {
+      activeScaleFactor = applyCanvasCssVariables(canvas, zoom);
+      for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
+        setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, zoom);
+      }
+      syncNodeTextLayouts(canvas, layoutText, zoom);
+      redraw(canvas, layoutText);
+      updateHull();
+    }
+    syncCanvasViewportSize(zoom);
+  };
   if (typeof ResizeObserver === 'function') {
-    const observer = new ResizeObserver(() => syncCanvasViewportSize());
+    const observer = new ResizeObserver(handleCanvasResize);
     observer.observe(viewport);
     removers.push(() => observer.disconnect());
   } else if (typeof window !== 'undefined') {
-    listen(window, 'resize', syncCanvasViewportSize);
+    listen(window, 'resize', handleCanvasResize);
   }
   if (firstDialogControl) firstDialogControl.focus({ preventScroll: true });
   else if (items.size === 1 && !flows.size) nodeFor([...items][0])?.focus({ preventScroll: true });
-  syncNodeTextLayouts(canvas, layoutText, canvasZoom(canvas));
+  syncNodeTextLayouts(canvas, layoutText, initialZoom);
   redraw(canvas, layoutText);
   updateHull();
   return () => {

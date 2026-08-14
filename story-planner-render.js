@@ -13,13 +13,16 @@ import {
   layoutFlowLabel,
   layoutStoryNodeText,
 } from './story-planner-labels.js';
+import {
+  snapToDevicePixel,
+  storyCanvasCssVariables,
+} from './story-planner-rendering.js';
 import { STORY_PLANNER_STYLES } from './story-planner-styles.js';
 import {
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
+  clampCanvasZoom,
   storyCanvasDetailLevel,
-  storyCanvasEdgeTypographyScale,
-  storyCanvasTypographyScale,
 } from './story-planner-zoom.js';
 
 const CANVAS_PAN_MARGIN = 480;
@@ -549,7 +552,7 @@ function breadcrumbs(host, data, scopeId, detailItem = null) {
   return host.h.breadcrumb(values);
 }
 
-function nodeHtml(node, selectedItemIds, host, zoom) {
+function nodeHtml(node, selectedItemIds, host, zoom, deviceScaleFactor) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const item = node.item;
@@ -567,8 +570,16 @@ function nodeHtml(node, selectedItemIds, host, zoom) {
     && !node.noteCount;
   const title = String(item.title || '');
   const summary = String(item.summary || item.objective || t('planner.item.noSummary'));
-  const titleLayout = layoutStoryNodeText(title, 'title', zoom, host.h.layoutText);
-  const summaryLayout = layoutStoryNodeText(summary, 'summary', zoom, host.h.layoutText);
+  const titleLayout = layoutStoryNodeText(
+    title,
+    { role: 'title', zoom, deviceScaleFactor },
+    host.h.layoutText,
+  );
+  const summaryLayout = layoutStoryNodeText(
+    summary,
+    { role: 'summary', zoom, deviceScaleFactor },
+    host.h.layoutText,
+  );
   const textLines = layout => layout.measured
     ? layout.lines.map(line => `<span class="dmt-node-text-line">${esc(line)}</span>`).join('')
     : esc(layout.lines[0] || '');
@@ -581,7 +592,7 @@ function nodeHtml(node, selectedItemIds, host, zoom) {
         title: item.title,
       }))}"
       data-dmt-x="${node.position.x}" data-dmt-y="${node.position.y}"
-      style="left:${node.position.x * zoom}px;top:${node.position.y * zoom}px">
+      style="left:${snapToDevicePixel(node.position.x * zoom, deviceScaleFactor)}px;top:${snapToDevicePixel(node.position.y * zoom, deviceScaleFactor)}px">
     <div class="dmt-node-header">
       <span class="dmt-node-kind">${esc(itemTypeLabel(item, t))}</span>
       ${node.noteCount ? `<span class="dmt-node-marginalia" title="${esc(t('planner.notes.count', { n: node.noteCount }))}" aria-label="${esc(t('planner.notes.count', { n: node.noteCount }))}">✎</span>` : ''}
@@ -601,14 +612,19 @@ function nodeHtml(node, selectedItemIds, host, zoom) {
 export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, host, zoom = 1) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
+  const deviceScaleFactor = Number(globalThis.devicePixelRatio) || 1;
+  const canvasZoom = clampCanvasZoom(zoom);
+  const cssVariables = Object.entries(storyCanvasCssVariables(canvasZoom, deviceScaleFactor))
+    .map(([property, value]) => `${property}:${value}`)
+    .join(';');
   const byId = new Map(projection.nodes.map(node => [node.item.id, node]));
   return `<div class="dmt-story-viewport">
     <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="${projection.width}" data-base-height="${projection.height}"
       data-pan-margin="${CANVAS_PAN_MARGIN}"
-      style="width:${projection.width * zoom + CANVAS_PAN_MARGIN * 2}px;height:${projection.height * zoom + CANVAS_PAN_MARGIN * 2}px">
-    <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" data-dmt-detail="${storyCanvasDetailLevel(zoom)}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
-      style="--dmt-canvas-zoom:${zoom};--dmt-type-zoom:${storyCanvasTypographyScale(zoom)};--dmt-edge-type-zoom:${storyCanvasEdgeTypographyScale(zoom)};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * zoom}px;height:${projection.height * zoom}px">
-      <svg class="dmt-story-edges" width="${projection.width * zoom}" height="${projection.height * zoom}" viewBox="0 0 ${projection.width} ${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
+      style="width:${projection.width * canvasZoom + CANVAS_PAN_MARGIN * 2}px;height:${projection.height * canvasZoom + CANVAS_PAN_MARGIN * 2}px">
+    <div class="dmt-story-canvas" data-dmt-zoom="${canvasZoom}" data-dmt-detail="${storyCanvasDetailLevel(canvasZoom)}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
+      style="${cssVariables};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * canvasZoom}px;height:${projection.height * canvasZoom}px">
+      <svg class="dmt-story-edges" width="${projection.width * canvasZoom}" height="${projection.height * canvasZoom}" viewBox="0 0 ${projection.width} ${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
@@ -621,19 +637,25 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
           const targetBox = { ...target.position, width: 240, height: 116 };
           const label = flow.label || t(`planner.flow.${flow.kind}`);
           const labelLayout = flow.label
-            ? layoutFlowLabel(flow.label, sourceBox, targetBox, host.h.layoutText, zoom)
+            ? layoutFlowLabel(flow.label, sourceBox, targetBox, host.h.layoutText, canvasZoom)
             : null;
           return `<g class="dmt-story-edge-group${selectedFlowIds.has(flow.id) ? ' is-selected' : ''}" data-dmt-edge-group="${esc(flow.id)}">
               <path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
               <path class="dmt-story-edge-hit" data-dmt-edge-hit="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" tabindex="0" role="button" aria-label="${esc(label)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
-               ${labelLayout ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" data-dmt-label="${esc(flow.label)}" data-dmt-layout-key="${esc(labelLayout.layoutKey)}" transform="translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${labelLayout.lines.map((line, index) => `<tspan x="0" dy="${index ? labelLayout.lineHeight : flowLabelFirstLineOffset(labelLayout.lines.length, zoom)}">${esc(line)}</tspan>`).join('')}</text>` : ''}
+               ${labelLayout ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" data-dmt-label="${esc(flow.label)}" data-dmt-layout-key="${esc(labelLayout.layoutKey)}" transform="translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${labelLayout.lines.map((line, index) => `<tspan x="0" dy="${index ? labelLayout.lineHeight : flowLabelFirstLineOffset(labelLayout.lines.length, canvasZoom)}">${esc(line)}</tspan>`).join('')}</text>` : ''}
             </g>`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>
       </svg>
       <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
       <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
-      ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host, zoom)).join('')}
+      ${projection.nodes.map(node => nodeHtml(
+        node,
+        selectedItemIds,
+        host,
+        canvasZoom,
+        deviceScaleFactor,
+      )).join('')}
     </div>
     </div>
   </div>

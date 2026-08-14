@@ -86,10 +86,15 @@ reference when the precise relationship matters but is not story flow.
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
   the current planner session; it is intentionally not campaign content. Card
-  geometry follows every zoom change. Typography uses a native 75% overview
-  band below 50%, its 100% size from 50% through 124%, and 25% growth steps
-  above that. The text-bearing canvas is never compositor-scaled, so browsers
-  rasterize every band at its real font size.
+  geometry follows every zoom change. Typography uses explicit integer-pixel
+  bands at 35–60%, above 60–80%, above 80–100%, above 100–125%, above
+  125–150%, above 150–175%, and above 175–200%. The first band is the minimum:
+  zooming below 60% changes card geometry and line breaks without shrinking the
+  title below 15 px or body text below 10 px. The text-bearing canvas is never
+  compositor-scaled, so browsers rasterize every band at its real font size.
+  Rendered card origins, width, padding, borders, and text-adjacent spacing snap
+  to the current display's physical-pixel grid; stored graph coordinates remain
+  continuous so this rendering concern cannot affect routing or drag storage.
 - Semantic detail changes independently from typography. Below 100% the
   condensed level hides metadata, marginalia, and flow-label text; below 60%
   compact also hides summaries; below 45% overview hides kind labels and keeps
@@ -155,14 +160,19 @@ Pretext. The planner owns the role-specific font descriptors, available width,
 line caps, ellipsis policy, and semantic levels; the host owns Unicode-aware
 measurement and caching. Returned line strings are rendered verbatim, and an
 older host falls back to native browser wrapping instead of blocking the
-planner. Flow labels still choose the longest usable straight connector
-segment and rotate with a vertical segment. Their graph-space font descriptor
+planner. `story-planner-rendering.js` is the single owner of typography bands,
+snapped card metrics, and their CSS-variable projection; label, render, and
+interaction modules only consume that contract. Flow labels still choose the
+longest usable straight connector segment and rotate with a vertical segment.
+Their graph-space font descriptor
 counterbalances SVG viewport scaling so the visible font follows the same
-stepped typography policy. Widths are bucketed to half-pixels and DOM children
-change only when the materialized lines change. The mounted canvas borrows the
-host's optional invalidation subscription and releases it with its other
-route-owned listeners, so late font loading or a locale change refreshes card
-and flow breaks without giving the addon ownership of the text engine.
+integer typography bands. Card widths are measured from the same device-pixel-
+snapped geometry exposed to CSS, and flow widths retain a stable half-pixel
+bucket. DOM children change only when the materialized lines change. The
+mounted canvas borrows the host's optional invalidation subscription and
+releases it with its other route-owned listeners, so a zoom-band change, late
+font loading, or locale change refreshes card and flow breaks without giving
+the addon ownership of the text engine.
 
 ## Lifecycle and accessibility
 

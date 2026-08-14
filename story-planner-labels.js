@@ -1,34 +1,27 @@
 import { flowLabelGeometry } from './story-planner-model.js';
 import {
-  clampCanvasZoom,
-  storyCanvasEdgeTypographyScale,
-  storyCanvasTypographyScale,
-} from './story-planner-zoom.js';
+  storyCanvasCardMetrics,
+  storyCanvasRenderingMetrics,
+  storyCanvasTypography,
+} from './story-planner-rendering.js';
+import { clampCanvasZoom } from './story-planner-zoom.js';
 
 // Flow geometry uses zoom-1 coordinates, so this descriptor mirrors the host's
 // --font-ui stack rather than reading scaled computed styles during a drag.
-export const FLOW_LABEL_FONT = '12px Inter, "Helvetica Neue", sans-serif';
-export const FLOW_LABEL_LINE_HEIGHT = 16;
+export const FLOW_LABEL_FONT_FAMILY = 'Inter, "Helvetica Neue", sans-serif';
 const FLOW_LABEL_WIDTH_STEP = 0.5;
-const STORY_NODE_WIDTH = 240;
-const STORY_NODE_PADDING = 12;
-const STORY_NODE_BORDER = 2;
-const STORY_NODE_CONTENT_WIDTH = STORY_NODE_WIDTH - (STORY_NODE_PADDING + STORY_NODE_BORDER) * 2;
-const STORY_NODE_WIDTH_STEP = 0.5;
 
 const STORY_NODE_TEXT = Object.freeze({
   title: Object.freeze({
-    baseFontSize: 19.2,
     family: 'Cinzel, Georgia, serif',
-    letterSpacingEm: 0.012,
-    lineHeightRatio: 1.15,
+    fontSizeProperty: 'titleFontSize',
+    lineHeightProperty: 'titleLineHeight',
     maxLines: 2,
   }),
   summary: Object.freeze({
-    baseFontSize: 12,
     family: 'Lora, Georgia, serif',
-    letterSpacingEm: 0,
-    lineHeightRatio: 1.4,
+    fontSizeProperty: 'bodyFontSize',
+    lineHeightProperty: 'bodyLineHeight',
     maxLines: 2,
   }),
 });
@@ -77,32 +70,41 @@ function ellipsizedLine(text, metrics, layoutText) {
   return `${characters.slice(0, low).join('').trimEnd()}${suffix}`;
 }
 
-export function storyNodeTextMetrics(role, zoom = 1) {
+export function storyNodeTextMetrics(
+  role,
+  { zoom = 1, deviceScaleFactor = 1 } = {},
+) {
   const descriptor = STORY_NODE_TEXT[role];
   if (!descriptor) throw new TypeError(`Unknown story node text role: ${role}`);
   const canvasZoom = clampCanvasZoom(zoom);
-  const typeScale = storyCanvasTypographyScale(canvasZoom);
-  const fontSize = descriptor.baseFontSize * typeScale;
+  const typography = storyCanvasTypography(canvasZoom);
+  const card = storyCanvasCardMetrics(canvasZoom, deviceScaleFactor);
+  const fontSize = typography[descriptor.fontSizeProperty];
   return Object.freeze({
     role,
     fontSize,
     font: `${fontSize}px ${descriptor.family}`,
-    lineHeight: fontSize * descriptor.lineHeightRatio,
-    letterSpacing: fontSize * descriptor.letterSpacingEm,
+    lineHeight: typography[descriptor.lineHeightProperty],
+    letterSpacing: 0,
     maxLines: descriptor.maxLines,
-    maxWidth: widthBucket(STORY_NODE_CONTENT_WIDTH * canvasZoom, STORY_NODE_WIDTH_STEP),
-    typeScale,
+    maxWidth: card.contentWidth,
+    typographyBand: typography.id,
   });
 }
 
-export function layoutStoryNodeText(text, role, zoom, layoutText) {
+export function layoutStoryNodeText(
+  text,
+  { role, zoom = 1, deviceScaleFactor = 1 } = {},
+  layoutText,
+) {
   const value = String(text ?? '');
-  const metrics = storyNodeTextMetrics(role, zoom);
+  const metrics = storyNodeTextMetrics(role, { zoom, deviceScaleFactor });
   const key = JSON.stringify([
     value,
     role,
     metrics.maxWidth,
     metrics.fontSize,
+    metrics.lineHeight,
     metrics.letterSpacing,
     metrics.maxLines,
   ]);
@@ -122,12 +124,13 @@ export function flowLabelLayoutWidth(maxWidth) {
 
 export function flowLabelTextMetrics(zoom = 1) {
   const canvasZoom = clampCanvasZoom(zoom);
-  const graphScale = storyCanvasEdgeTypographyScale(canvasZoom);
-  const fontSize = 12 * graphScale;
+  const rendering = storyCanvasRenderingMetrics(canvasZoom);
   return Object.freeze({
-    font: `${fontSize}px Inter, "Helvetica Neue", sans-serif`,
-    fontSize,
-    lineHeight: FLOW_LABEL_LINE_HEIGHT * graphScale,
+    font: `${rendering.edgeFontSize}px ${FLOW_LABEL_FONT_FAMILY}`,
+    fontSize: rendering.edgeFontSize,
+    lineHeight: rendering.edgeLineHeight,
+    visibleFontSize: rendering.typography.edgeFontSize,
+    visibleLineHeight: rendering.typography.edgeLineHeight,
   });
 }
 
