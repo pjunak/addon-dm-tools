@@ -13,6 +13,7 @@ import {
 import {
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
+  NATIVE_CANVAS_ZOOM,
   clampCanvasZoom,
   normalizeCanvasZoom,
   stepCanvasZoom,
@@ -22,7 +23,6 @@ import {
 const GRID = 24;
 const DRAG_THRESHOLD = 4;
 const WHEEL_ZOOM_DELTA_PER_STEP = 100;
-const WHEEL_LINE_UNITS_PER_STEP = 3;
 
 export function anchoredZoomScroll({
   oldZoom,
@@ -77,11 +77,12 @@ function canvasZoom(canvas) {
 }
 
 function normalizedWheelDelta(event) {
-  if (event.deltaMode === 1) {
-    return event.deltaY * (WHEEL_ZOOM_DELTA_PER_STEP / WHEEL_LINE_UNITS_PER_STEP);
-  }
-  if (event.deltaMode === 2) return event.deltaY * WHEEL_ZOOM_DELTA_PER_STEP;
-  return event.deltaY;
+  if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return 0;
+  if (event.deltaMode !== 0) return Math.sign(event.deltaY) * WHEEL_ZOOM_DELTA_PER_STEP;
+  return Math.sign(event.deltaY) * Math.min(
+    Math.abs(event.deltaY),
+    WHEEL_ZOOM_DELTA_PER_STEP,
+  );
 }
 
 function renderingScaleFactor(element) {
@@ -635,7 +636,7 @@ export function mountStoryCanvas({
       }
       if (command === 'zoom-reset') {
         accumulatedWheelDelta = 0;
-        applyZoom(1);
+        applyZoom(NATIVE_CANVAS_ZOOM);
       }
       if (command === 'fullscreen') {
         const open = !root.classList.contains('is-fullscreen');

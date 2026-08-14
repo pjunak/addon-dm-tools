@@ -1,3 +1,5 @@
+export const NATIVE_CANVAS_ZOOM = 1;
+
 export const CANVAS_ZOOM_LEVELS = Object.freeze([
   0.35,
   0.45,
@@ -6,7 +8,7 @@ export const CANVAS_ZOOM_LEVELS = Object.freeze([
   0.7,
   0.8,
   0.9,
-  1,
+  NATIVE_CANVAS_ZOOM,
   1.1,
   1.25,
   1.5,
@@ -22,7 +24,7 @@ export const CANVAS_ZOOM_EPSILON = 1e-9;
 
 export function clampCanvasZoom(value) {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 1;
+  if (!Number.isFinite(numeric)) return NATIVE_CANVAS_ZOOM;
   return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, numeric));
 }
 
@@ -36,12 +38,17 @@ export function normalizeCanvasZoom(value) {
 export function stepCanvasZoom(value, direction, stepCount = 1) {
   const current = normalizeCanvasZoom(value);
   const currentIndex = CANVAS_ZOOM_LEVELS.indexOf(current);
+  const nativeIndex = CANVAS_ZOOM_LEVELS.indexOf(NATIVE_CANVAS_ZOOM);
   const count = Math.max(0, Math.floor(Math.abs(Number(stepCount) || 0)));
   const offset = Math.sign(Number(direction) || 0) * count;
-  const nextIndex = Math.min(
+  let nextIndex = Math.min(
     CANVAS_ZOOM_LEVELS.length - 1,
     Math.max(0, currentIndex + offset),
   );
+  if (
+    (currentIndex < nativeIndex && nextIndex > nativeIndex)
+    || (currentIndex > nativeIndex && nextIndex < nativeIndex)
+  ) nextIndex = nativeIndex;
   return CANVAS_ZOOM_LEVELS[nextIndex];
 }
 

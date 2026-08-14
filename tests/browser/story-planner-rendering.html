@@ -102,6 +102,14 @@
       const check = (name, pass, actual, expected) => checks.push({ name, pass, actual, expected });
       const root = document.querySelector('#planner');
       const viewport = root.querySelector('.dmt-story-viewport');
+      const dispatchWheel = (deltaY, deltaMode = 0) => viewport.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 250,
+        deltaMode,
+        deltaY,
+      }));
       const canvas = root.querySelector('.dmt-story-canvas');
       const svg = root.querySelector('.dmt-story-edges');
       const node = root.querySelector('[data-dmt-node="node-a"]');
@@ -206,36 +214,69 @@
         detailBoundaries,
         ['overview', 'overview', 'compact', 'compact', 'condensed', 'condensed', 'full', 'full'],
       );
-      viewport.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 400,
-        clientY: 250,
-        deltaY: 800,
-      }));
+      dispatchWheel(800);
       await nextFrame();
       check(
-        'wheel zoom applies overview detail through the mounted controller',
-        canvas.dataset.dmtDetail === 'overview',
-        canvas.dataset.dmtDetail,
-        'overview',
-      );
-      check(
-        'wheel zoom stops on the exact 35% ladder minimum',
-        canvas.dataset.dmtZoom === '0.35',
+        'large pixel wheel delta is limited to one zoom step',
+        canvas.dataset.dmtZoom === '0.9',
         canvas.dataset.dmtZoom,
-        '0.35',
+        '0.9',
       );
-      viewport.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 400,
-        clientY: 250,
-        deltaY: -700,
-      }));
+      dispatchWheel(-700);
       await nextFrame();
       check(
-        'reversing through the wheel ladder returns exactly to 100%',
+        'large reverse wheel delta stops at exactly 100%',
+        canvas.dataset.dmtZoom === '1' && canvas.dataset.dmtDetail === 'full',
+        { zoom: canvas.dataset.dmtZoom, detail: canvas.dataset.dmtDetail },
+        { zoom: '1', detail: 'full' },
+      );
+      dispatchWheel(6, 1);
+      await nextFrame();
+      check(
+        'mouse line-count settings still produce one fixed step',
+        canvas.dataset.dmtZoom === '0.9',
+        canvas.dataset.dmtZoom,
+        '0.9',
+      );
+      dispatchWheel(-6, 1);
+      await nextFrame();
+      check(
+        'reversed line wheel input returns exactly to 100%',
+        canvas.dataset.dmtZoom === '1',
+        canvas.dataset.dmtZoom,
+        '1',
+      );
+      dispatchWheel(40);
+      dispatchWheel(40);
+      await nextFrame();
+      check(
+        'small trackpad deltas accumulate without stepping early',
+        canvas.dataset.dmtZoom === '1',
+        canvas.dataset.dmtZoom,
+        '1',
+      );
+      dispatchWheel(40);
+      await nextFrame();
+      check(
+        'accumulated trackpad deltas eventually take one step',
+        canvas.dataset.dmtZoom === '0.9',
+        canvas.dataset.dmtZoom,
+        '0.9',
+      );
+      dispatchWheel(-100);
+      await nextFrame();
+      for (let index = 0; index < 7; index += 1) dispatchWheel(800);
+      await nextFrame();
+      check(
+        'repeated wheel events reach the exact 35% ladder minimum',
+        canvas.dataset.dmtZoom === '0.35' && canvas.dataset.dmtDetail === 'overview',
+        { zoom: canvas.dataset.dmtZoom, detail: canvas.dataset.dmtDetail },
+        { zoom: '0.35', detail: 'overview' },
+      );
+      for (let index = 0; index < 7; index += 1) dispatchWheel(-800);
+      await nextFrame();
+      check(
+        'repeated reverse wheel events return exactly to 100%',
         canvas.dataset.dmtZoom === '1' && canvas.dataset.dmtDetail === 'full',
         { zoom: canvas.dataset.dmtZoom, detail: canvas.dataset.dmtDetail },
         { zoom: '1', detail: 'full' },
@@ -264,37 +305,6 @@
         },
         { zoom: '1', label: '100%' },
       );
-      viewport.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 400,
-        clientY: 250,
-        deltaMode: 1,
-        deltaY: 3,
-      }));
-      await nextFrame();
-      check(
-        'Firefox-style line wheel input takes one fixed step',
-        canvas.dataset.dmtZoom === '0.9',
-        canvas.dataset.dmtZoom,
-        '0.9',
-      );
-      viewport.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: 400,
-        clientY: 250,
-        deltaMode: 1,
-        deltaY: -3,
-      }));
-      await nextFrame();
-      check(
-        'reversed line wheel input returns exactly to 100%',
-        canvas.dataset.dmtZoom === '1',
-        canvas.dataset.dmtZoom,
-        '1',
-      );
-
       for (const zoom of [
         0.35,
         0.449,

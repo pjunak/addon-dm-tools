@@ -23,6 +23,7 @@ import {
 } from '../story-planner-rendering.js';
 import {
   CANVAS_ZOOM_LEVELS,
+  NATIVE_CANVAS_ZOOM,
   clampCanvasZoom,
   normalizeCanvasZoom,
   stepCanvasZoom,
@@ -411,6 +412,7 @@ test('canvas zoom anchors the pointer and derives discrete rendering metrics', (
     2,
   ]);
   assert.equal(Object.isFrozen(CANVAS_ZOOM_LEVELS), true);
+  assert.equal(NATIVE_CANVAS_ZOOM, 1);
   assert.equal(clampCanvasZoom(0.2), 0.35);
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
@@ -427,6 +429,9 @@ test('canvas zoom anchors the pointer and derives discrete rendering metrics', (
   assert.equal(stepCanvasZoom(1, 1), 1.1);
   assert.equal(stepCanvasZoom(1, -1, 8), 0.35);
   assert.equal(stepCanvasZoom(1, 1, 5), 2);
+  assert.equal(stepCanvasZoom(0.9, 1, 2), 1);
+  assert.equal(stepCanvasZoom(1.1, -1, 2), 1);
+  assert.equal(stepCanvasZoom(1, 1, 2), 1.25);
   assert.equal(storyCanvasDetailLevel(0.35), 'overview');
   assert.equal(storyCanvasDetailLevel(0.449), 'overview');
   assert.equal(storyCanvasDetailLevel(0.45), 'compact');

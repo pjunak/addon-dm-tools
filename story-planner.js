@@ -23,7 +23,10 @@ import {
   renderDetailPage,
   renderSelectionToolbar,
 } from './story-planner-render.js';
-import { normalizeCanvasZoom } from './story-planner-zoom.js';
+import {
+  NATIVE_CANVAS_ZOOM,
+  normalizeCanvasZoom,
+} from './story-planner-zoom.js';
 
 const COLLECTIONS = Object.freeze({
   items: 'planning_items',
@@ -131,7 +134,7 @@ export function createStoryPlanner(host, options = {}) {
   }
 
   function currentZoom() {
-    return normalizeCanvasZoom(viewportZoom.get(viewId()) ?? 1);
+    return normalizeCanvasZoom(viewportZoom.get(viewId()) ?? NATIVE_CANVAS_ZOOM);
   }
 
   function exitPlannerFullscreen() {
