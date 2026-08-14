@@ -64,6 +64,16 @@ function canvasZoom(canvas) {
   return clampCanvasZoom(canvas?.dataset.dmtZoom);
 }
 
+export function canvasPixelRectangle(rectangle, zoom) {
+  const scale = clampCanvasZoom(zoom);
+  return {
+    x: Number(rectangle?.x || 0) * scale,
+    y: Number(rectangle?.y || 0) * scale,
+    width: Number(rectangle?.width || 0) * scale,
+    height: Number(rectangle?.height || 0) * scale,
+  };
+}
+
 function pointInCanvas(event, canvas) {
   const bounds = canvas.getBoundingClientRect();
   const zoom = canvasZoom(canvas);
@@ -74,12 +84,23 @@ function pointInCanvas(event, canvas) {
 }
 
 function nodeGeometry(node) {
+  const zoom = canvasZoom(node?.closest?.('.dmt-story-canvas'));
+  const bounds = node.getBoundingClientRect();
   return {
-    x: Number.parseFloat(node.style.left) || 0,
-    y: Number.parseFloat(node.style.top) || 0,
-    width: node.offsetWidth,
-    height: node.offsetHeight,
+    x: Number(node.dataset.dmtX) || 0,
+    y: Number(node.dataset.dmtY) || 0,
+    width: bounds.width / zoom,
+    height: bounds.height / zoom,
   };
+}
+
+function setNodePosition(node, x, y, zoom = canvasZoom(node?.closest?.('.dmt-story-canvas'))) {
+  const logicalX = Math.max(0, Number(x) || 0);
+  const logicalY = Math.max(0, Number(y) || 0);
+  node.dataset.dmtX = String(logicalX);
+  node.dataset.dmtY = String(logicalY);
+  node.style.left = `${logicalX * zoom}px`;
+  node.style.top = `${logicalY * zoom}px`;
 }
 
 export function rectanglesIntersect(left, right) {
@@ -99,10 +120,14 @@ function selectionRectangle(start, current) {
 }
 
 function applyRectangle(element, rectangle) {
-  element.style.left = `${rectangle.x}px`;
-  element.style.top = `${rectangle.y}px`;
-  element.style.width = `${rectangle.width}px`;
-  element.style.height = `${rectangle.height}px`;
+  const pixels = canvasPixelRectangle(
+    rectangle,
+    canvasZoom(element?.closest?.('.dmt-story-canvas')),
+  );
+  element.style.left = `${pixels.x}px`;
+  element.style.top = `${pixels.y}px`;
+  element.style.width = `${pixels.width}px`;
+  element.style.height = `${pixels.height}px`;
 }
 
 function redraw(canvas) {
@@ -295,10 +320,17 @@ export function mountStoryCanvas({
   }
 
   function syncCanvasViewportSize(zoom = canvasZoom(canvas)) {
-    const minimumWidth = Math.max(0, viewport.clientWidth / zoom);
-    const minimumHeight = Math.max(0, viewport.clientHeight / zoom);
+    const baseWidth = Math.max(0, Number(surface?.dataset.baseWidth) || 0);
+    const baseHeight = Math.max(0, Number(surface?.dataset.baseHeight) || 0);
+    const minimumWidth = Math.max(0, viewport.clientWidth);
+    const minimumHeight = Math.max(0, viewport.clientHeight);
+    canvas.style.width = `${baseWidth * zoom}px`;
+    canvas.style.height = `${baseHeight * zoom}px`;
     canvas.style.minWidth = `${minimumWidth}px`;
     canvas.style.minHeight = `${minimumHeight}px`;
+    const edges = canvas.querySelector('.dmt-story-edges');
+    edges?.setAttribute('width', String(baseWidth * zoom));
+    edges?.setAttribute('height', String(baseHeight * zoom));
     if (!surface) return;
     const size = canvasSurfaceSize({
       baseWidth: surface.dataset.baseWidth,
@@ -331,8 +363,12 @@ export function mountStoryCanvas({
     });
     canvas.dataset.dmtZoom = String(next);
     canvas.style.setProperty('--dmt-canvas-zoom', String(next));
-    canvas.style.transform = `scale(${next})`;
+    for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
+      setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, next);
+    }
     syncCanvasViewportSize(next);
+    redraw(canvas);
+    updateHull();
     viewport.scrollLeft = scroll.left;
     viewport.scrollTop = scroll.top;
     root.querySelectorAll('[data-dmt-zoom-label]').forEach(label => {
@@ -455,8 +491,7 @@ export function mountStoryCanvas({
       const geometry = nodeGeometry(node);
       const x = Math.max(0, geometry.x + snapDx);
       const y = Math.max(0, geometry.y + snapDy);
-      node.style.left = `${x}px`;
-      node.style.top = `${y}px`;
+      setNodePosition(node, x, y);
       updates[id] = { x, y };
     }
     redraw(canvas);
@@ -650,8 +685,7 @@ export function mountStoryCanvas({
         const node = nodeFor(id);
         const start = nodeDrag.positions.get(id);
         if (!node || !start) continue;
-        node.style.left = `${Math.max(0, start.x + dx)}px`;
-        node.style.top = `${Math.max(0, start.y + dy)}px`;
+        setNodePosition(node, start.x + dx, start.y + dy);
       }
       redraw(canvas);
       updateHull();
@@ -870,8 +904,7 @@ export function mountStoryCanvas({
       const geometry = nodeGeometry(node);
       const x = geometry.x + moveX;
       const y = geometry.y + moveY;
-      node.style.left = `${x}px`;
-      node.style.top = `${y}px`;
+      setNodePosition(node, x, y);
       updates[id] = { x, y };
     }
     redraw(canvas);

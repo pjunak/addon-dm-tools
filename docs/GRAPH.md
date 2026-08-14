@@ -85,7 +85,10 @@ reference when the precise relationship matters but is not story flow.
 - The stage controls zoom from 50% to 200% and reset to 100%. The scroll wheel
   applies the same zoom while the pointer is inside the canvas and keeps the
   story position under the pointer stationary. Each scope keeps its zoom for
-  the current planner session; it is intentionally not campaign content.
+  the current planner session; it is intentionally not campaign content. Card
+  dimensions, spacing, and font sizes are recalculated at the requested zoom;
+  the text-bearing canvas is never compositor-scaled, so browsers rasterize
+  text at its actual displayed size.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while

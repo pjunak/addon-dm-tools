@@ -537,7 +537,7 @@ function breadcrumbs(host, data, scopeId, detailItem = null) {
   return host.h.breadcrumb(values);
 }
 
-function nodeHtml(node, selectedItemIds, host) {
+function nodeHtml(node, selectedItemIds, host, zoom) {
   const { esc } = host.h;
   const t = key => host.i18n.t(key);
   const item = node.item;
@@ -561,7 +561,8 @@ function nodeHtml(node, selectedItemIds, host) {
         kind: itemTypeLabel(item, t),
         title: item.title,
       }))}"
-      style="left:${node.position.x}px;top:${node.position.y}px">
+      data-dmt-x="${node.position.x}" data-dmt-y="${node.position.y}"
+      style="left:${node.position.x * zoom}px;top:${node.position.y * zoom}px">
     <div class="dmt-node-header">
       <span class="dmt-node-kind">${esc(itemTypeLabel(item, t))}</span>
       ${node.noteCount ? `<span class="dmt-node-marginalia" title="${esc(t('planner.notes.count', { n: node.noteCount }))}" aria-label="${esc(t('planner.notes.count', { n: node.noteCount }))}">✎</span>` : ''}
@@ -587,8 +588,8 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
       data-pan-margin="${CANVAS_PAN_MARGIN}"
       style="width:${projection.width * zoom + CANVAS_PAN_MARGIN * 2}px;height:${projection.height * zoom + CANVAS_PAN_MARGIN * 2}px">
     <div class="dmt-story-canvas" data-dmt-zoom="${zoom}" tabindex="0" aria-label="${esc(t('planner.canvas.label'))}"
-      style="--dmt-canvas-zoom:${zoom};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width}px;height:${projection.height}px;transform:scale(${zoom})">
-      <svg class="dmt-story-edges" width="${projection.width}" height="${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
+      style="--dmt-canvas-zoom:${zoom};left:${CANVAS_PAN_MARGIN}px;top:${CANVAS_PAN_MARGIN}px;width:${projection.width * zoom}px;height:${projection.height * zoom}px">
+      <svg class="dmt-story-edges" width="${projection.width * zoom}" height="${projection.height * zoom}" viewBox="0 0 ${projection.width} ${projection.height}" role="group" aria-label="${esc(t('planner.flow.title'))}">
         <defs>
           <marker id="dmt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
@@ -613,7 +614,7 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
       </svg>
       <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
       <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
-      ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host)).join('')}
+      ${projection.nodes.map(node => nodeHtml(node, selectedItemIds, host, zoom)).join('')}
     </div>
     </div>
   </div>

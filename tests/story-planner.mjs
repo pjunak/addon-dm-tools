@@ -6,6 +6,7 @@ import { createStoryPlanner } from '../story-planner.js';
 import { STORY_PLANNER_STYLES } from '../story-planner-styles.js';
 import {
   anchoredZoomScroll,
+  canvasPixelRectangle,
   canvasSurfaceSize,
   clampCanvasZoom,
   pannedCanvasScroll,
@@ -356,6 +357,12 @@ test('canvas zoom clamps its range and keeps the pointer anchored', () => {
     left: 505,
     top: 505,
   });
+  assert.deepEqual(canvasPixelRectangle({ x: 72, y: 48, width: 240, height: 116 }, 0.5), {
+    x: 36,
+    y: 24,
+    width: 120,
+    height: 58,
+  });
 });
 
 test('canvas working margin keeps a viewport-sized canvas pannable in every direction', () => {
@@ -534,6 +541,9 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /class="dmt-builder-bottom-controls"/);
   assert.match(rootHtml, /class="dmt-atlas-dock"/);
   assert.match(rootHtml, /class="dmt-story-edges"[^>]*role="group"/);
+  assert.match(rootHtml, /class="dmt-story-edges"[^>]*viewBox="0 0 [^"]+"/);
+  assert.match(rootHtml, /data-dmt-x="\d+" data-dmt-y="\d+"/);
+  assert.doesNotMatch(rootHtml, /transform:scale\(/);
   assert.equal((rootHtml.match(/data-dmt-create-kind=/g) || []).length, 8);
   assert.match(rootHtml, /data-dmt-shortcuts-modal hidden inert aria-hidden="true"/);
   assert.match(rootHtml, /data-dmt-command="fullscreen"/);
