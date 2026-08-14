@@ -102,7 +102,11 @@ From this repository:
 
 ```powershell
 node --test tests/*.mjs
+node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html
 ```
+
+The browser rendering check uses the sibling host's pinned Playwright runner;
+install the host dependencies and Chromium before running it.
 
 From the sibling host repository:
 

@@ -24,5 +24,16 @@ jobs:
         with:
           node-version: 26
 
+      - run: npm ci
+        working-directory: ttrpg-codex
+
       - run: node --test tests/*.mjs
+        working-directory: addon-dm-tools
+
+      - name: Install Chromium for rendering contracts
+        run: npx playwright install --with-deps chromium
+        working-directory: ttrpg-codex
+
+      - name: Check planner rendering contract
+        run: node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html
         working-directory: addon-dm-tools

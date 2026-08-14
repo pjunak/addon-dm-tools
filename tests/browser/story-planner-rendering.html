@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Story planner rendering contract</title>
+  <style>
+    :root {
+      --accent-gold: #c8a040;
+      --accent-gold-dim: #8b6914;
+      --bg-base: #141008;
+      --bg-raised: #241c0d;
+      --bg-surface: #1c1509;
+      --border-subtle: rgba(255,255,255,.07);
+      --color-danger: #ef9a9a;
+      --color-info: #90caf9;
+      --color-mystery: #ce93d8;
+      --font-title: Georgia, serif;
+      --font-ui: Arial, sans-serif;
+      --radius: 6px;
+      --radius-lg: 12px;
+      --shadow-md: 0 4px 16px rgba(0,0,0,.4);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+      --space-1: .25rem;
+      --space-2: .5rem;
+      --space-3: .75rem;
+      --space-4: 1rem;
+      --space-5: 1.5rem;
+      --text-lg: 1.2rem;
+      --text-muted: #9a8660;
+      --text-parchment: #f5edd8;
+      --text-xl: 1.5rem;
+      --text-xs: .75rem;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 1rem; background: var(--bg-base); }
+    .fixture-viewport { position: relative !important; width: 1000px; height: 640px; }
+  </style>
+</head>
+<body>
+  <main id="planner" class="addon-dm-tools dmt-planner-shell">
+    <div class="dmt-story-viewport fixture-viewport">
+      <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
+        <div class="dmt-story-canvas" data-dmt-zoom="1" tabindex="0" style="--dmt-canvas-zoom:1;width:900px;height:500px">
+          <svg class="dmt-story-edges" width="900" height="500" viewBox="0 0 900 500">
+            <g class="dmt-story-edge-group" data-dmt-edge-group="edge-1">
+              <path class="dmt-story-edge" data-dmt-edge="edge-1" data-source="node-a" data-target="node-b"></path>
+              <path class="dmt-story-edge-hit" data-dmt-edge-hit="edge-1" data-source="node-a" data-target="node-b"></path>
+              <text class="dmt-story-edge-label" data-dmt-edge-label="edge-1" data-dmt-label="Follow the silver thread" data-dmt-layout-key="" text-anchor="middle"></text>
+            </g>
+            <path class="dmt-story-preview" data-dmt-preview hidden></path>
+          </svg>
+          <div class="dmt-selection-hull" data-dmt-selection-hull hidden></div>
+          <div class="dmt-selection-marquee" data-dmt-marquee hidden></div>
+          <article class="dmt-story-node" data-dmt-node="node-a" data-dmt-x="40" data-dmt-y="40" style="left:40px;top:40px">
+            <span class="dmt-node-kind">Quest</span>
+            <h3>The silver road</h3>
+            <p>Cross the valley before the sleeping dragon wakes.</p>
+          </article>
+          <article class="dmt-story-node" data-dmt-node="node-b" data-dmt-x="420" data-dmt-y="40" style="left:420px;top:40px">
+            <span class="dmt-node-kind">Encounter</span>
+            <h3>The sleeping dragon</h3>
+            <p>Reach the old gate without raising an alarm.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script type="module">
+    import { mountStoryCanvas } from '../../story-planner-interactions.js';
+    import { STORY_PLANNER_STYLES } from '../../story-planner-styles.js';
+
+    document.head.insertAdjacentHTML('beforeend', STORY_PLANNER_STYLES);
+
+    const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const closeTo = (actual, expected, tolerance = 0.08) => Math.abs(actual - expected) <= tolerance;
+    const pixelValue = (element, property) => Number.parseFloat(getComputedStyle(element)[property]);
+    const transformScale = element => {
+      const value = getComputedStyle(element).transform;
+      if (value === 'none') return [1, 1];
+      const matrix = new DOMMatrix(value);
+      return [Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d)];
+    };
+
+    window.runRenderingContract = async ({ deviceScaleFactor }) => {
+      const checks = [];
+      const check = (name, pass, actual, expected) => checks.push({ name, pass, actual, expected });
+      const root = document.querySelector('#planner');
+      const canvas = root.querySelector('.dmt-story-canvas');
+      const svg = root.querySelector('.dmt-story-edges');
+      const node = root.querySelector('[data-dmt-node="node-a"]');
+      const title = node.querySelector('h3');
+      const summary = node.querySelector('p');
+      const kind = node.querySelector('.dmt-node-kind');
+      const edgeLabel = root.querySelector('[data-dmt-edge-label="edge-1"]');
+      let generation = 0;
+      let subscriber = null;
+      let subscriptions = 0;
+      let unsubscriptions = 0;
+      const layoutText = () => {
+        const values = generation === 0
+          ? ['Follow the', 'silver thread']
+          : ['Refreshed after fonts'];
+        return {
+          lineCount: values.length,
+          height: values.length * 16,
+          maxLineWidth: 84,
+          lines: values.map(text => ({ text, width: 84 })),
+        };
+      };
+      const cleanup = mountStoryCanvas({
+        root,
+        layoutText,
+        onSelectionChange: () => {},
+        onTextLayoutInvalidated: listener => {
+          subscriptions += 1;
+          subscriber = listener;
+          return () => {
+            unsubscriptions += 1;
+            subscriber = null;
+          };
+        },
+      });
+      await nextFrame();
+
+      check('planner subscribes once while mounted', subscriptions === 1 && typeof subscriber === 'function', subscriptions, 1);
+      const layoutKey = edgeLabel.dataset.dmtLayoutKey;
+      check(
+        'planner materializes exact host lines',
+        JSON.stringify([...edgeLabel.children].map(line => line.textContent)) === JSON.stringify(['Follow the', 'silver thread']),
+        [...edgeLabel.children].map(line => line.textContent),
+        ['Follow the', 'silver thread'],
+      );
+      generation = 1;
+      subscriber?.({ reason: 'fonts', revision: 1, locale: 'en' });
+      await nextFrame();
+      check(
+        'invalidation rematerializes a stable geometry bucket',
+        edgeLabel.dataset.dmtLayoutKey === layoutKey && edgeLabel.textContent === 'Refreshed after fonts',
+        { key: edgeLabel.dataset.dmtLayoutKey, text: edgeLabel.textContent },
+        { key: layoutKey, text: 'Refreshed after fonts' },
+      );
+
+      let previousEdgeHeight = null;
+      for (const zoom of [0.5, 1, 2]) {
+        canvas.dataset.dmtZoom = String(zoom);
+        canvas.style.setProperty('--dmt-canvas-zoom', String(zoom));
+        svg.setAttribute('width', String(900 * zoom));
+        svg.setAttribute('height', String(500 * zoom));
+        await nextFrame();
+        const expected = {
+          kindFont: 12 * zoom,
+          nodeWidth: 240 * zoom,
+          summaryFont: 12 * zoom,
+          titleFont: 19.2 * zoom,
+        };
+        const actual = {
+          kindFont: pixelValue(kind, 'fontSize'),
+          nodeWidth: node.getBoundingClientRect().width,
+          summaryFont: pixelValue(summary, 'fontSize'),
+          titleFont: pixelValue(title, 'fontSize'),
+        };
+        for (const property of Object.keys(expected)) {
+          check(`planner ${property} at ${zoom}x`, closeTo(actual[property], expected[property]), actual[property], expected[property]);
+        }
+        for (const [label, element] of [['canvas', canvas], ['node', node]]) {
+          const scales = transformScale(element);
+          check(`${label} has no raster scale at ${zoom}x`, scales.every(scale => closeTo(scale, 1, 0.001)), scales, [1, 1]);
+        }
+        const currentEdgeHeight = edgeLabel.getBoundingClientRect().height;
+        check(
+          `SVG label raster size grows at ${zoom}x`,
+          previousEdgeHeight === null || currentEdgeHeight > previousEdgeHeight,
+          currentEdgeHeight,
+          previousEdgeHeight === null ? '> 0' : `> ${previousEdgeHeight}`,
+        );
+        previousEdgeHeight = currentEdgeHeight;
+      }
+
+      cleanup();
+      check('planner releases the borrowed subscription', unsubscriptions === 1 && subscriber === null, unsubscriptions, 1);
+      return { name: 'DM Tools story planner rendering', checks, diagnostics: { deviceScaleFactor } };
+    };
+  </script>
+</body>
+</html>
