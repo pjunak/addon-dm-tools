@@ -158,13 +158,72 @@ export function projectScope({
   };
 }
 
+const FLOW_TURN_OFFSET = 48;
+const FLOW_TURN_RADIUS = 12;
+
+export function flowLabelGeometry(source, target, {
+  padding = 16,
+  minWidth = 36,
+  maxWidth = 240,
+} = {}) {
+  const startX = source.x + source.width;
+  const startY = source.y + source.height / 2;
+  const endX = target.x;
+  const endY = target.y + target.height / 2;
+  const availableWidth = length => Math.min(
+    maxWidth,
+    Math.max(minWidth, Math.max(0, length - padding)),
+  );
+  if (Math.abs(endY - startY) < 1) {
+    return {
+      x: (startX + endX) / 2,
+      y: startY,
+      angle: 0,
+      maxWidth: availableWidth(Math.abs(endX - startX)),
+    };
+  }
+
+  const middleX = startX + Math.max(FLOW_TURN_OFFSET, (endX - startX) / 2);
+  const beforeTurn = middleX - FLOW_TURN_RADIUS;
+  const afterTurn = middleX + FLOW_TURN_RADIUS;
+  const segments = [
+    {
+      x: (startX + beforeTurn) / 2,
+      y: startY,
+      angle: 0,
+      length: Math.abs(beforeTurn - startX),
+    },
+    {
+      x: middleX,
+      y: (startY + endY) / 2,
+      angle: endY >= startY ? 90 : -90,
+      length: Math.max(0, Math.abs(endY - startY) - FLOW_TURN_RADIUS * 2),
+    },
+    {
+      x: (afterTurn + endX) / 2,
+      y: endY,
+      angle: 0,
+      length: Math.abs(endX - afterTurn),
+    },
+  ];
+  const segment = segments.reduce((longest, candidate) => (
+    candidate.length > longest.length ? candidate : longest
+  ));
+  return {
+    x: segment.x,
+    y: segment.y,
+    angle: segment.angle,
+    maxWidth: availableWidth(segment.length),
+  };
+}
+
 export function orthogonalPath(source, target) {
   const startX = source.x + source.width;
   const startY = source.y + source.height / 2;
   const endX = target.x;
   const endY = target.y + target.height / 2;
-  const middleX = startX + Math.max(48, (endX - startX) / 2);
-  const radius = 12;
+  const middleX = startX + Math.max(FLOW_TURN_OFFSET, (endX - startX) / 2);
+  const radius = FLOW_TURN_RADIUS;
   if (Math.abs(endY - startY) < 1) return `M ${startX} ${startY} H ${endX}`;
   const direction = endY > startY ? 1 : -1;
   const beforeTurn = middleX - radius;

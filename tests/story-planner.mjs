@@ -20,8 +20,13 @@ import {
   itemSubtreeIds,
   normalizePositions,
   orthogonalPath,
+  flowLabelGeometry,
   projectScope,
 } from '../story-planner-model.js';
+import {
+  flowLabelFirstLineOffset,
+  layoutFlowLabel,
+} from '../story-planner-labels.js';
 
 const en = JSON.parse(await readFile(new URL('../locales/en.json', import.meta.url), 'utf8'));
 
@@ -212,6 +217,39 @@ test('Atlas dock owns the desktop rail and becomes horizontal on narrow screens'
   assert.match(
     STORY_PLANNER_STYLES,
     /\.dmt-fullscreen-toggle\{[^}]*top:var\(--space-3\)[^}]*right:var\(--space-3\)/,
+  );
+});
+
+test('flow labels use the longest straight connector segment and exact host lines', () => {
+  const source = { x: 0, y: 0, width: 240, height: 116 };
+  const horizontal = { x: 500, y: 0, width: 240, height: 116 };
+  assert.deepEqual(flowLabelGeometry(source, horizontal), {
+    x: 370,
+    y: 58,
+    angle: 0,
+    maxWidth: 240,
+  });
+
+  const vertical = { x: 300, y: 400, width: 240, height: 116 };
+  assert.deepEqual(flowLabelGeometry(source, vertical), {
+    x: 288,
+    y: 258,
+    angle: 90,
+    maxWidth: 240,
+  });
+  let receivedOptions = null;
+  const label = layoutFlowLabel('Wake the sleeping dragon', source, vertical, (text, options) => {
+    assert.equal(text, 'Wake the sleeping dragon');
+    receivedOptions = options;
+    return { lines: [{ text: 'Wake the' }, { text: 'sleeping dragon' }] };
+  });
+  assert.equal(receivedOptions.maxWidth, 240);
+  assert.deepEqual(label.lines, ['Wake the', 'sleeping dragon']);
+  assert.equal(flowLabelFirstLineOffset(label.lines.length), -8);
+
+  assert.deepEqual(
+    layoutFlowLabel('Fallback label', source, horizontal, () => { throw new Error('old host'); }).lines,
+    ['Fallback label'],
   );
 });
 
@@ -659,7 +697,9 @@ test('manual flow stays local while named references may cross canvas scopes', a
   const [flow] = value.stores.planning_flow_links.values();
   assert.equal(flow.kind, 'option');
   assert.equal(flow.label, 'Wake the dragon');
-  assert.match(value.planner.render(), /data-dmt-edge-label="[^"]+"/);
+  const labelledFlowHtml = value.planner.render();
+  assert.match(labelledFlowHtml, /data-dmt-edge-label="[^"]+"/);
+  assert.match(labelledFlowHtml, /class="dmt-story-edge-label"[^>]*data-dmt-label="[^"]+"[^>]*>[\s\S]*?<tspan /);
 
   await value.planner.saveFlow(event({
     targetId: 'branch-choice',

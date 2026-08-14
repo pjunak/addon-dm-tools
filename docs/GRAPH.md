@@ -142,6 +142,13 @@ Auto-arrange removes that scope record and cannot change story meaning.
 Imported documents never contain view records. Only schema-version-3 view
 records are read; older layouts are ignored rather than converted.
 
+Flow labels choose the longest usable straight segment in their orthogonal
+connector, rotate with a vertical segment, and wrap within that segment's
+length. When the host provides `host.h.layoutText`, DM Tools renders its exact
+Unicode-aware line strings so measurement and visible breaks agree. On older
+hosts the same geometry retains a single-line label instead of blocking the
+planner.
+
 ## Lifecycle and accessibility
 
 Every card and flow line is keyboard-focusable and has a plain-text accessible

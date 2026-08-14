@@ -8,6 +8,11 @@ import {
   REFERENCE_RELATIONS,
 } from './planning-contract.js';
 import { itemAncestors, orthogonalPath, records } from './story-planner-model.js';
+import {
+  FLOW_LABEL_LINE_HEIGHT,
+  flowLabelFirstLineOffset,
+  layoutFlowLabel,
+} from './story-planner-labels.js';
 import { STORY_PLANNER_STYLES } from './story-planner-styles.js';
 
 const CANVAS_PAN_MARGIN = 480;
@@ -600,14 +605,14 @@ export function renderStoryCanvas(projection, selectedItemIds, selectedFlowIds, 
           const target = byId.get(flow.targetId);
           const sourceBox = { ...source.position, width: 240, height: 116 };
           const targetBox = { ...target.position, width: 240, height: 116 };
-          const labelX = (sourceBox.x + sourceBox.width + targetBox.x) / 2;
-          const labelY = (sourceBox.y + targetBox.y) / 2
-            + ((sourceBox.height + targetBox.height) / 4);
           const label = flow.label || t(`planner.flow.${flow.kind}`);
+          const labelLayout = flow.label
+            ? layoutFlowLabel(flow.label, sourceBox, targetBox, host.h.layoutText)
+            : null;
           return `<g class="dmt-story-edge-group${selectedFlowIds.has(flow.id) ? ' is-selected' : ''}" data-dmt-edge-group="${esc(flow.id)}">
               <path class="dmt-story-edge" data-dmt-edge="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" data-kind="${esc(flow.kind)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
               <path class="dmt-story-edge-hit" data-dmt-edge-hit="${esc(flow.id)}" data-source="${esc(flow.sourceId)}" data-target="${esc(flow.targetId)}" tabindex="0" role="button" aria-label="${esc(label)}" d="${orthogonalPath(sourceBox, targetBox)}"></path>
-              ${flow.label ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(flow.label)}</text>` : ''}
+              ${labelLayout ? `<text class="dmt-story-edge-label" data-dmt-edge-label="${esc(flow.id)}" data-dmt-label="${esc(flow.label)}" transform="translate(${labelLayout.x} ${labelLayout.y}) rotate(${labelLayout.angle})" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${labelLayout.lines.map((line, index) => `<tspan x="0" dy="${index ? FLOW_LABEL_LINE_HEIGHT : flowLabelFirstLineOffset(labelLayout.lines.length)}">${esc(line)}</tspan>`).join('')}</text>` : ''}
             </g>`;
         }).join('')}
         <path class="dmt-story-preview" data-dmt-preview hidden></path>

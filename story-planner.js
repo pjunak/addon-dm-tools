@@ -307,6 +307,7 @@ export function createStoryPlanner(host, options = {}) {
       onUndo: undoLastDelete,
       onDialogTab: setDialogTab,
       onCancelEdit: cancelEdit,
+      layoutText: host.h.layoutText,
       onZoom: value => viewportZoom.set(viewId(), value),
       onFullscreen: value => { fullscreen = value; },
     });
