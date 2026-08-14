@@ -16,7 +16,7 @@
       --color-info: #90caf9;
       --color-mystery: #ce93d8;
       --font-title: Georgia, serif;
-      --font-ui: Arial, sans-serif;
+      --font-ui: Inter, "Helvetica Neue", sans-serif;
       --radius: 6px;
       --radius-lg: 12px;
       --shadow-md: 0 4px 16px rgba(0,0,0,.4);
@@ -68,6 +68,7 @@
   </main>
   <script type="module">
     import { mountStoryCanvas } from '../../story-planner-interactions.js';
+    import { FLOW_LABEL_FONT } from '../../story-planner-labels.js';
     import { STORY_PLANNER_STYLES } from '../../story-planner-styles.js';
 
     document.head.insertAdjacentHTML('beforeend', STORY_PLANNER_STYLES);
@@ -93,6 +94,7 @@
       const summary = node.querySelector('p');
       const kind = node.querySelector('.dmt-node-kind');
       const edgeLabel = root.querySelector('[data-dmt-edge-label="edge-1"]');
+      const measuredFontFamily = FLOW_LABEL_FONT.replace(/^\S+\s+/, '');
       let generation = 0;
       let subscriber = null;
       let subscriptions = 0;
@@ -124,6 +126,12 @@
       await nextFrame();
 
       check('planner subscribes once while mounted', subscriptions === 1 && typeof subscriber === 'function', subscriptions, 1);
+      check(
+        'flow label measurement uses the rendered font stack',
+        getComputedStyle(edgeLabel).fontFamily.replaceAll(' ', '') === measuredFontFamily.replaceAll(' ', ''),
+        getComputedStyle(edgeLabel).fontFamily,
+        measuredFontFamily,
+      );
       const layoutKey = edgeLabel.dataset.dmtLayoutKey;
       check(
         'planner materializes exact host lines',

@@ -1,6 +1,8 @@
 import { flowLabelGeometry } from './story-planner-model.js';
 
-export const FLOW_LABEL_FONT = '12px Inter, sans-serif';
+// Flow geometry uses zoom-1 coordinates, so this descriptor mirrors the host's
+// --font-ui stack rather than reading scaled computed styles during a drag.
+export const FLOW_LABEL_FONT = '12px Inter, "Helvetica Neue", sans-serif';
 export const FLOW_LABEL_LINE_HEIGHT = 16;
 const FLOW_LABEL_WIDTH_STEP = 0.5;
 
