@@ -22,7 +22,10 @@ import {
   storyCanvasTypography,
 } from '../story-planner-rendering.js';
 import {
+  CANVAS_ZOOM_LEVELS,
   clampCanvasZoom,
+  normalizeCanvasZoom,
+  stepCanvasZoom,
   storyCanvasDetailLevel,
 } from '../story-planner-zoom.js';
 import {
@@ -392,10 +395,38 @@ test('fullscreen requests the physical display and exits through the document', 
 });
 
 test('canvas zoom anchors the pointer and derives discrete rendering metrics', () => {
+  assert.deepEqual(CANVAS_ZOOM_LEVELS, [
+    0.35,
+    0.45,
+    0.55,
+    0.6,
+    0.7,
+    0.8,
+    0.9,
+    1,
+    1.1,
+    1.25,
+    1.5,
+    1.75,
+    2,
+  ]);
+  assert.equal(Object.isFrozen(CANVAS_ZOOM_LEVELS), true);
   assert.equal(clampCanvasZoom(0.2), 0.35);
   assert.equal(clampCanvasZoom(1.25), 1.25);
   assert.equal(clampCanvasZoom(4), 2);
   assert.equal(clampCanvasZoom('invalid'), 1);
+  assert.equal(normalizeCanvasZoom(0.34), 0.35);
+  assert.equal(normalizeCanvasZoom(0.42), 0.45);
+  assert.equal(normalizeCanvasZoom(1.03), 1);
+  assert.equal(normalizeCanvasZoom(1.08), 1.1);
+  assert.equal(normalizeCanvasZoom(3), 2);
+  assert.equal(normalizeCanvasZoom('invalid'), 1);
+  assert.equal(stepCanvasZoom(0.35, -1), 0.35);
+  assert.equal(stepCanvasZoom(0.35, 1), 0.45);
+  assert.equal(stepCanvasZoom(1, -1), 0.9);
+  assert.equal(stepCanvasZoom(1, 1), 1.1);
+  assert.equal(stepCanvasZoom(1, -1, 8), 0.35);
+  assert.equal(stepCanvasZoom(1, 1, 5), 2);
   assert.equal(storyCanvasDetailLevel(0.35), 'overview');
   assert.equal(storyCanvasDetailLevel(0.449), 'overview');
   assert.equal(storyCanvasDetailLevel(0.45), 'compact');

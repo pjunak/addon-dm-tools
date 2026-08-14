@@ -39,9 +39,14 @@
 </head>
 <body>
   <main id="planner" class="addon-dm-tools dmt-planner-shell">
+    <div>
+      <button type="button" data-dmt-command="zoom-out">Zoom out</button>
+      <button type="button" data-dmt-command="zoom-reset"><output data-dmt-zoom-label>103%</output></button>
+      <button type="button" data-dmt-command="zoom-in">Zoom in</button>
+    </div>
     <div class="dmt-story-viewport fixture-viewport">
       <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
-        <div class="dmt-story-canvas" data-dmt-zoom="1" data-dmt-detail="full" tabindex="0" style="width:900px;height:500px">
+        <div class="dmt-story-canvas" data-dmt-zoom="1.03" data-dmt-detail="full" tabindex="0" style="width:900px;height:500px">
           <svg class="dmt-story-edges" width="900" height="500" viewBox="0 0 900 500">
             <g class="dmt-story-edge-group" data-dmt-edge-group="edge-1">
               <path class="dmt-story-edge" data-dmt-edge="edge-1" data-source="node-a" data-target="node-b"></path>
@@ -149,6 +154,16 @@
 
       check('planner subscribes once while mounted', subscriptions === 1 && typeof subscriber === 'function', subscriptions, 1);
       check(
+        'mount normalizes an arbitrary session zoom to the nearest ladder value',
+        canvas.dataset.dmtZoom === '1'
+          && root.querySelector('[data-dmt-zoom-label]').textContent === '100%',
+        {
+          zoom: canvas.dataset.dmtZoom,
+          label: root.querySelector('[data-dmt-zoom-label]').textContent,
+        },
+        { zoom: '1', label: '100%' },
+      );
+      check(
         'flow label measurement uses the rendered font stack',
         normalizedFontFamily(getComputedStyle(edgeLabel).fontFamily) === normalizedFontFamily(measuredFontFamily),
         getComputedStyle(edgeLabel).fontFamily,
@@ -204,6 +219,80 @@
         canvas.dataset.dmtDetail === 'overview',
         canvas.dataset.dmtDetail,
         'overview',
+      );
+      check(
+        'wheel zoom stops on the exact 35% ladder minimum',
+        canvas.dataset.dmtZoom === '0.35',
+        canvas.dataset.dmtZoom,
+        '0.35',
+      );
+      viewport.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 250,
+        deltaY: -700,
+      }));
+      await nextFrame();
+      check(
+        'reversing through the wheel ladder returns exactly to 100%',
+        canvas.dataset.dmtZoom === '1' && canvas.dataset.dmtDetail === 'full',
+        { zoom: canvas.dataset.dmtZoom, detail: canvas.dataset.dmtDetail },
+        { zoom: '1', detail: 'full' },
+      );
+      root.querySelector('[data-dmt-command="zoom-in"]').click();
+      await nextFrame();
+      check(
+        'zoom button advances to the next fixed ladder value',
+        canvas.dataset.dmtZoom === '1.1'
+          && root.querySelector('[data-dmt-zoom-label]').textContent === '110%',
+        {
+          zoom: canvas.dataset.dmtZoom,
+          label: root.querySelector('[data-dmt-zoom-label]').textContent,
+        },
+        { zoom: '1.1', label: '110%' },
+      );
+      root.querySelector('[data-dmt-command="zoom-out"]').click();
+      await nextFrame();
+      check(
+        'opposite zoom button returns exactly to 100%',
+        canvas.dataset.dmtZoom === '1'
+          && root.querySelector('[data-dmt-zoom-label]').textContent === '100%',
+        {
+          zoom: canvas.dataset.dmtZoom,
+          label: root.querySelector('[data-dmt-zoom-label]').textContent,
+        },
+        { zoom: '1', label: '100%' },
+      );
+      viewport.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 250,
+        deltaMode: 1,
+        deltaY: 3,
+      }));
+      await nextFrame();
+      check(
+        'Firefox-style line wheel input takes one fixed step',
+        canvas.dataset.dmtZoom === '0.9',
+        canvas.dataset.dmtZoom,
+        '0.9',
+      );
+      viewport.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 250,
+        deltaMode: 1,
+        deltaY: -3,
+      }));
+      await nextFrame();
+      check(
+        'reversed line wheel input returns exactly to 100%',
+        canvas.dataset.dmtZoom === '1',
+        canvas.dataset.dmtZoom,
+        '1',
       );
 
       for (const zoom of [

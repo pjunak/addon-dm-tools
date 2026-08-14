@@ -82,10 +82,12 @@ reference when the precise relationship matters but is not story flow.
   reveal zone, a control receives keyboard focus, or an Atlas tool is dragged.
   Escape also exits fullscreen after any open modal or connection gesture has
   been dismissed.
-- The stage controls zoom from 35% to 200% and reset to 100%. The scroll wheel
-  applies the same zoom while the pointer is inside the canvas and keeps the
-  story position under the pointer stationary. Each scope keeps its zoom for
-  the current planner session; it is intentionally not campaign content. Card
+- The stage controls use the fixed 35%, 45%, 55%, 60%, 70%, 80%, 90%, 100%,
+  110%, 125%, 150%, 175%, and 200% zoom ladder. Buttons and accumulated scroll
+  wheel input step through the same values, reset selects exactly 100%, and the
+  story position under the pointer remains stationary. Any non-ladder session
+  value is normalized to its nearest level. Each scope keeps its zoom for the
+  current planner session; it is intentionally not campaign content. Card
   geometry follows every zoom change. Typography uses explicit integer-pixel
   bands at 35–60%, above 60–80%, above 80–100%, above 100–125%, above
   125–150%, above 150–175%, and above 175–200%. The first band is the minimum:

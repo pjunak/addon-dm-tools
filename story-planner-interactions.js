@@ -11,15 +11,18 @@ import {
   storyCanvasCssVariables,
 } from './story-planner-rendering.js';
 import {
-  CANVAS_ZOOM_STEP,
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
   clampCanvasZoom,
+  normalizeCanvasZoom,
+  stepCanvasZoom,
   storyCanvasDetailLevel,
 } from './story-planner-zoom.js';
 
 const GRID = 24;
 const DRAG_THRESHOLD = 4;
+const WHEEL_ZOOM_DELTA_PER_STEP = 100;
+const WHEEL_LINE_UNITS_PER_STEP = 3;
 
 export function anchoredZoomScroll({
   oldZoom,
@@ -70,7 +73,15 @@ export function pannedCanvasScroll({
 }
 
 function canvasZoom(canvas) {
-  return clampCanvasZoom(canvas?.dataset.dmtZoom);
+  return normalizeCanvasZoom(canvas?.dataset.dmtZoom);
+}
+
+function normalizedWheelDelta(event) {
+  if (event.deltaMode === 1) {
+    return event.deltaY * (WHEEL_ZOOM_DELTA_PER_STEP / WHEEL_LINE_UNITS_PER_STEP);
+  }
+  if (event.deltaMode === 2) return event.deltaY * WHEEL_ZOOM_DELTA_PER_STEP;
+  return event.deltaY;
 }
 
 function renderingScaleFactor(element) {
@@ -376,6 +387,7 @@ export function mountStoryCanvas({
   let suppressPortClick = false;
   let draggedTool = null;
   let activeScaleFactor = renderingScaleFactor(canvas);
+  let accumulatedWheelDelta = 0;
 
   const listen = (target, event, handler, options) => {
     target.addEventListener(event, handler, options);
@@ -437,9 +449,21 @@ export function mountStoryCanvas({
     surface.style.height = `${size.height}px`;
   }
 
+  function syncZoomControls(zoom) {
+    root.querySelectorAll('[data-dmt-zoom-label]').forEach(label => {
+      label.textContent = `${Math.round(zoom * 100)}%`;
+    });
+    root.querySelectorAll('[data-dmt-command="zoom-out"]').forEach(button => {
+      button.disabled = zoom <= MIN_CANVAS_ZOOM;
+    });
+    root.querySelectorAll('[data-dmt-command="zoom-in"]').forEach(button => {
+      button.disabled = zoom >= MAX_CANVAS_ZOOM;
+    });
+  }
+
   function applyZoom(nextZoom, client = null) {
     const previous = canvasZoom(canvas);
-    const next = clampCanvasZoom(nextZoom);
+    const next = normalizeCanvasZoom(nextZoom);
     if (Math.abs(previous - next) < 0.001) return previous;
     const bounds = viewport.getBoundingClientRect();
     const pointerX = client ? client.x - bounds.left : viewport.clientWidth / 2;
@@ -466,15 +490,7 @@ export function mountStoryCanvas({
     updateHull();
     viewport.scrollLeft = scroll.left;
     viewport.scrollTop = scroll.top;
-    root.querySelectorAll('[data-dmt-zoom-label]').forEach(label => {
-      label.textContent = `${Math.round(next * 100)}%`;
-    });
-    root.querySelectorAll('[data-dmt-command="zoom-out"]').forEach(button => {
-      button.disabled = next <= MIN_CANVAS_ZOOM;
-    });
-    root.querySelectorAll('[data-dmt-command="zoom-in"]').forEach(button => {
-      button.disabled = next >= MAX_CANVAS_ZOOM;
-    });
+    syncZoomControls(next);
     onZoom?.(next);
     return next;
   }
@@ -609,9 +625,18 @@ export function mountStoryCanvas({
       if (command === 'delete') onDeleteSelection?.([...items], [...flows]);
       if (command === 'undo') onUndo?.();
       if (command === 'shortcuts') setShortcutModalOpen(root, true);
-      if (command === 'zoom-in') applyZoom(canvasZoom(canvas) + CANVAS_ZOOM_STEP);
-      if (command === 'zoom-out') applyZoom(canvasZoom(canvas) - CANVAS_ZOOM_STEP);
-      if (command === 'zoom-reset') applyZoom(1);
+      if (command === 'zoom-in') {
+        accumulatedWheelDelta = 0;
+        applyZoom(stepCanvasZoom(canvasZoom(canvas), 1));
+      }
+      if (command === 'zoom-out') {
+        accumulatedWheelDelta = 0;
+        applyZoom(stepCanvasZoom(canvasZoom(canvas), -1));
+      }
+      if (command === 'zoom-reset') {
+        accumulatedWheelDelta = 0;
+        applyZoom(1);
+      }
       if (command === 'fullscreen') {
         const open = !root.classList.contains('is-fullscreen');
         void changeFullscreen(open);
@@ -890,8 +915,22 @@ export function mountStoryCanvas({
 
   listen(viewport, 'wheel', event => {
     event.preventDefault();
-    const factor = Math.exp(-event.deltaY * 0.0015);
-    applyZoom(canvasZoom(canvas) * factor, { x: event.clientX, y: event.clientY });
+    const delta = normalizedWheelDelta(event);
+    if (!Number.isFinite(delta) || delta === 0) return;
+    if (accumulatedWheelDelta && Math.sign(accumulatedWheelDelta) !== Math.sign(delta)) {
+      accumulatedWheelDelta = 0;
+    }
+    accumulatedWheelDelta += delta;
+    const steps = Math.floor(Math.abs(accumulatedWheelDelta) / WHEEL_ZOOM_DELTA_PER_STEP);
+    if (!steps) return;
+    const direction = accumulatedWheelDelta < 0 ? 1 : -1;
+    accumulatedWheelDelta -= Math.sign(accumulatedWheelDelta)
+      * steps
+      * WHEEL_ZOOM_DELTA_PER_STEP;
+    applyZoom(stepCanvasZoom(canvasZoom(canvas), direction, steps), {
+      x: event.clientX,
+      y: event.clientY,
+    });
   }, { passive: false });
 
   listen(viewport, 'auxclick', event => {
@@ -1011,6 +1050,9 @@ export function mountStoryCanvas({
   const firstDialogControl = root.querySelector('[data-dmt-modal] input[name="title"]')
     || root.querySelector('[data-dmt-modal] button:not([tabindex="-1"])');
   const initialZoom = canvasZoom(canvas);
+  canvas.dataset.dmtZoom = String(initialZoom);
+  canvas.dataset.dmtDetail = storyCanvasDetailLevel(initialZoom);
+  syncZoomControls(initialZoom);
   activeScaleFactor = applyCanvasCssVariables(canvas, initialZoom);
   for (const node of canvas.querySelectorAll('[data-dmt-node]')) {
     setNodePosition(node, node.dataset.dmtX, node.dataset.dmtY, initialZoom);
