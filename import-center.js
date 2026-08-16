@@ -48,11 +48,9 @@ function normalizeAdapter(handle) {
 }
 
 export function createImportCenter(host) {
-  const { esc, dataAction } = host.h;
+  const { esc } = host.h;
   const t = (key, params) => host.i18n.t(key, params);
-  let activeKey = '';
-  let active = null;
-  let deactivate = null;
+  const active = new Map();
   let disposed = false;
 
   function adapters() {
@@ -66,47 +64,37 @@ export function createImportCenter(host) {
       });
   }
 
-  function stopActive({ leave = false } = {}) {
-    if (deactivate) {
-      try { deactivate(); } catch (_) {}
-      deactivate = null;
+  function stopAdapter(entry, { leave = false } = {}) {
+    if (!entry) return Promise.resolve();
+    active.delete(entry.adapter.key);
+    if (entry.deactivate) {
+      try { entry.deactivate(); } catch (_) {}
     }
-    if (leave && active?.api && typeof active.api.leave === 'function') {
-      Promise.resolve(active.api.leave()).catch(() => {});
+    if (leave && typeof entry.adapter.api.leave === 'function') {
+      return Promise.resolve(entry.adapter.api.leave()).catch(() => {});
     }
-    active = null;
+    return Promise.resolve();
   }
 
   function ensureActive(available) {
-    const next = available.find(adapter => adapter.key === activeKey) || available[0] || null;
-    if (!next) {
-      stopActive({ leave: true });
-      activeKey = '';
-      return null;
+    const availableKeys = new Set(available.map(adapter => adapter.key));
+    for (const entry of active.values()) {
+      if (!availableKeys.has(entry.adapter.key)) stopAdapter(entry, { leave: true });
     }
-    if (active?.key === next.key) return active;
-    stopActive({ leave: true });
-    active = next;
-    activeKey = next.key;
-    if (typeof next.api.activate === 'function') {
-      try {
-        const cleanup = next.api.activate({ invalidate: () => host.ui.rerender() });
-        if (typeof cleanup === 'function') deactivate = cleanup;
-      } catch (_) {
-        deactivate = null;
+    for (const adapter of available) {
+      const current = active.get(adapter.key);
+      if (current?.adapter.api === adapter.api) continue;
+      if (current) stopAdapter(current, { leave: true });
+      let deactivate = null;
+      if (typeof adapter.api.activate === 'function') {
+        try {
+          const cleanup = adapter.api.activate({ invalidate: () => host.ui.rerender() });
+          if (typeof cleanup === 'function') deactivate = cleanup;
+        } catch (_) {}
       }
+      active.set(adapter.key, { adapter, deactivate });
     }
-    return active;
-  }
-
-  function select(key) {
-    if (disposed || !host.role.isDM()) return;
-    const available = adapters();
-    if (!available.some(adapter => adapter.key === key)) return;
-    activeKey = key;
-    ensureActive(available);
-    host.ui.rerender();
-    host.ui.announce(t('center.adapterSelected'));
+    return available;
   }
 
   function adapterBody(adapter) {
@@ -128,25 +116,20 @@ export function createImportCenter(host) {
 
   function render() {
     if (!host.role.isDM()) return `<div class="codex-notice">${esc(t('page.dmOnly'))}</div>`;
-    const available = adapters();
-    const current = ensureActive(available);
-    const tabs = available.length > 1 ? `<div class="codex-tab-strip" role="tablist" aria-label="${esc(t('center.adapters'))}">
-      ${available.map(adapter => `<button type="button" role="tab" aria-selected="${adapter.key === current?.key}"
-        class="codex-tab${adapter.key === current?.key ? ' is-active' : ''}"${dataAction(host.action('selectImportAdapter'), adapter.key)}>
-        ${esc(adapter.descriptor.label)}</button>`).join('')}
-    </div>` : '';
+    const available = ensureActive(adapters());
+    const body = available.length
+      ? `<div class="codex-stack codex-stack-loose">${available.map(adapterBody).join('')}</div>`
+      : adapterBody(null);
     return `<div class="dmt-import-center">
       <header class="page-header"><div><p class="codex-meta">${esc(t('center.kicker'))}</p>
         <h1>⌁ ${esc(t('center.title'))}</h1><p class="subtitle">${esc(t('center.intro'))}</p></div></header>
-      ${tabs}${adapterBody(current)}
+      ${body}
     </div>`;
   }
 
   async function leave() {
     if (disposed) return;
-    const current = active;
-    stopActive();
-    if (current?.api && typeof current.api.leave === 'function') await Promise.resolve(current.api.leave()).catch(() => {});
+    await Promise.all([...active.values()].map(entry => stopAdapter(entry, { leave: true })));
   }
 
   async function dispose() {
@@ -155,5 +138,5 @@ export function createImportCenter(host) {
     disposed = true;
   }
 
-  return Object.freeze({ render, select, leave, dispose });
+  return Object.freeze({ render, leave, dispose });
 }

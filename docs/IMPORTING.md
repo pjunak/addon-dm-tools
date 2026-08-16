@@ -71,9 +71,11 @@ workflow through that same cardinality-many contract. Adapter identity is the
 provider addon id plus its descriptor id; no official addon ids or payload
 schemas are hardcoded in the center. Each content owner supplies localized
 metadata, review/editor HTML, registered actions, scoped import-provider calls,
-safe resource/view links, and cleanup. The center selects adapters and contains
-descriptor invocation, descriptor property access, and render failures; one
-adapter cannot prevent another from loading. Resource links must be parsed as
+safe resource/view links, and cleanup. The center activates and renders every
+compatible adapter as its own section on one continuous page; it adds no
+adapter tab strip. It contains descriptor invocation, descriptor property
+access, and render failures, so one adapter cannot prevent another from
+loading. Resource links must be parsed as
 same-origin root-relative URLs: scheme-relative paths, backslashes, control
 characters, and cross-origin results are rejected. The center never parses an
 adapter's documents.

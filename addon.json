@@ -41,7 +41,6 @@
     "data:import-provider",
     "server:code",
     "ui:route",
-    "ui:sidebar",
     "ui:action",
     "ui:slot:dm",
     "data:read:characters",

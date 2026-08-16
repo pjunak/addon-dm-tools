@@ -32,7 +32,7 @@ story-planner-render.js          escaped canvas, dock, modal, and detail HTML
 story-planner-styles.js          addon-scoped host-token styles
 story-planner.js                 planner state, CRUD, transactions, navigation
 dashboard.js                     live dm:dashboard planning overview
-import-center.js                 generic adapter discovery, selection, lifecycle
+import-center.js                 generic adapter discovery, composition, lifecycle
 planning-import-adapter.js       reviewed planning import state machine and UI
 server/index.cjs                 server composition
 server/planning-provider.cjs     schema-v3 import provider and restricted
@@ -82,7 +82,8 @@ tests/                           contract, provider, UI, dashboard, lifecycle
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
 - Import adapters own their UI, actions, provider client, links, and cleanup.
-  The center only validates descriptors, selects adapters, and contains errors.
+  The center only validates descriptors, composes every workflow vertically,
+  manages lifecycle, and contains errors.
 - The server provider also contributes restricted `(dm-tools, planning)` data
   to reviewed campaign bundles. Keep its reserved core targets and planning
   references aligned with the schema and host bundle contract.

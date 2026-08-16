@@ -49,9 +49,29 @@ test('Import Center composes unknown adapter ids without source changes or a whi
   assert.match(html, /Campaign/);
   assert.match(html, /Homebrew items/);
   assert.match(html, /campaign-bundle/);
+  assert.doesNotMatch(html, /role="tablist"/);
+  assert.doesNotMatch(html, /selectImportAdapter/);
+});
 
-  center.select('third-party-content:homebrew-items');
-  assert.match(center.render(), /homebrew-items/);
+test('all adapters activate together and leave together', async () => {
+  const calls = [];
+  const first = adapter('core', 'campaign-bundle', 'Campaign');
+  first.api.activate = () => { calls.push('activate:campaign'); return () => calls.push('deactivate:campaign'); };
+  first.api.leave = async () => { calls.push('leave:campaign'); };
+  const second = adapter('notes', 'notes-json', 'Notes');
+  second.api.activate = () => { calls.push('activate:notes'); return () => calls.push('deactivate:notes'); };
+  second.api.leave = async () => { calls.push('leave:notes'); };
+  const { center } = fixture([first, second]);
+
+  center.render();
+  center.render();
+  assert.deepEqual(calls, ['activate:campaign', 'activate:notes']);
+  await center.leave();
+  assert.deepEqual(calls, [
+    'activate:campaign', 'activate:notes',
+    'deactivate:campaign', 'leave:campaign',
+    'deactivate:notes', 'leave:notes',
+  ]);
 });
 
 test('adapter descriptors, failures, duplicate identities, and unsafe links are isolated', () => {

@@ -48,6 +48,7 @@ test('manifest is a valid API-v2 DM collection declaration', () => {
   assert.ok(!manifest.capabilities.required.includes('graphs.facade'));
   assert.ok(!manifest.permissions.includes('ui:graph'));
   assert.ok(manifest.permissions.includes('ui:slot:dm'));
+  assert.ok(!manifest.permissions.includes('ui:sidebar'));
   assert.deepEqual(manifest.locales, {
     en: 'locales/en.json',
     cs: 'locales/cs.json',
@@ -86,9 +87,7 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
     'dm-import',
   ]);
   assert.deepEqual(result.rec.slots.map(slot => slot.slotId), ['dm:dashboard']);
-  assert.equal(result.rec.sidebar[0].role, 'dm');
-  assert.equal(result.rec.sidebar[1].role, 'dm');
-  assert.equal(result.rec.sidebar.length, 2);
+  assert.deepEqual(result.rec.sidebar, []);
   assert.ok(result.rec.actions.some(action => action.name === 'commit'));
   assert.equal(result.rec.provided, undefined);
   assert.equal(result.rec.providedServices.length, 1);

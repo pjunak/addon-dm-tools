@@ -32,8 +32,8 @@ export default function register(host) {
     apiVersion: 1,
     descriptor: () => Object.freeze({
       id: 'planning-json',
-      label: host.i18n.t('page.title'),
-      description: host.i18n.t('page.description'),
+      label: host.i18n.t('adapter.planning.label'),
+      description: host.i18n.t('adapter.planning.description'),
       accept: '.json,application/json',
       links: Object.freeze([]),
     }),
@@ -47,18 +47,6 @@ export default function register(host) {
   host.registerSlot('dm:dashboard', () => dashboard.render());
   host.registerRoute('dm-plans', (sub, parts) => planner.render(sub, parts));
   host.registerRoute('dm-import', () => center.render());
-  host.registerSidebarPage({
-    route: '/dm-plans',
-    label: host.i18n.t('planner.page.title'),
-    icon: '✦',
-    role: 'dm',
-  });
-  host.registerSidebarPage({
-    route: '/dm-import',
-    label: host.i18n.t('page.title'),
-    icon: '⇩',
-    role: 'dm',
-  });
 
   host.registerAction('selectFile', input => planningImport.selectFile(input));
   host.registerAction('preview', () => planningImport.requestPreview());
@@ -68,8 +56,6 @@ export default function register(host) {
   host.registerAction('status', () => planningImport.recoverStatus());
   host.registerAction('cancel', () => planningImport.cancel());
   host.registerAction('reset', () => planningImport.reset());
-  host.registerAction('selectImportAdapter', key => center.select(key));
-
   host.registerAction('plannerOpenItem', id => planner.openItem(id));
   host.registerAction('plannerSelectItem', id => planner.selectItem(id));
   host.registerAction('plannerCreateItem', (kind, subtype) => planner.createItem(kind, subtype));
