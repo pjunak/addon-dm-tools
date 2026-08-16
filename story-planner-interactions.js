@@ -15,6 +15,7 @@ import {
   MIN_CANVAS_ZOOM,
   NATIVE_CANVAS_ZOOM,
   clampCanvasZoom,
+  fittedCanvasZoom,
   normalizeCanvasZoom,
   stepCanvasZoom,
   storyCanvasDetailLevel,
@@ -460,6 +461,13 @@ export function mountStoryCanvas({
     root.querySelectorAll('[data-dmt-command="zoom-in"]').forEach(button => {
       button.disabled = zoom >= MAX_CANVAS_ZOOM;
     });
+    const detailLevel = storyCanvasDetailLevel(zoom);
+    root.querySelectorAll('[data-dmt-visibility]').forEach(indicator => {
+      indicator.hidden = detailLevel === 'full';
+      const label = indicator.querySelector('[data-dmt-visibility-label]');
+      const property = `label${detailLevel[0].toUpperCase()}${detailLevel.slice(1)}`;
+      if (label) label.textContent = detailLevel === 'full' ? '' : indicator.dataset[property] || '';
+    });
   }
 
   function applyZoom(nextZoom, client = null) {
@@ -494,6 +502,26 @@ export function mountStoryCanvas({
     syncZoomControls(next);
     onZoom?.(next);
     return next;
+  }
+
+  function fitCanvas() {
+    const baseWidth = Math.max(1, Number(surface?.dataset.baseWidth) || 1);
+    const baseHeight = Math.max(1, Number(surface?.dataset.baseHeight) || 1);
+    const next = fittedCanvasZoom({
+      baseWidth,
+      baseHeight,
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+    });
+    applyZoom(next);
+    viewport.scrollLeft = Math.max(
+      0,
+      panMargin + (baseWidth * next - viewport.clientWidth) / 2,
+    );
+    viewport.scrollTop = Math.max(
+      0,
+      panMargin + (baseHeight * next - viewport.clientHeight) / 2,
+    );
   }
 
   function updateHull() {
@@ -637,6 +665,10 @@ export function mountStoryCanvas({
       if (command === 'zoom-reset') {
         accumulatedWheelDelta = 0;
         applyZoom(NATIVE_CANVAS_ZOOM);
+      }
+      if (command === 'zoom-fit') {
+        accumulatedWheelDelta = 0;
+        fitCanvas();
       }
       if (command === 'fullscreen') {
         const open = !root.classList.contains('is-fullscreen');

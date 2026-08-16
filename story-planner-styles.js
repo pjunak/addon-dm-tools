@@ -24,12 +24,16 @@ export const STORY_PLANNER_STYLES = `
     .addon-dm-tools .dmt-planner-stagebar{grid-column:2;grid-row:1;display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);min-width:0;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-muted);font-size:var(--text-xs)}
     .addon-dm-tools .dmt-planner-stagebar span{display:flex;align-items:center;gap:var(--space-2)}
     .addon-dm-tools .dmt-stage-actions{justify-content:flex-end;min-width:0;flex-wrap:wrap}
+    .addon-dm-tools .dmt-canvas-purpose,.addon-dm-tools .dmt-visibility-indicator{display:inline-flex;min-height:2rem;padding:0 var(--space-3);border:1px solid var(--border-subtle);border-radius:999px;background:var(--bg-raised);color:var(--text-muted);font-family:var(--font-ui);font-size:var(--text-xs);white-space:nowrap}
+    .addon-dm-tools .dmt-visibility-indicator{border-color:color-mix(in srgb,var(--accent-gold) 48%,transparent);background:color-mix(in srgb,var(--bg-raised) 86%,var(--accent-gold) 14%);color:var(--accent-gold)}
+    .addon-dm-tools .dmt-visibility-indicator[hidden]{display:none!important}
     .addon-dm-tools .dmt-zoom-controls{display:inline-flex!important;gap:0!important;border:1px solid var(--border-subtle);border-radius:999px;overflow:hidden;background:var(--bg-raised)}
     .addon-dm-tools .dmt-zoom-controls button{min-width:2rem;min-height:2rem;padding:0 var(--space-2);border:0;border-radius:0;background:transparent;color:var(--text-parchment);cursor:pointer}
     .addon-dm-tools .dmt-zoom-controls button+button{border-left:1px solid var(--border-subtle)}
     .addon-dm-tools .dmt-zoom-controls button:hover,.addon-dm-tools .dmt-zoom-controls button:focus-visible{outline:none;background:color-mix(in srgb,var(--bg-raised) 82%,var(--accent-gold) 18%)}
     .addon-dm-tools .dmt-zoom-controls button:disabled{opacity:.4;cursor:not-allowed}
     .addon-dm-tools .dmt-zoom-level{min-width:4rem!important;font-variant-numeric:tabular-nums}
+    .addon-dm-tools .dmt-zoom-fit{padding-inline:var(--space-3)!important}
     .addon-dm-tools .dmt-stage-canvas-wrap{position:relative;grid-column:2;grid-row:2;min-width:0;min-height:0;overflow:hidden;background:var(--bg-base)}
     .addon-dm-tools .dmt-story-viewport{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain;background-color:var(--bg-base)}
     .addon-dm-tools .dmt-story-viewport.is-panning,.addon-dm-tools .dmt-story-viewport.is-panning *{cursor:grabbing!important;user-select:none}
@@ -140,6 +144,7 @@ export const STORY_PLANNER_STYLES = `
     }
     @media(max-width:768px){
       .addon-dm-tools .dmt-planner-stagebar{align-items:flex-start;flex-direction:column}
+      .addon-dm-tools .dmt-canvas-purpose{display:none}
       .addon-dm-tools .dmt-planner-form-row{grid-template-columns:1fr}
       .addon-dm-tools .dmt-selection-toolbar{justify-content:flex-start;overflow-x:auto;border-radius:var(--radius-lg)}
       .addon-dm-tools .dmt-planner-modal,.addon-dm-tools .dmt-shortcuts-modal{align-items:end;padding:0}

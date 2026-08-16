@@ -106,6 +106,16 @@ reference when the precise relationship matters but is not story flow.
   removed by a semantic level do not reserve empty card height; detail changes
   occur only at discrete thresholds, and actual card bounds drive connector
   geometry after both row removal and Pretext wrapping change the height.
+- The stage bar labels Story Planner as an **editable canvas**, distinguishing
+  it from derived read-only projections such as Mind Palace. Its zoom control
+  uses the same minus / exact percentage / plus / Fit presentation as Mind
+  Palace. Fit selects the largest fixed ladder level that contains the active
+  structure, never enlarges beyond 100%, and centers it without changing stored
+  graph positions.
+- Whenever semantic zoom removes information, a visible status pill names the
+  hidden layers. Overview reports hidden types, descriptions, metadata, notes,
+  and flow labels; compact restores types; condensed restores descriptions.
+  The indicator disappears at 100%, where all planning detail is visible.
 - Holding the middle mouse button and dragging pans the viewport in either
   standard or fullscreen mode, matching the established CAD interaction. It
   does not alter selection or card positions and shows a grabbing cursor while

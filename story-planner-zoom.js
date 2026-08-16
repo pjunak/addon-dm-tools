@@ -59,3 +59,25 @@ export function storyCanvasDetailLevel(value) {
   if (zoom < FULL_DETAIL_ZOOM - CANVAS_ZOOM_EPSILON) return 'condensed';
   return 'full';
 }
+
+export function storyCanvasHiddenDetailKey(value) {
+  const level = storyCanvasDetailLevel(value);
+  return level === 'full' ? '' : `planner.zoom.hidden.${level}`;
+}
+
+export function fittedCanvasZoom({
+  baseWidth,
+  baseHeight,
+  viewportWidth,
+  viewportHeight,
+  padding = 48,
+  maxZoom = NATIVE_CANVAS_ZOOM,
+} = {}) {
+  const availableWidth = Math.max(1, Number(viewportWidth) - Math.max(0, Number(padding)) * 2);
+  const availableHeight = Math.max(1, Number(viewportHeight) - Math.max(0, Number(padding)) * 2);
+  const width = Math.max(1, Number(baseWidth) || 1);
+  const height = Math.max(1, Number(baseHeight) || 1);
+  const limit = Math.min(clampCanvasZoom(maxZoom), availableWidth / width, availableHeight / height);
+  return [...CANVAS_ZOOM_LEVELS].reverse().find(level => level <= limit)
+    ?? MIN_CANVAS_ZOOM;
+}

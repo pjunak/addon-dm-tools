@@ -25,9 +25,11 @@ import {
   CANVAS_ZOOM_LEVELS,
   NATIVE_CANVAS_ZOOM,
   clampCanvasZoom,
+  fittedCanvasZoom,
   normalizeCanvasZoom,
   stepCanvasZoom,
   storyCanvasDetailLevel,
+  storyCanvasHiddenDetailKey,
 } from '../story-planner-zoom.js';
 import {
   itemAncestors,
@@ -441,6 +443,22 @@ test('canvas zoom anchors the pointer and derives discrete rendering metrics', (
   assert.equal(storyCanvasDetailLevel(0.75), 'condensed');
   assert.equal(storyCanvasDetailLevel(0.999), 'condensed');
   assert.equal(storyCanvasDetailLevel(1), 'full');
+  assert.equal(storyCanvasHiddenDetailKey(0.35), 'planner.zoom.hidden.overview');
+  assert.equal(storyCanvasHiddenDetailKey(0.55), 'planner.zoom.hidden.compact');
+  assert.equal(storyCanvasHiddenDetailKey(0.8), 'planner.zoom.hidden.condensed');
+  assert.equal(storyCanvasHiddenDetailKey(1), '');
+  assert.equal(fittedCanvasZoom({
+    baseWidth: 1200,
+    baseHeight: 800,
+    viewportWidth: 900,
+    viewportHeight: 700,
+  }), 0.6);
+  assert.equal(fittedCanvasZoom({
+    baseWidth: 200,
+    baseHeight: 200,
+    viewportWidth: 900,
+    viewportHeight: 700,
+  }), 1);
   assert.equal(storyCanvasTypography(0.35).id, 'minimum');
   assert.equal(storyCanvasTypography(0.6).id, 'minimum');
   assert.equal(storyCanvasTypography(0.6 + Number.EPSILON).id, 'minimum');
@@ -788,6 +806,9 @@ test('unified route renders one canvas and manually creates a nested quest', asy
   assert.match(rootHtml, /data-dmt-command="zoom-out"/);
   assert.match(rootHtml, /data-dmt-command="zoom-reset"[^>]*><output data-dmt-zoom-label>100%<\/output>/);
   assert.match(rootHtml, /data-dmt-command="zoom-in"/);
+  assert.match(rootHtml, /data-dmt-command="zoom-fit"/);
+  assert.match(rootHtml, /data-dmt-visibility[^>]*hidden/);
+  assert.match(rootHtml, /Editable canvas/);
   assert.match(rootHtml, /<dt>Scroll wheel<\/dt><dd>Zoom around the pointer/);
   assert.doesNotMatch(rootHtml, /dm-story-inspector/);
   assert.doesNotMatch(rootHtml, /Planning Graph|Folder|Named sections/);

@@ -23,6 +23,7 @@ import {
   MIN_CANVAS_ZOOM,
   clampCanvasZoom,
   storyCanvasDetailLevel,
+  storyCanvasHiddenDetailKey,
 } from './story-planner-zoom.js';
 
 const CANVAS_PAN_MARGIN = 480;
@@ -731,6 +732,7 @@ export function renderCanvasPage({
   const t = (key, params) => host.i18n.t(key, params);
   const title = projection.scope?.title || t('planner.campaign');
   const zoomPercent = Math.round(zoom * 100);
+  const hiddenDetailKey = storyCanvasHiddenDetailKey(zoom);
   return `<main class="addon-dm-tools dmt-planner-shell${fullscreen ? ' is-fullscreen' : ''}">
     ${STORY_PLANNER_STYLES}
     ${breadcrumbs(host, data, scopeId)}
@@ -748,10 +750,17 @@ export function renderCanvasPage({
                 nodes: projection.nodes.length,
                 links: projection.flowLinks.length,
               }))}
+              <span class="dmt-canvas-purpose" title="${esc(t('planner.canvas.editableTitle'))}">✦ ${esc(t('planner.canvas.editable'))}</span>
+              <span class="dmt-visibility-indicator" data-dmt-visibility role="status"
+                data-label-overview="${esc(t('planner.zoom.hidden.overview'))}"
+                data-label-compact="${esc(t('planner.zoom.hidden.compact'))}"
+                data-label-condensed="${esc(t('planner.zoom.hidden.condensed'))}"
+                title="${esc(t('planner.zoom.hiddenTitle'))}"${hiddenDetailKey ? '' : ' hidden'}>◐ <span data-dmt-visibility-label>${hiddenDetailKey ? esc(t(hiddenDetailKey)) : ''}</span></span>
               <span class="dmt-zoom-controls" role="group" aria-label="${esc(t('planner.zoom.controls'))}">
                 <button class="inline-create-btn" type="button" data-dmt-command="zoom-out" aria-label="${esc(t('planner.zoom.out'))}"${zoom <= MIN_CANVAS_ZOOM ? ' disabled' : ''}>−</button>
                 <button class="dmt-zoom-level" type="button" data-dmt-command="zoom-reset" aria-label="${esc(t('planner.zoom.reset'))}"><output data-dmt-zoom-label>${zoomPercent}%</output></button>
                 <button class="inline-create-btn" type="button" data-dmt-command="zoom-in" aria-label="${esc(t('planner.zoom.in'))}"${zoom >= MAX_CANVAS_ZOOM ? ' disabled' : ''}>+</button>
+                <button class="dmt-zoom-fit" type="button" data-dmt-command="zoom-fit" title="${esc(t('planner.zoom.fitTitle'))}">${esc(t('planner.zoom.fit'))}</button>
               </span>
               ${canUndo ? `<button class="inline-create-btn" type="button" data-dmt-command="undo">${esc(t('planner.action.undo'))}</button>` : ''}
               <button class="inline-create-btn" type="button"${dataAction(host.action('plannerResetLayout'))}>${esc(t('planner.action.resetLayout'))}</button>

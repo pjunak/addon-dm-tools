@@ -43,6 +43,12 @@
       <button type="button" data-dmt-command="zoom-out">Zoom out</button>
       <button type="button" data-dmt-command="zoom-reset"><output data-dmt-zoom-label>103%</output></button>
       <button type="button" data-dmt-command="zoom-in">Zoom in</button>
+      <button type="button" data-dmt-command="zoom-fit">Fit</button>
+      <span class="dmt-visibility-indicator" data-dmt-visibility role="status"
+        data-label-overview="Overview details hidden"
+        data-label-compact="Compact details hidden"
+        data-label-condensed="Condensed details hidden"
+        hidden>◐ <span data-dmt-visibility-label></span></span>
     </div>
     <div class="dmt-story-viewport fixture-viewport">
       <div class="dmt-story-surface" data-dmt-canvas-surface data-base-width="900" data-base-height="500" data-pan-margin="0">
@@ -218,17 +224,29 @@
       await nextFrame();
       check(
         'large pixel wheel delta is limited to one zoom step',
-        canvas.dataset.dmtZoom === '0.9',
-        canvas.dataset.dmtZoom,
-        '0.9',
+        canvas.dataset.dmtZoom === '0.9'
+          && root.querySelector('[data-dmt-visibility]').hidden === false
+          && root.querySelector('[data-dmt-visibility-label]').textContent === 'Condensed details hidden',
+        {
+          zoom: canvas.dataset.dmtZoom,
+          hidden: root.querySelector('[data-dmt-visibility]').hidden,
+          label: root.querySelector('[data-dmt-visibility-label]').textContent,
+        },
+        { zoom: '0.9', hidden: false, label: 'Condensed details hidden' },
       );
       dispatchWheel(-700);
       await nextFrame();
       check(
         'large reverse wheel delta stops at exactly 100%',
-        canvas.dataset.dmtZoom === '1' && canvas.dataset.dmtDetail === 'full',
-        { zoom: canvas.dataset.dmtZoom, detail: canvas.dataset.dmtDetail },
-        { zoom: '1', detail: 'full' },
+        canvas.dataset.dmtZoom === '1'
+          && canvas.dataset.dmtDetail === 'full'
+          && root.querySelector('[data-dmt-visibility]').hidden === true,
+        {
+          zoom: canvas.dataset.dmtZoom,
+          detail: canvas.dataset.dmtDetail,
+          hidden: root.querySelector('[data-dmt-visibility]').hidden,
+        },
+        { zoom: '1', detail: 'full', hidden: true },
       );
       dispatchWheel(6, 1);
       await nextFrame();
@@ -297,6 +315,19 @@
       await nextFrame();
       check(
         'opposite zoom button returns exactly to 100%',
+        canvas.dataset.dmtZoom === '1'
+          && root.querySelector('[data-dmt-zoom-label]').textContent === '100%',
+        {
+          zoom: canvas.dataset.dmtZoom,
+          label: root.querySelector('[data-dmt-zoom-label]').textContent,
+        },
+        { zoom: '1', label: '100%' },
+      );
+      root.querySelector('[data-dmt-command="zoom-in"]').click();
+      root.querySelector('[data-dmt-command="zoom-fit"]').click();
+      await nextFrame();
+      check(
+        'Fit returns the complete structure to a fixed level no larger than 100%',
         canvas.dataset.dmtZoom === '1'
           && root.querySelector('[data-dmt-zoom-label]').textContent === '100%',
         {
