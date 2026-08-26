@@ -73,6 +73,7 @@ Only schema version 3 is accepted; do not emit or convert older versions.
   "format": "dm-tools-planning",
   "schemaVersion": 3,
   "generatedAt": 1785024000000,
+  "mode": "merge",
   "items": [],
   "flowLinks": [],
   "references": [],
@@ -83,6 +84,15 @@ Only schema version 3 is accepted; do not emit or convert older versions.
 
 `generatedAt` is a non-negative epoch-millisecond integer. It becomes the
 stored `updatedAt` of every changed record.
+
+`mode` is optional and defaults to `merge`. Generate `merge` for ordinary
+creates and revision-checked updates. Generate `replace` only when the DM has
+explicitly requested a complete authoritative planner snapshot or legacy-data
+recovery. In `replace` mode every desired record uses `operation: "create"` and
+omits `expectedUpdatedAt`; records absent from the five arrays will be deleted
+and saved canvas layouts will be cleared. Never use replacement for a partial
+plan or a batch. The total writes and deletions must fit the 256-operation
+atomic limit.
 
 Every record includes:
 
@@ -444,6 +454,7 @@ marginalia.
   "format": "dm-tools-planning",
   "schemaVersion": 3,
   "generatedAt": 1785024000000,
+  "mode": "merge",
   "items": [
     {
       "id": "plotline-waking-dragons",
@@ -563,6 +574,7 @@ earlier committed batch already created that anchor.
 ## Final checklist
 
 - Root format and schema are exact.
+- Mode is `merge` unless the DM explicitly requested a complete replacement.
 - All five arrays exist.
 - IDs are stable, valid, and unique within each collection.
 - Every child parent exists and is a plotline or quest.
@@ -576,5 +588,7 @@ earlier committed batch already created that anchor.
 - Every marginalia anchor exists.
 - Encounter quantities are explicit.
 - Updates have exact revisions; creates omit revisions.
+- A replacement contains the entire desired planner, uses only create records,
+  and fits the 256-operation limit including deletions and layout cleanup.
 - There are no canvas positions, progress states, sessions, or invented fields.
 - The preview contains no errors before the DM approves commit.

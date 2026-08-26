@@ -11,7 +11,11 @@ const DIAGNOSTIC_KEYS = {
   PLANNING_ID_INVALID: 'diagnostic.id',
   PLANNING_DUPLICATE_ID: 'diagnostic.duplicateId',
   PLANNING_OPERATION_INVALID: 'diagnostic.operation',
+  PLANNING_REPLACE_OPERATION_INVALID: 'diagnostic.replaceOperation',
+  PLANNING_MODE_INVALID: 'diagnostic.mode',
   PLANNING_LOCAL_INVALID: 'diagnostic.localInvalid',
+  PLANNING_LOCAL_REPLACE_REQUIRED: 'diagnostic.localReplaceRequired',
+  PLANNING_REPLACE: 'diagnostic.replace',
   PLANNING_CONFLICT: 'diagnostic.conflict',
   PLANNING_FIELD_REQUIRED: 'diagnostic.planningField',
   PLANNING_FIELD_TYPE: 'diagnostic.planningField',
@@ -56,11 +60,16 @@ function initialState() {
 
 function counts(plan) {
   const result = {
-    writes: plan?.operations?.length || 0,
+    writes: 0,
+    deletes: 0,
     conflicts: 0,
     warnings: 0,
     errors: 0,
   };
+  for (const operation of plan?.operations || []) {
+    if (operation.op === 'delete') result.deletes++;
+    else result.writes++;
+  }
   for (const item of plan?.diagnostics || []) {
     if (item.code === 'PLANNING_CONFLICT') result.conflicts++;
     if (item.severity === 'warning') result.warnings++;
@@ -153,6 +162,57 @@ export function createPlanningImportAdapter(host, options = {}) {
       state.confirmed = false;
       state.step = 'preview';
       publish('announce.previewReady', 'dm-import-preview-heading');
+    } catch (error) {
+      if (disposed || current !== generation) return;
+      fail(error);
+      publish('announce.failed', 'dm-import-state');
+    }
+  }
+
+  function replacementAvailable() {
+    const errors = (state.plan?.diagnostics || []).filter(
+      item => item.severity === 'error',
+    );
+    return errors.length > 0 && errors.every(
+      item => item.code === 'PLANNING_LOCAL_REPLACE_REQUIRED',
+    );
+  }
+
+  async function requestReplacementPreview() {
+    if (disposed || !['preview', 'review'].includes(state.step)
+        || !state.file || !replacementAvailable()) return;
+    const previousJob = state.jobId;
+    const current = ++generation;
+    state.step = 'validating';
+    state.errorCode = '';
+    state.confirmed = false;
+    publish('announce.replacementValidating', 'dm-import-state');
+    try {
+      const source = JSON.parse(await state.file.text());
+      source.mode = 'replace';
+      const serialized = `${JSON.stringify(source, null, 2)}\n`;
+      const file = typeof File === 'function'
+        ? new File([serialized], state.fileName || 'planning.json', { type: 'application/json' })
+        : Object.assign(new Blob([serialized], { type: 'application/json' }), {
+          name: state.fileName || 'planning.json',
+        });
+      const job = await host.imports.createJob({
+        providerId: PROVIDER_ID,
+        file,
+        format: 'json',
+      });
+      if (disposed || current !== generation) return;
+      state.jobId = job.id;
+      host.ui.rerender();
+      const preview = await host.imports.preview(job.id);
+      if (disposed || current !== generation) return;
+      state.file = file;
+      state.previewToken = preview.previewToken;
+      state.plan = preview.plan;
+      state.committable = preview.committable === true;
+      state.step = 'preview';
+      if (previousJob) await host.imports.cancel(previousJob).catch(() => {});
+      publish('announce.replacementPreviewReady', 'dm-import-preview-heading');
     } catch (error) {
       if (disposed || current !== generation) return;
       fail(error);
@@ -301,7 +361,10 @@ export function createPlanningImportAdapter(host, options = {}) {
           <strong>${esc(operation.id)}</strong>
           <div>${esc(operation.value?.title || operation.value?.name || operation.value?.label || '')}</div>
         </div>
-        <span class="codex-badge">${esc(operation.target?.collection || '')}</span>
+        <div>
+          <span class="codex-badge">${esc(t(operation.op === 'delete' ? 'operation.delete' : 'operation.write'))}</span>
+          <span class="codex-badge">${esc(operation.target?.collection || '')}</span>
+        </div>
       </article>`).join('')}</div>`;
   }
 
@@ -309,6 +372,7 @@ export function createPlanningImportAdapter(host, options = {}) {
     const value = counts(state.plan);
     return `<dl>
       <div><dt>${esc(t('summary.writes'))}</dt><dd>${esc(host.i18n.formatNumber(value.writes))}</dd></div>
+      <div><dt>${esc(t('summary.deletes'))}</dt><dd>${esc(host.i18n.formatNumber(value.deletes))}</dd></div>
       <div><dt>${esc(t('summary.conflicts'))}</dt><dd>${esc(host.i18n.formatNumber(value.conflicts))}</dd></div>
       <div><dt>${esc(t('summary.warnings'))}</dt><dd>${esc(host.i18n.formatNumber(value.warnings))}</dd></div>
       <div><dt>${esc(t('summary.errors'))}</dt><dd>${esc(host.i18n.formatNumber(value.errors))}</dd></div>
@@ -355,7 +419,9 @@ export function createPlanningImportAdapter(host, options = {}) {
   }
 
   function previewHtml(reviewing = false) {
-    const blocked = !state.committable || counts(state.plan).errors > 0;
+    const value = counts(state.plan);
+    const blocked = !state.committable || value.errors > 0;
+    const offerReplacement = replacementAvailable();
     return `<section class="settings-panel" aria-labelledby="${reviewing ? 'dm-import-review-heading' : 'dm-import-preview-heading'}">
       <h2 id="${reviewing ? 'dm-import-review-heading' : 'dm-import-preview-heading'}" tabindex="-1">${esc(t(reviewing ? 'review.title' : 'preview.title'))}</h2>
       <p>${esc(t('preview.file', { name: state.fileName }))}</p>
@@ -365,10 +431,15 @@ export function createPlanningImportAdapter(host, options = {}) {
       <h3>${esc(t('preview.diagnostics'))}</h3>
       ${diagnosticsHtml()}
       ${blocked ? `<p role="alert">${esc(t('review.blocked'))}</p>` : ''}
+      ${offerReplacement ? `<aside class="codex-notice">
+        <strong>${esc(t('replace.title'))}</strong>
+        <p>${esc(t('replace.body'))}</p>
+        <button class="edit-delete-btn" type="button"${dataAction(host.action('replacePreview'))}>${esc(t('action.previewReplacement'))}</button>
+      </aside>` : ''}
       ${reviewing ? `
         <div class="settings-field">
           <label><input id="dm-import-confirm" type="checkbox" ${state.confirmed ? 'checked' : ''}${dataOn('change', host.action('confirm'), '$checked')}>
-            ${esc(t('review.confirm'))}</label>
+            ${esc(t(value.deletes ? 'review.confirmReplace' : 'review.confirm'))}</label>
         </div>
         <button class="edit-save-btn" type="button" ${!state.confirmed || blocked ? 'disabled' : ''}${dataAction(host.action('commit'))}>${esc(t('action.commit'))}</button>
       ` : `<button class="edit-save-btn" type="button"${dataAction(host.action('review'))}>${esc(t('action.review'))}</button>`}
@@ -435,6 +506,7 @@ export function createPlanningImportAdapter(host, options = {}) {
     initialize,
     selectFile,
     requestPreview,
+    requestReplacementPreview,
     review,
     confirm,
     commit,

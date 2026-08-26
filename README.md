@@ -85,9 +85,11 @@ surfaces nor their data.
 Provider `(dm-tools, planning-json)` uses provider API 1 and planning schema
 version 3. Older versions are rejected without conversion. Preview is
 read-only. Commit publishes the exact reviewed plan through one durable host
-transaction. Imports never delete, change canvas positions, or overwrite a
-record with a stale `expectedUpdatedAt`. One document may propose at most 256
-writes.
+transaction. Normal merge imports never delete, change canvas positions, or
+overwrite a record with a stale `expectedUpdatedAt`. An explicit complete
+replacement may overwrite matching IDs, delete omitted planner records, and
+clear saved canvas layouts only after a second preview that lists those exact
+operations. One document may propose at most 256 combined writes and deletes.
 
 The planning client publishes `codex.import-adapter` v1 while DM Tools consumes
 the same contract with cardinality many. New content addons appear without a

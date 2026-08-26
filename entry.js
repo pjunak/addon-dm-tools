@@ -50,6 +50,7 @@ export default function register(host) {
 
   host.registerAction('selectFile', input => planningImport.selectFile(input));
   host.registerAction('preview', () => planningImport.requestPreview());
+  host.registerAction('replacePreview', () => planningImport.requestReplacementPreview());
   host.registerAction('review', () => planningImport.review());
   host.registerAction('confirm', checked => planningImport.confirm(checked));
   host.registerAction('commit', () => planningImport.commit());

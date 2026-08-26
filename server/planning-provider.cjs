@@ -7,6 +7,7 @@ const ROOT_FIELDS = new Set([
   'format',
   'schemaVersion',
   'generatedAt',
+  'mode',
   'items',
   'flowLinks',
   'references',
@@ -43,6 +44,11 @@ const TARGETS = Object.freeze({
   references: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_references' }),
   consequences: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'planning_consequences' }),
   notes: Object.freeze({ scope: 'addon', addonId: ADDON_ID, collection: 'dm_notes' }),
+});
+const LAYOUT_TARGET = Object.freeze({
+  scope: 'addon',
+  addonId: ADDON_ID,
+  collection: 'planning_views',
 });
 const CORE_TARGETS = Object.freeze([
   'characters',
@@ -100,21 +106,27 @@ function sameContent(left, right) {
 function normalizeStored(snapshot, normalize, label, diagnostics) {
   const records = [];
   const byId = new Map();
+  const rawById = new Map(entriesOf(snapshot));
+  let invalid = 0;
   for (const [id, record] of entriesOf(snapshot)) {
     const result = normalize(record, [label, id || '']);
     if (!result.value || byId.has(result.value.id)) {
-      addDiagnostic(diagnostics, diagnostic(
-        'error',
-        'PLANNING_LOCAL_INVALID',
-        `The local ${label} collection contains an invalid or duplicate record.`,
-        [label, id || ''],
-      ));
+      invalid++;
       continue;
     }
     records.push(result.value);
     byId.set(result.value.id, result.value);
   }
-  return { records, byId };
+  if (invalid) {
+    addDiagnostic(diagnostics, diagnostic(
+      'error',
+      'PLANNING_LOCAL_REPLACE_REQUIRED',
+      `${invalid} stored ${label} record${invalid === 1 ? '' : 's'} use an older or invalid schema. `
+        + 'A merge cannot reconcile them safely; set "mode":"replace" on the complete planning document and preview again.',
+      [label],
+    ));
+  }
+  return { records, byId, rawById };
 }
 
 function normalizeIncoming({
@@ -123,6 +135,7 @@ function normalizeIncoming({
   generatedAt,
   normalize,
   diagnostics,
+  mode,
 }) {
   if (!Array.isArray(records)) {
     addDiagnostic(diagnostics, diagnostic(
@@ -155,7 +168,14 @@ function normalizeIncoming({
         ));
       }
     }
-    if (record.operation !== 'create' && record.operation !== 'update') {
+    if (mode === 'replace' && record.operation !== 'create') {
+      addDiagnostic(diagnostics, diagnostic(
+        'error',
+        'PLANNING_REPLACE_OPERATION_INVALID',
+        'Complete replacement documents must use operation "create" for every desired record.',
+        [...path, 'operation'],
+      ));
+    } else if (record.operation !== 'create' && record.operation !== 'update') {
       addDiagnostic(diagnostics, diagnostic(
         'error',
         'PLANNING_OPERATION_INVALID',
@@ -205,6 +225,42 @@ function normalizeIncoming({
       path,
     };
   }).filter(Boolean);
+}
+
+function reconcileReplacement({
+  incoming,
+  local,
+  normalize,
+  target,
+  operations,
+  counts,
+}) {
+  const desiredIds = new Set();
+  for (const record of incoming) {
+    const id = record.value.id;
+    desiredIds.add(id);
+    const currentRaw = local.rawById.get(id);
+    const current = currentRaw === undefined
+      ? null
+      : normalize(currentRaw, []).value;
+    if (current && sameContent(current, record.value)) {
+      counts.skip++;
+      continue;
+    }
+    operations.push({
+      target,
+      op: 'put',
+      id,
+      value: withoutId(record.value),
+    });
+    if (currentRaw === undefined) counts.create++;
+    else counts.update++;
+  }
+  for (const id of local.rawById.keys()) {
+    if (typeof id !== 'string' || !id || desiredIds.has(id)) continue;
+    operations.push({ target, op: 'delete', id });
+    counts.delete++;
+  }
 }
 
 function reconcile({
@@ -295,6 +351,7 @@ function summaryDiagnostics(diagnostics, counts) {
   const verbs = {
     create: 'created',
     update: 'updated',
+    delete: 'deleted',
     skip: 'skipped',
   };
   for (const [kind, count] of Object.entries(counts)) {
@@ -358,6 +415,14 @@ function descriptor(contract) {
         ['schemaVersion'],
       ));
     }
+    if (source.mode !== undefined && source.mode !== 'merge' && source.mode !== 'replace') {
+      addDiagnostic(diagnostics, diagnostic(
+        'error',
+        'PLANNING_MODE_INVALID',
+        'mode must be "merge" or "replace" when provided.',
+        ['mode'],
+      ));
+    }
     if (!Number.isSafeInteger(source.generatedAt) || source.generatedAt < 0) {
       addDiagnostic(diagnostics, diagnostic(
         'error',
@@ -367,9 +432,11 @@ function descriptor(contract) {
       ));
     }
 
+    const mode = source.mode === 'replace' ? 'replace' : 'merge';
+    const localDiagnostics = mode === 'merge' ? diagnostics : [];
     const local = Object.fromEntries(Object.entries(normalizers).map(([label, normalize]) => [
       label,
-      normalizeStored(context.read(TARGETS[label]), normalize, label, diagnostics),
+      normalizeStored(context.read(TARGETS[label]), normalize, label, localDiagnostics),
     ]));
     const generatedAt = Number.isSafeInteger(source.generatedAt) && source.generatedAt >= 0
       ? source.generatedAt
@@ -382,38 +449,76 @@ function descriptor(contract) {
         generatedAt,
         normalize,
         diagnostics,
+        mode,
       }),
     ]));
-    const counts = { create: 0, update: 0, skip: 0, conflict: 0 };
+    const counts = { create: 0, update: 0, delete: 0, skip: 0, conflict: 0 };
     for (const label of Object.keys(normalizers)) {
-      reconcile({
-        incoming: incoming[label],
-        local: local[label],
-        target: TARGETS[label],
-        diagnostics,
-        operations,
-        counts,
-      });
+      if (mode === 'replace') {
+        reconcileReplacement({
+          incoming: incoming[label],
+          local: local[label],
+          normalize: normalizers[label],
+          target: TARGETS[label],
+          operations,
+          counts,
+        });
+      } else {
+        reconcile({
+          incoming: incoming[label],
+          local: local[label],
+          target: TARGETS[label],
+          diagnostics,
+          operations,
+          counts,
+        });
+      }
     }
 
-    const candidate = Object.fromEntries(Object.keys(normalizers).map(label => [
-      label,
-      [...local[label].byId.values()],
-    ]));
-    contract.validatePlanningDataset(candidate).forEach(error => addDiagnostic(
-      diagnostics,
-      diagnostic('error', error.code, error.message, error.path),
-    ));
-    contract.validatePlanningDataset({
-      ...candidate,
-      references: incoming.references.map(record => record.value),
-      consequences: incoming.consequences.map(record => record.value),
-      notes: incoming.notes.map(record => record.value),
-      coreIds: coreIds(context),
-    }).forEach(error => addDiagnostic(
-      diagnostics,
-      diagnostic('error', error.code, error.message, error.path),
-    ));
+    const candidate = mode === 'replace'
+      ? Object.fromEntries(Object.keys(normalizers).map(label => [
+        label,
+        incoming[label].map(record => record.value),
+      ]))
+      : Object.fromEntries(Object.keys(normalizers).map(label => [
+        label,
+        [...local[label].byId.values()],
+      ]));
+    if (mode === 'replace') {
+      contract.validatePlanningDataset({
+        ...candidate,
+        coreIds: coreIds(context),
+      }).forEach(error => addDiagnostic(
+        diagnostics,
+        diagnostic('error', error.code, error.message, error.path),
+      ));
+      for (const [id] of entriesOf(context.read(LAYOUT_TARGET))) {
+        if (typeof id !== 'string' || !id) continue;
+        operations.push({ target: LAYOUT_TARGET, op: 'delete', id });
+        counts.delete++;
+      }
+      addDiagnostic(diagnostics, diagnostic(
+        'info',
+        'PLANNING_REPLACE',
+        'Replace mode treats this document as the complete planner state and clears saved canvas layouts.',
+        ['mode'],
+      ));
+    } else {
+      contract.validatePlanningDataset(candidate).forEach(error => addDiagnostic(
+        diagnostics,
+        diagnostic('error', error.code, error.message, error.path),
+      ));
+      contract.validatePlanningDataset({
+        ...candidate,
+        references: incoming.references.map(record => record.value),
+        consequences: incoming.consequences.map(record => record.value),
+        notes: incoming.notes.map(record => record.value),
+        coreIds: coreIds(context),
+      }).forEach(error => addDiagnostic(
+        diagnostics,
+        diagnostic('error', error.code, error.message, error.path),
+      ));
+    }
     if (operations.length > 256) {
       operations.length = 0;
       addDiagnostic(diagnostics, diagnostic(
@@ -431,8 +536,8 @@ function descriptor(contract) {
     apiVersion: 1,
     schemaVersion: SCHEMA_VERSION,
     formats: ['json'],
-    reads: [...Object.values(TARGETS), ...CORE_TARGETS],
-    writes: Object.values(TARGETS),
+    reads: [...Object.values(TARGETS), LAYOUT_TARGET, ...CORE_TARGETS],
+    writes: [...Object.values(TARGETS), LAYOUT_TARGET],
     targetTypes: ['addon-keyed'],
     limits: {
       maxInputBytes: 2 * 1024 * 1024,
@@ -451,6 +556,7 @@ module.exports = {
   PROVIDER_ID,
   SCHEMA_VERSION,
   TARGETS,
+  LAYOUT_TARGET,
   CORE_TARGETS,
   descriptor,
 };

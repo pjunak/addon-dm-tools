@@ -111,7 +111,7 @@ test('state machine keeps validation, preview, review, commit, and result distin
   assert.equal(fixture.center.getState().step, 'completed');
   assert.equal(fixture.rec.commits, 1);
   assert.ok(fixture.rec.announces.includes(en['announce.completed']));
-  assert.match(fixture.center.render(), /1 planning record was committed\./);
+  assert.match(fixture.center.render(), /1 planning operation was committed\./);
 });
 
 test('commit requires confirmation, blocks invalid previews, and prevents double submit', async () => {
@@ -147,6 +147,79 @@ test('commit requires confirmation, blocks invalid previews, and prevents double
   await invalid.center.commit();
   assert.equal(invalid.rec.commits, 0);
   assert.equal(invalid.center.getState().counts.conflicts, 1);
+});
+
+test('legacy-data finding offers a second, explicit replacement preview with visible deletions', async () => {
+  let previews = 0;
+  let replacementDocument;
+  const fixture = hostFixture({
+    imports: {
+      createJob: async ({ file }) => {
+        if (previews) replacementDocument = JSON.parse(await file.text());
+        return { id: `job-${previews + 1}`, state: 'created' };
+      },
+      preview: async id => {
+        previews++;
+        if (id === 'job-1') {
+          return {
+            id,
+            previewToken: 'merge-token',
+            committable: false,
+            plan: plan([{
+              severity: 'error',
+              code: 'PLANNING_LOCAL_REPLACE_REQUIRED',
+              path: ['items'],
+            }]),
+          };
+        }
+        return {
+          id,
+          previewToken: 'replace-token',
+          committable: true,
+          plan: plan([{ severity: 'info', code: 'PLANNING_REPLACE', path: ['mode'] }], [{
+            op: 'put',
+            id: 'current',
+            target: { collection: 'planning_items' },
+            value: { title: 'Current plan' },
+          }, {
+            op: 'delete',
+            id: 'legacy',
+            target: { collection: 'planning_items' },
+          }]),
+        };
+      },
+    },
+  });
+  await fixture.center.initialize();
+  fixture.center.selectFile({ files: [{
+    name: 'planning.json',
+    size: 100,
+    type: 'application/json',
+    text: async () => JSON.stringify({
+      format: 'dm-tools-planning',
+      schemaVersion: 3,
+      generatedAt: 1,
+      items: [],
+      flowLinks: [],
+      references: [],
+      consequences: [],
+      notes: [],
+    }),
+  }] });
+  await fixture.center.requestPreview();
+  assert.equal(fixture.center.getState().committable, false);
+  assert.match(fixture.center.render(), /Preview complete replacement/);
+
+  await fixture.center.requestReplacementPreview();
+  assert.equal(replacementDocument.mode, 'replace');
+  assert.equal(fixture.center.getState().step, 'preview');
+  assert.equal(fixture.center.getState().committable, true);
+  assert.equal(fixture.center.getState().counts.writes, 1);
+  assert.equal(fixture.center.getState().counts.deletes, 1);
+  assert.equal(fixture.rec.cancels, 1);
+  assert.match(fixture.center.render(), />delete</);
+  fixture.center.review();
+  assert.match(fixture.center.render(), /reviewed every write and deletion/);
 });
 
 test('revision conflict, cancellation, and expiry have separate states', async () => {

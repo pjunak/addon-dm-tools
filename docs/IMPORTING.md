@@ -1,8 +1,9 @@
 # Planning import
 
 DM Tools registers `(dm-tools, planning-json)` using provider API 1 and planning
-schema version 3. It accepts strict UTF-8 JSON and may atomically write the five
-meaning-bearing keyed DM-only collections.
+schema version 3. It accepts strict UTF-8 JSON and may atomically write or
+delete records in the five meaning-bearing keyed DM-only collections. Explicit
+replacement also clears the keyed `planning_views` layout collection.
 
 Older planning schema versions are rejected and are not converted.
 
@@ -16,6 +17,7 @@ in [`AGENT_GENERATION.md`](AGENT_GENERATION.md).
   "format": "dm-tools-planning",
   "schemaVersion": 3,
   "generatedAt": 1785024000000,
+  "mode": "merge",
   "items": [],
   "flowLinks": [],
   "references": [],
@@ -29,6 +31,16 @@ Every array must be present. Every record declares
 `expectedUpdatedAt`; creates omit it. The document `generatedAt` becomes
 `updatedAt` for every changed record.
 
+`mode` is optional and defaults to `"merge"`. Merge is the normal incremental
+workflow and retains records omitted from the document. `"replace"` is an
+explicit full-snapshot workflow: every incoming record must use `"create"`,
+matching IDs are overwritten, stored IDs omitted from the document are
+deleted, and saved canvas layouts are cleared. The complete replacement is
+validated and listed in preview before one atomic commit. Use it only when the
+document intentionally represents the entire planner, such as recovery from
+pre-v3 stored data. A replacement whose combined writes and deletions exceed
+256 operations is rejected rather than partially applied.
+
 The campaign-bundle contributor envelope is:
 
 ```json
@@ -39,6 +51,7 @@ The campaign-bundle contributor envelope is:
     "format": "dm-tools-planning",
     "schemaVersion": 3,
     "generatedAt": 1785024000000,
+    "mode": "merge",
     "items": [],
     "flowLinks": [],
     "references": [],
@@ -96,11 +109,11 @@ The provider then:
 
 1. normalizes every record through `planning-contract.js`;
 2. reads one consistent snapshot of all five planning collections and allowed
-   core reference collections;
+   core reference collections, plus saved layouts for explicit replacement;
 3. reconciles create, update, identical skip, and conflict in memory;
 4. validates ownership, same-parent flow, anchors, and new core references
    against the complete candidate;
-5. returns at most 256 exact `put` operations.
+5. returns at most 256 exact `put`/`delete` operations.
 
 Optional-addon targets are not existence-checked. Their addon, kind, record id,
 and fallback label remain strictly validated. Older missing core records do not
@@ -119,10 +132,26 @@ block unrelated imports; every core target present in the new input must exist.
   conflict.
 
 Equivalence ignores `updatedAt`; time alone never causes a write. Any error
-blocks the complete commit. Imports do not delete or write `planning_views`.
+blocks the complete commit. Merge imports never delete or write
+`planning_views`.
+
+### Complete replacement
+
+If merge encounters stored records from an older or invalid schema, it reports
+one actionable finding per affected collection instead of flooding the preview
+with one error per record. In the planning adapter, **Preview complete
+replacement** creates a new source document with `"mode":"replace"` and asks
+the server for a second preview. The original blocked preview changes nothing.
+
+Replacement treats the five incoming arrays as the exact desired state. It
+lists every write and delete, including layout cleanup, and requires a separate
+confirmation that explicitly mentions deletions. A campaign-bundle contribution
+uses the same behavior by setting `mode` inside its nested planning `document`.
+The host still rechecks all participating collection revisions at commit, so a
+change after preview invalidates the whole replacement.
 
 Preview stores the normalized plan server-side. Commit consumes an opaque
 single-use token, rechecks provider/package and collection revisions, and
 publishes those exact operations through one durable transaction. Cancellation,
 expiry, provider change, revision conflict, or publication failure leaves all
-five collections unchanged.
+six participating collections unchanged.

@@ -180,6 +180,132 @@ test('schema-v2 documents are rejected without conversion', async () => {
   await instance.dispose();
 });
 
+test('merge preview aggregates legacy local records and offers an explicit replacement', async () => {
+  const planningItems = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [
+    `legacy-${index}`,
+    {
+      schemaVersion: 2,
+      kind: 'event',
+      parentId: null,
+      eventType: 'story',
+      title: `Legacy ${index}`,
+      summary: '',
+      body: '',
+      objective: '',
+      setup: '',
+      resolution: '',
+      tags: [],
+      updatedAt: 10,
+    },
+  ]));
+  const instance = harness({ planning_items: planningItems });
+  const ready = await preview(instance, document());
+  const legacyDiagnostics = ready.plan.diagnostics.filter(
+    entry => entry.code === 'PLANNING_LOCAL_REPLACE_REQUIRED',
+  );
+  assert.equal(ready.committable, false);
+  assert.equal(legacyDiagnostics.length, 1);
+  assert.match(legacyDiagnostics[0].message, /^120 stored items records/);
+  assert.ok(ready.plan.diagnostics.length < 10);
+  assert.deepEqual(instance.collection('planning_items'), planningItems);
+  await instance.dispose();
+});
+
+test('replace mode atomically overwrites legacy planner state and clears saved layouts', async () => {
+  const instance = harness({
+    planning_items: {
+      'plotline-dragons': {
+        schemaVersion: 2,
+        kind: 'plotline',
+        parentId: null,
+        title: 'Legacy dragons',
+        summary: '',
+        body: '',
+        objective: '',
+        setup: '',
+        resolution: '',
+        tags: [],
+        updatedAt: 10,
+      },
+      obsolete: {
+        schemaVersion: 2,
+        kind: 'event',
+        parentId: null,
+        eventType: 'story',
+        title: 'Obsolete event',
+        summary: '',
+        body: '',
+        objective: '',
+        setup: '',
+        resolution: '',
+        tags: [],
+        updatedAt: 10,
+      },
+    },
+    planning_views: {
+      campaign: { positions: { obsolete: { x: 10, y: 20 } } },
+      'plotline-dragons': { positions: {} },
+    },
+  });
+  const ready = await preview(instance, document({ mode: 'replace' }));
+  assert.equal(ready.committable, true);
+  assert.ok(ready.plan.diagnostics.some(entry => entry.code === 'PLANNING_REPLACE'));
+  assert.ok(!ready.plan.diagnostics.some(
+    entry => entry.code === 'PLANNING_LOCAL_REPLACE_REQUIRED',
+  ));
+  assert.deepEqual(
+    ready.plan.operations.filter(operation => operation.op === 'delete').map(operation => [
+      operation.target.collection,
+      operation.id,
+    ]),
+    [
+      ['planning_items', 'obsolete'],
+      ['planning_views', 'campaign'],
+      ['planning_views', 'plotline-dragons'],
+    ],
+  );
+  assert.equal(ready.plan.operations.filter(operation => operation.op === 'put').length, 7);
+  assert.equal(instance.collection('planning_items').obsolete.title, 'Obsolete event');
+
+  const result = await instance.manager.commit(ready.id, 'mock-session', ready.previewToken);
+  assert.equal(result.operationCount, 10);
+  assert.deepEqual(Object.keys(instance.collection('planning_items')).sort(), [
+    'event-tremor',
+    'plotline-dragons',
+    'quest-earthquake',
+  ]);
+  assert.equal(instance.collection('planning_items')['plotline-dragons'].schemaVersion, 3);
+  assert.deepEqual(instance.collection('planning_views'), {});
+  assert.equal(instance.events(), 1);
+  await instance.dispose();
+});
+
+test('replace mode requires snapshot-style create records and still validates the full result', async () => {
+  const source = document({ mode: 'replace' });
+  source.items[0].operation = 'update';
+  source.items[0].expectedUpdatedAt = 10;
+  source.references[0].target.id = 'missing-character';
+  const instance = harness({
+    planning_items: {
+      legacy: { schemaVersion: 2, title: 'Legacy' },
+    },
+  });
+  const ready = await preview(instance, source);
+  assert.equal(ready.committable, false);
+  assert.ok(ready.plan.diagnostics.some(
+    entry => entry.code === 'PLANNING_REPLACE_OPERATION_INVALID',
+  ));
+  assert.ok(ready.plan.diagnostics.some(
+    entry => entry.code === 'PLANNING_CORE_REFERENCE_MISSING',
+  ));
+  await assert.rejects(
+    instance.manager.commit(ready.id, 'mock-session', ready.previewToken),
+    error => error.code === 'IMPORT_PLAN_INVALID',
+  );
+  assert.ok(instance.collection('planning_items').legacy);
+  await instance.dispose();
+});
+
 test('cross-canvas flow blocks the complete import', async () => {
   const source = document();
   source.items.push({
