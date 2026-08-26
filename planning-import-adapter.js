@@ -95,6 +95,7 @@ export function createPlanningImportAdapter(host, options = {}) {
   let state = initialState();
   let generation = 0;
   let disposed = false;
+  let returnToChooser = () => {};
 
   function publish(messageKey, focusId) {
     host.ui.rerender();
@@ -127,7 +128,14 @@ export function createPlanningImportAdapter(host, options = {}) {
       state.providerStatus = 'error';
       fail(error);
     }
-    publish('', state.step === 'select-input' ? 'dm-import-file' : 'dm-import-state');
+    publish('', 'dm-import-state');
+  }
+
+  function activate(context = {}) {
+    returnToChooser = typeof context.returnToChooser === 'function'
+      ? context.returnToChooser
+      : () => {};
+    return () => { returnToChooser = () => {}; };
   }
 
   function selectFile(input) {
@@ -136,7 +144,18 @@ export function createPlanningImportAdapter(host, options = {}) {
     state.file = file;
     state.fileName = file && typeof file.name === 'string' ? file.name : '';
     state.errorCode = '';
-    publish('announce.fileSelected', file ? 'dm-import-preview' : 'dm-import-file');
+    publish('announce.fileSelected', 'dm-import-state');
+  }
+
+  async function open(file) {
+    if (disposed || !file) return;
+    await reset(false);
+    state.file = file;
+    state.fileName = typeof file.name === 'string' ? file.name : '';
+    state.errorCode = '';
+    publish('announce.fileSelected', 'dm-import-state');
+    if (state.providerStatus === 'loading') await initialize();
+    await requestPreview();
   }
 
   async function requestPreview() {
@@ -306,7 +325,7 @@ export function createPlanningImportAdapter(host, options = {}) {
     }
   }
 
-  async function reset() {
+  async function reset(notifyCenter = true) {
     const jobId = state.jobId;
     const shouldCancel = jobId && !TERMINAL.has(state.step) && state.step !== 'committing';
     ++generation;
@@ -314,12 +333,13 @@ export function createPlanningImportAdapter(host, options = {}) {
     state = initialState();
     state.providerStatus = providerStatus;
     if (shouldCancel) await host.imports.cancel(jobId).catch(() => {});
-    if (!disposed) publish('', 'dm-import-file');
+    if (!disposed) publish('', 'dm-import-state');
+    if (notifyCenter) returnToChooser();
   }
 
   async function leave() {
     if (disposed) return;
-    await reset();
+    await reset(false);
   }
 
   async function dispose() {
@@ -403,21 +423,6 @@ export function createPlanningImportAdapter(host, options = {}) {
     </ol>`;
   }
 
-  function selectHtml() {
-    return `<section class="settings-panel" aria-labelledby="dm-import-select-heading">
-      <h2 id="dm-import-select-heading">${esc(t('select.title'))}</h2>
-      <p class="settings-hint" id="dm-import-help">${esc(t('select.help'))}</p>
-      <div class="settings-field">
-        <label class="settings-field-label" for="dm-import-file">${esc(t('select.fileLabel'))}</label>
-        <input class="edit-input" id="dm-import-file" type="file" accept=".json,application/json"
-          aria-describedby="dm-import-help"${dataOn('change', host.action('selectFile'), '$el')}>
-      </div>
-      ${state.fileName ? `<p>${esc(t('select.chosen', { name: state.fileName }))}</p>` : ''}
-      <button class="edit-save-btn" id="dm-import-preview" type="button"
-        ${!state.file || state.providerStatus !== 'ready' ? 'disabled' : ''}${dataAction(host.action('preview'))}>${esc(t('action.preview'))}</button>
-    </section>`;
-  }
-
   function previewHtml(reviewing = false) {
     const value = counts(state.plan);
     const blocked = !state.committable || value.errors > 0;
@@ -449,7 +454,11 @@ export function createPlanningImportAdapter(host, options = {}) {
   }
 
   function stateHtml() {
-    if (state.step === 'select-input') return selectHtml();
+    if (state.step === 'select-input') {
+      return `<section class="settings-panel" id="dm-import-state" tabindex="-1" aria-busy="true">
+        <p>${esc(t('state.preparing.body'))}</p>
+      </section>`;
+    }
     if (state.step === 'preview') return previewHtml(false);
     if (state.step === 'review') return previewHtml(true);
     if (state.step === 'validating' || state.step === 'committing') {
@@ -478,13 +487,10 @@ export function createPlanningImportAdapter(host, options = {}) {
 
   function render() {
     if (!host.role.isDM()) return `<section class="settings-panel" role="alert">${esc(t('error.forbidden'))}</section>`;
-    return `<main class="addon-dm-tools">
-      ${host.h.breadcrumb([{ label: t('breadcrumb.tools'), href: '#/dm' }, { label: t('page.title') }])}
-      <div class="page-header"><h1>${esc(t('page.title'))}</h1></div>
-      <p class="settings-hint">${esc(t('page.description'))}</p>
+    return `<div class="codex-stack">
       ${stepIndicator()}
       ${stateHtml()}
-    </main>`;
+    </div>`;
   }
 
   function getState() {
@@ -504,6 +510,8 @@ export function createPlanningImportAdapter(host, options = {}) {
 
   return {
     initialize,
+    activate,
+    open,
     selectFile,
     requestPreview,
     requestReplacementPreview,

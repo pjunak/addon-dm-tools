@@ -28,15 +28,17 @@ export default function register(host) {
   ].forEach(name => host.registerCollection(name));
 
   const planningImport = createPlanningImportAdapter(host);
-  host.provideService('codex.import-adapter', '1.0.0', Object.freeze({
+  host.provideService('codex.import-adapter', '1.1.0', Object.freeze({
     apiVersion: 1,
     descriptor: () => Object.freeze({
       id: 'planning-json',
       label: host.i18n.t('adapter.planning.label'),
       description: host.i18n.t('adapter.planning.description'),
-      accept: '.json,application/json',
+      formats: Object.freeze(['dm-tools-planning']),
       links: Object.freeze([]),
     }),
+    activate: context => planningImport.activate(context),
+    open: file => planningImport.open(file),
     render: () => planningImport.render(),
     leave: () => planningImport.leave(),
   }));
@@ -48,8 +50,8 @@ export default function register(host) {
   host.registerRoute('dm-plans', (sub, parts) => planner.render(sub, parts));
   host.registerRoute('dm-import', () => center.render());
 
-  host.registerAction('selectFile', input => planningImport.selectFile(input));
-  host.registerAction('preview', () => planningImport.requestPreview());
+  host.registerAction('selectImportFile', input => center.selectFile(input));
+  host.registerAction('resetImportCenter', () => center.reset());
   host.registerAction('replacePreview', () => planningImport.requestReplacementPreview());
   host.registerAction('review', () => planningImport.review());
   host.registerAction('confirm', checked => planningImport.confirm(checked));

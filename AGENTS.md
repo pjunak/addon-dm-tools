@@ -65,7 +65,9 @@ tests/                           contract, provider, UI, dashboard, lifecycle
 - Character Sheets, compendiums, and future homebrew addons remain optional.
 - Manual editing and reviewed generated imports use the same data contract.
 - The visible Import Center belongs here. It composes `codex.import-adapter`
-  services and must never branch on known addon ids or payload schemas.
+  version 1.1 services, exposes one file chooser, and routes only by each
+  adapter's declared root JSON `format`. It must never branch on known addon
+  ids or payload schemas.
 
 ## Correctness boundaries
 
@@ -81,9 +83,10 @@ tests/                           contract, provider, UI, dashboard, lifecycle
 - Register all collections and UI only for an effective DM.
 - Preview is deterministic and read-only. Commit uses the exact server-held
   plan. Conflicts require a corrected source and a new preview.
-- Import adapters own their UI, actions, provider client, links, and cleanup.
-  The center only validates descriptors, composes every workflow vertically,
-  manages lifecycle, and contains errors.
+- Import adapters own strict validation, their review UI, actions, provider
+  client, links, and cleanup. The center validates descriptors, reads only the
+  root `format`, opens exactly one owner workflow, manages lifecycle, and
+  contains routing/render failures.
 - The server provider also contributes restricted `(dm-tools, planning)` data
   to reviewed campaign bundles. Keep its reserved core targets and planning
   references aligned with the schema and host bundle contract.
@@ -91,7 +94,8 @@ tests/                           contract, provider, UI, dashboard, lifecycle
   newer record silently.
 - `planning_items`, `planning_flow_links`, `planning_references`,
   `planning_consequences`, and `dm_notes` are planning meaning.
-  `planning_views` is presentation only and never enters imports.
+  `planning_views` is presentation only and is never accepted as source data;
+  an explicit complete replacement may list deletions that clear saved layouts.
 - Render only direct children and their real local flow on an open canvas.
   Never roll up or infer edges from nested content, ownership, prose, tags,
   proximity, or timestamps.

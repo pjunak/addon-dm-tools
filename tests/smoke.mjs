@@ -92,7 +92,7 @@ test('effective DM registration provides Import Center UI and lifecycle cleanup'
   assert.equal(result.rec.provided, undefined);
   assert.equal(result.rec.providedServices.length, 1);
   assert.equal(result.rec.providedServices[0].contract, 'codex.import-adapter');
-  assert.equal(result.rec.providedServices[0].version, '1.0.0');
+  assert.equal(result.rec.providedServices[0].version, '1.1.0');
   assert.equal(result.rec.providedServices[0].api.apiVersion, 1);
   assert.ok(smokeRegistrations(result.rec).ok);
   assert.deepEqual(result.rec.i18nMissing, []);
@@ -115,7 +115,7 @@ test('effective player registration exposes no collection', async () => {
 });
 
 test('regional locale uses Czech and a partial translation falls back to English', async () => {
-  const partialCs = { 'page.title': 'Centrum importu' };
+  const partialCs = { 'center.title': 'Centrum importu' };
   const result = dryRunRegister(register, manifest, {
     isDM: true,
     catalogs: { en, cs: partialCs },

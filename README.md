@@ -70,8 +70,8 @@ JSON contract.
   path segments under the same route
 - `#/dm-import` — the complete adapter-driven Import Center. It always includes
   the planning adapter and automatically includes any compatible adapter from
-  core or another installed content addon. All workflows appear on one
-  continuous page without a second tab layer.
+  core or another installed content addon. One file chooser reads the
+  document's top-level `format` and opens only its owning workflow.
 - `#/dm` — host-owned DM shell containing the addon overview
 
 The Story Planner and Import Center are launched from the DM shell and are not
@@ -91,12 +91,13 @@ replacement may overwrite matching IDs, delete omitted planner records, and
 clear saved canvas layouts only after a second preview that lists those exact
 operations. One document may propose at most 256 combined writes and deletes.
 
-The planning client publishes `codex.import-adapter` v1 while DM Tools consumes
-the same contract with cardinality many. New content addons appear without a
-DM Tools change; each owner supplies its localized review/editor UI, provider
-actions, and safe view/edit links. The center mounts every compatible workflow
-as a separate section on the same page. Core contributes campaign data through
-the same contract and has no visible import route of its own.
+The planning client publishes `codex.import-adapter` version 1.1 while DM Tools
+consumes the same contract with cardinality many. New content addons appear
+without a DM Tools change; each owner declares stable JSON `format` values and
+supplies its localized review/editor UI, provider actions, and safe view/edit
+links. The center routes the untouched file to exactly one matching owner and
+renders only that workflow. Core contributes campaign data through the same
+contract and has no visible import route of its own.
 
 The provider also serves as restricted campaign-bundle contributor
 `(dm-tools, planning)`, so a reviewed campaign bundle can reserve core record

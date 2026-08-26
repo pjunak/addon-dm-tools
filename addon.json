@@ -24,13 +24,13 @@
     "provides": [
       {
         "contract": "codex.import-adapter",
-        "version": "1.0.0"
+        "version": "1.1.0"
       }
     ],
     "consumes": [
       {
         "contract": "codex.import-adapter",
-        "range": "^1.0.0",
+        "range": "^1.1.0",
         "cardinality": "many",
         "required": false
       }

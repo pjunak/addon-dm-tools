@@ -114,6 +114,26 @@ test('state machine keeps validation, preview, review, commit, and result distin
   assert.match(fixture.center.render(), /1 planning operation was committed\./);
 });
 
+test('opening a routed document starts its owner preview without another file chooser', async () => {
+  let receivedFile;
+  const fixture = hostFixture({
+    imports: {
+      createJob: async ({ file }) => {
+        receivedFile = file;
+        return { id: 'job-1', state: 'created' };
+      },
+    },
+  });
+  await fixture.center.initialize();
+  const file = { name: 'planning.json', size: 2 };
+  await fixture.center.open(file);
+
+  assert.equal(receivedFile, file);
+  assert.equal(fixture.center.getState().step, 'preview');
+  assert.doesNotMatch(fixture.center.render(), /type="file"/);
+  assert.doesNotMatch(fixture.center.render(), /wiki-breadcrumb/);
+});
+
 test('commit requires confirmation, blocks invalid previews, and prevents double submit', async () => {
   const commitGate = deferred();
   const fixture = hostFixture({
@@ -302,12 +322,11 @@ test('locale rendering, escaping, focus, live announcements, and player denial a
   await fixture.center.initialize();
   fixture.center.selectFile({ files: [{ name: hostile, size: 2 }] });
   const html = fixture.center.render();
-  assert.match(html, /Centrum importu/);
-  assert.ok(!html.includes(hostile));
-  assert.match(html, /&lt;img/);
-  assert.match(html, /<label[^>]*for="dm-import-file"/);
+  assert.match(html, /Připravuji správný postup importu/);
+  assert.doesNotMatch(html, /type="file"/);
+  assert.doesNotMatch(html, /wiki-breadcrumb/);
   assert.match(html, /aria-label="Průběh importu"/);
-  assert.ok(fixture.rec.focus.includes('dm-import-preview'));
+  assert.ok(fixture.rec.focus.includes('dm-import-state'));
   assert.ok(fixture.rec.announces.length > 0);
 
   fixture.host.imports.preview = async () => ({
@@ -326,6 +345,7 @@ test('locale rendering, escaping, focus, live announcements, and player denial a
   await fixture.center.requestPreview();
   const previewHtml = fixture.center.render();
   assert.doesNotMatch(previewHtml, /<script>|<svg|<img onerror/);
+  assert.match(previewHtml, /&lt;img src=x onerror=alert\(1\)&gt;\.json/);
   assert.match(previewHtml, /&lt;script&gt;/);
   assert.match(previewHtml, /&lt;svg onload=alert\(1\)&gt;/);
 
