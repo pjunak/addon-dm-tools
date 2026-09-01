@@ -18,22 +18,43 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: pjunak/ttrpg-codex
+          ref: rewrite/go-typescript
           path: ttrpg-codex
 
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          cache: npm
+          cache-dependency-path: addon-dm-tools/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: addon-dm-tools/go.mod
+          cache-dependency-path: addon-dm-tools/go.sum
 
       - run: npm ci
-        working-directory: ttrpg-codex
+        working-directory: addon-dm-tools
 
-      - run: node --test tests/*.mjs
+      - run: npm run build
+        working-directory: addon-dm-tools
+
+      - run: npm test
+        working-directory: addon-dm-tools
+
+      - run: go test ./...
+        working-directory: addon-dm-tools
+
+      - run: go vet ./...
         working-directory: addon-dm-tools
 
       - name: Install Chromium for rendering contracts
         run: npx playwright install --with-deps chromium
-        working-directory: ttrpg-codex
+        working-directory: addon-dm-tools
 
       - name: Check planner rendering contract
-        run: node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html
+        run: npm run test:rendering
+        working-directory: addon-dm-tools
+
+      - name: Build release package
+        run: go run ./cmd/build-package
         working-directory: addon-dm-tools

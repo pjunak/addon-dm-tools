@@ -6,7 +6,12 @@
   "scripts": {
     "build": "node tools/clean-web.ts && tsc -p tsconfig.json && node tools/copy-style.ts",
     "test": "node --test tests/*.mjs",
-    "check": "npm run build && npm test"
+    "test:rendering": "node tools/browser-rendering-check.mjs --root . --fixture tests/browser/planner-v3.html",
+    "check": "npm run build && npm test && npm run test:rendering"
   },
-  "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0" }
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "1.62.0",
+    "typescript": "^5.9.0"
+  }
 }

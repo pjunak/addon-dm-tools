@@ -49,6 +49,11 @@ data namespaces.
 
 ## Working loop
 
+Install the planner rendering browser once with
+`npx playwright install chromium`. The complete gate includes a real-browser
+contract for the current TypeScript planner; keep its fixture aligned with
+intentional card, flow, or layout changes.
+
 ```powershell
 npm run check
 go test ./...

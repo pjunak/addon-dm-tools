@@ -71,11 +71,16 @@ Use Node.js 26 and Go 1.26:
 
 ```powershell
 npm install
+npx playwright install chromium
 npm run check
 go test ./...
 go vet ./...
 go run ./cmd/build-package
 ```
+
+The one-time Playwright install provides the local Chromium used by the planner
+rendering contract. CI runs the same TypeScript, Node, browser, Go, and package
+checks rather than borrowing scripts or dependencies from the host checkout.
 
 The package command builds Windows amd64, Linux amd64, and Linux arm64 workers
 and creates a deterministic checksummed ZIP under `dist/`. Deployment and live

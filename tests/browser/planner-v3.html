@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DM Tools planner v3 rendering contract</title>
+  <link rel="stylesheet" href="../../web/index.css">
+  <style>
+    :root {
+      --accent: #d6af61;
+      --border: #4b4741;
+      --danger: #b85d5d;
+      --input-bg: #171513;
+      --surface: #211f1c;
+      --surface-raised: #302d29;
+      --text: #e7e2d8;
+      --text-muted: #aaa39a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; color: var(--text); background: #171513; font: 16px/1.4 Arial, sans-serif; }
+  </style>
+</head>
+<body>
+  <main id="fixture"></main>
+  <script type="module">
+    import { definePlannerElement } from "../../web/planner-element.js";
+    import { registerRuntime } from "../../web/runtime.js";
+
+    const item = (id, title, summary) => ({
+      id,
+      schemaVersion: 3,
+      kind: "quest",
+      parentId: null,
+      title,
+      summary,
+      body: "",
+      objective: "",
+      setup: "",
+      resolution: "",
+      tags: [],
+      updatedAt: 1,
+    });
+    const snapshot = {
+      items: [
+        item("quest-a", "The silver road", "Cross the valley before the sleeping dragon wakes."),
+        item("quest-b", "The sleeping dragon", "Reach the old gate without raising an alarm."),
+      ],
+      flows: [{ id: "root-flow", schemaVersion: 3, sourceId: "quest-a", targetId: "quest-b", kind: "continues", label: "Follow the silver thread", updatedAt: 1 }],
+      references: [],
+      consequences: [],
+      notes: [],
+      views: [],
+      revisions: new Map(),
+    };
+    const signal = new AbortController().signal;
+    const generation = "a".repeat(64);
+    registerRuntime(generation, {
+      repository: { load: async () => snapshot },
+      adapters: { available: false, providers: [], call: async () => { throw new Error("No adapters in rendering fixture"); } },
+      signal,
+    });
+    definePlannerElement();
+    const planner = document.createElement("dm-tools-planner-page");
+    planner.codexContribution = { addon: { id: "dm-tools", generation }, contribution: { id: "planner.route", config: {} }, signal };
+    document.querySelector("#fixture").append(planner);
+
+    for (let attempt = 0; attempt < 60 && planner.querySelectorAll(".dm-plan-card").length !== 2; attempt += 1) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
+    const closeTo = (actual, expected, tolerance = 0.02) => Math.abs(actual - expected) <= tolerance;
+    globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
+      const checks = [];
+      const check = (name, pass, actual, expected) => checks.push({ name, pass, actual, expected });
+      const workspace = planner.querySelector(".dm-planner-workspace");
+      const stage = planner.querySelector(".dm-planner-stage");
+      const cards = [...planner.querySelectorAll(".dm-plan-card")];
+      const titles = cards.map(card => card.querySelector("h3")?.textContent);
+      const summaries = cards.map(card => card.querySelector("p")?.textContent);
+      const path = planner.querySelector(".dm-planner-flows path");
+
+      check("planner renders three workspace regions", workspace?.children.length === 3, workspace?.children.length, 3);
+      check("planner keeps three desktop columns", getComputedStyle(workspace).gridTemplateColumns.split(" ").length === 3, getComputedStyle(workspace).gridTemplateColumns, "three resolved columns");
+      check("planner renders both current records", JSON.stringify(titles) === JSON.stringify(["The silver road", "The sleeping dragon"]), titles, ["The silver road", "The sleeping dragon"]);
+      check("planner preserves record summaries", JSON.stringify(summaries) === JSON.stringify(["Cross the valley before the sleeping dragon wakes.", "Reach the old gate without raising an alarm."]), summaries, "both source summaries");
+      check("planner keeps deterministic default positions", cards[0]?.style.left === "72px" && cards[0]?.style.top === "72px" && cards[1]?.style.left === "372px" && cards[1]?.style.top === "72px", cards.map(card => ({ left: card.style.left, top: card.style.top })), [{ left: "72px", top: "72px" }, { left: "372px", top: "72px" }]);
+      check("flow follows the card geometry", path?.getAttribute("d") === "M 312 138 H 342 V 138 H 372", path?.getAttribute("d"), "M 312 138 H 342 V 138 H 372");
+      check("flow retains its accessible label", path?.getAttribute("aria-label") === "Follow the silver thread", path?.getAttribute("aria-label"), "Follow the silver thread");
+      check("planner does not raster-scale the canvas", getComputedStyle(stage).transform === "none" && cards.every(card => getComputedStyle(card).transform === "none"), { stage: getComputedStyle(stage).transform, cards: cards.map(card => getComputedStyle(card).transform) }, "no transforms");
+
+      for (const [index, card] of cards.entries()) {
+        const bounds = card.getBoundingClientRect();
+        check(`card ${index + 1} keeps its 240px width`, closeTo(bounds.width, 240), bounds.width, 240);
+        check(`card ${index + 1} keeps its minimum height`, bounds.height >= 132, bounds.height, ">= 132");
+        for (const [property, value] of [["left", card.offsetLeft], ["top", card.offsetTop], ["width", bounds.width]]) {
+          const physicalPixels = value * deviceScaleFactor;
+          check(`card ${index + 1} ${property} is device-pixel aligned`, closeTo(physicalPixels, Math.round(physicalPixels), 0.001), physicalPixels, Math.round(physicalPixels));
+        }
+        const titleSize = Number.parseFloat(getComputedStyle(card.querySelector("h3")).fontSize) * deviceScaleFactor;
+        check(`card ${index + 1} title uses whole device pixels`, closeTo(titleSize, Math.round(titleSize), 0.001), titleSize, Math.round(titleSize));
+      }
+
+      return { name: "DM Tools planner v3 rendering", checks };
+    };
+  </script>
+</body>
+</html>
