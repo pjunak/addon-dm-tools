@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["contractVersion", "format", "document"],
+  "properties": { "contractVersion": { "const": "import-preview.v1" }, "format": { "type": "string", "minLength": 1, "maxLength": 100 }, "document": { "type": "object" } }
+}

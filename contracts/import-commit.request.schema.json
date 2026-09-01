@@ -1,0 +1,4 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["contractVersion", "token"], "properties": { "contractVersion": { "const": "import-commit.v1" }, "token": { "type": "string", "minLength": 20, "maxLength": 200 } }
+}

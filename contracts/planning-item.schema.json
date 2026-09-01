@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "schemaVersion", "kind", "parentId", "title", "summary", "body", "objective", "setup", "resolution", "tags", "updatedAt"],
+  "properties": {
+    "id": { "$ref": "planning-common.schema.json#/$defs/id" }, "schemaVersion": { "$ref": "planning-common.schema.json#/$defs/schemaVersion" },
+    "kind": { "enum": ["plotline", "quest", "event", "branch"] }, "parentId": { "oneOf": [{ "$ref": "planning-common.schema.json#/$defs/id" }, { "type": "null" }] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 160 }, "summary": { "type": "string", "maxLength": 2000 }, "body": { "type": "string", "maxLength": 80000 },
+    "objective": { "type": "string", "maxLength": 10000 }, "setup": { "type": "string", "maxLength": 30000 }, "resolution": { "type": "string", "maxLength": 30000 },
+    "eventType": { "enum": ["story", "encounter", "puzzle"] }, "branchType": { "enum": ["decision", "condition", "random"] },
+    "tags": { "type": "array", "uniqueItems": true, "maxItems": 40, "items": { "type": "string", "minLength": 1, "maxLength": 60 } },
+    "updatedAt": { "$ref": "planning-common.schema.json#/$defs/updatedAt" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "event" } }, "required": ["kind"] }, "then": { "required": ["eventType"] }, "else": { "not": { "required": ["eventType"] } } },
+    { "if": { "properties": { "kind": { "const": "branch" } }, "required": ["kind"] }, "then": { "required": ["branchType"] }, "else": { "not": { "required": ["branchType"] } } }
+  ]
+}

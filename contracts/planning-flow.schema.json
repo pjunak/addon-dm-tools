@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["id", "schemaVersion", "sourceId", "targetId", "kind", "label", "updatedAt"],
+  "properties": {
+    "id": { "$ref": "planning-common.schema.json#/$defs/id" }, "schemaVersion": { "$ref": "planning-common.schema.json#/$defs/schemaVersion" },
+    "sourceId": { "$ref": "planning-common.schema.json#/$defs/id" }, "targetId": { "$ref": "planning-common.schema.json#/$defs/id" },
+    "kind": { "enum": ["continues", "option"] }, "label": { "type": "string", "maxLength": 200 }, "updatedAt": { "$ref": "planning-common.schema.json#/$defs/updatedAt" }
+  }
+}

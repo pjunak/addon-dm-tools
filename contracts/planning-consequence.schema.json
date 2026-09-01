@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["id", "schemaVersion", "anchor", "kind", "title", "body", "updatedAt"],
+  "properties": {
+    "id": { "$ref": "planning-common.schema.json#/$defs/id" }, "schemaVersion": { "$ref": "planning-common.schema.json#/$defs/schemaVersion" },
+    "anchor": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["scope", "itemId"], "properties": { "scope": { "const": "item" }, "itemId": { "$ref": "planning-common.schema.json#/$defs/id" } } },
+      { "type": "object", "additionalProperties": false, "required": ["scope", "flowId"], "properties": { "scope": { "const": "flow" }, "flowId": { "$ref": "planning-common.schema.json#/$defs/id" } } }
+    ] },
+    "kind": { "enum": ["world", "reward", "information", "complication"] }, "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "body": { "type": "string", "maxLength": 10000 },
+    "target": { "$ref": "planning-common.schema.json#/$defs/target" }, "updatedAt": { "$ref": "planning-common.schema.json#/$defs/updatedAt" }
+  }
+}

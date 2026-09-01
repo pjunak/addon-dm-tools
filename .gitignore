@@ -10,3 +10,8 @@
 *.keystore
 id_rsa
 id_ed25519
+
+# Generated and local development state
+node_modules/
+.npm-cache/
+dist/

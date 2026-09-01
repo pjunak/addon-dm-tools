@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["id", "schemaVersion", "scopeId", "positions", "updatedAt"],
+  "properties": {
+    "id": { "$ref": "planning-common.schema.json#/$defs/id" }, "schemaVersion": { "$ref": "planning-common.schema.json#/$defs/schemaVersion" },
+    "scopeId": { "oneOf": [{ "$ref": "planning-common.schema.json#/$defs/id" }, { "type": "null" }] },
+    "positions": { "type": "object", "propertyNames": { "$ref": "planning-common.schema.json#/$defs/id" }, "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } } },
+    "updatedAt": { "$ref": "planning-common.schema.json#/$defs/updatedAt" }
+  }
+}

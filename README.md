@@ -1,133 +1,82 @@
 # DM Tools
 
-DM Tools is the planning and world-building addon for
-[ttrpg-codex](https://github.com/pjunak/ttrpg-codex). It gives the effective DM
-a hierarchy of focused story canvases and a reviewed import workflow over the
-same model.
+DM Tools is the DM-only story planner and reviewed planning Import Center for
+TTRPG Codex. Version 3 is a clean Add-on API v3 package:
 
-The planner is deliberately forward-looking. It helps a DM organize plotlines,
-quests, story events, encounters, puzzles, decisions, conditions, world
-references, intended consequences, and separate table notes. It does not track
-which branch is active, mark quests complete, prescribe sessions, or require a
-play log.
+- the interactive planner and Import Center are strict TypeScript;
+- authoritative import preview and commit run in a small native Go worker;
+- all campaign state uses host-managed schema-backed collections.
 
-It contributes a compact overview to the host-owned `/dm` dashboard. Character
-Sheets and compendiums remain optional and independently useful.
+## Story planner
 
-## Story model
-
-Ownership is a tree:
+Ownership is a tree. Plotlines and quests can contain planning items; events
+and branches are leaves. Every open scope is its own local directed acyclic
+flow graph:
 
 ```text
 Campaign
 ├─ Plotline
 │  ├─ Quest
-│  │  ├─ nested Quest
-│  │  ├─ Event (story, encounter, or puzzle)
-│  │  └─ Branch (decision, condition, or random)
-│  └─ Event / Branch / nested Plotline
-└─ Quest / Event / Branch
+│  │  ├─ Event
+│  │  └─ Branch
+│  └─ Quest
+└─ Event
 ```
 
-Each open canvas shows only the direct children of its campaign, plotline, or
-quest scope. Flow links are acyclic, independent from ownership, and connect
-only siblings with that same immediate parent. Every stored flow is therefore
-fully visible and editable on exactly one canvas.
+Flow connects direct siblings only. It never changes ownership, crosses
+scopes, or records what happened during play. Named references, planned
+consequences, and DM notes are separate annotations and may cross scopes.
 
-For example, the campaign canvas may contain `Quest A → Quest B`, while Quest
-A's canvas contains `Event A1 → Event A2`. An event inside Quest A never links
-directly to an event inside Quest B. Put the handoff between their quest cards
-on the shared parent canvas; use a named reference when the relationship is
-cross-scope but not chronological.
+The planner supports nested navigation, card creation and editing, drag-saved
+positions, explicit sibling flow, subtree deletion, and annotations. It uses
+plain DOM and SVG owned by the package; no host-private graph object crosses
+the add-on boundary.
 
-Single click selects a card and opens its inspector. Double-click enters a
-plotline or quest, or opens the dedicated encounter/puzzle screen. Cards drag
-to a 24 px grid. Pulling from a card’s edge creates an orthogonal flow link;
-the same operation is available through labelled native controls.
+## Stored contracts
 
-## Data contract
-
-All collections are host-managed and DM-only:
+The permanent add-on namespace is `dm-tools`. Six schema-v3 collections remain
+stable:
 
 | Collection | Purpose |
 |---|---|
-| `planning_items` | Nested plotlines, quests, typed events, and branches. |
-| `planning_flow_links` | Stateless directed story flow and branch options. |
-| `planning_references` | Named links to campaign records, optional-addon records, or other plans; quantities support encounter participants. |
-| `planning_consequences` | Planned world changes, rewards, information, and complications attached to an item or flow. |
-| `dm_notes` | Separate marginalia linked to zero or more planning items. |
-| `planning_views` | Per-scope card positions only; never planning meaning or import data. |
+| `planning_items` | Plotlines, quests, events, and branches |
+| `planning_flow_links` | Directed same-parent story flow |
+| `planning_references` | Named planning/core/external references |
+| `planning_consequences` | Planned annotations on items or flow |
+| `dm_notes` | Separate DM marginalia |
+| `planning_views` | Per-scope card positions only |
 
-The shared schema is [`planning-contract.js`](planning-contract.js). See
-[`docs/GRAPH.md`](docs/GRAPH.md) for canvas semantics,
-[`docs/IMPORTING.md`](docs/IMPORTING.md) for import behavior, and
-[`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) for the exact generated
-JSON contract.
+The one-time campaign converter moves old records into these same collection
+IDs. There is no permanent legacy planning format or compatibility runtime.
 
-## Routes
+## Import Center
 
-- `#/dm-plans` — campaign story canvas; nested scopes and detail screens use
-  path segments under the same route
-- `#/dm-import` — the complete adapter-driven Import Center. It always includes
-  the planning adapter and automatically includes any compatible adapter from
-  core or another installed content addon. One file chooser reads the
-  document's top-level `format` and opens only its owning workflow.
-- `#/dm` — host-owned DM shell containing the addon overview
+DM Tools publishes and consumes `codex.import-adapter` v2. The visible center
+routes a JSON document only by its top-level `format`, without naming provider
+add-ons. Each provider describes its formats through the brokered serializable
+service contract.
 
-The Story Planner and Import Center are launched from the DM shell and are not
-duplicated in the host's Add-ons sidebar section.
+For `dm-tools-planning`, the Go worker normalizes the complete candidate,
+checks hierarchy and local-flow invariants, reconciles optimistic timestamps,
+and retains an opaque single-use preview token. Commit submits only those exact
+reviewed mutations through one host transaction. Changes after preview cause a
+conflict; there is no merge or silent overwrite.
 
-Players, anonymous visitors, and DM-view-as-player receive neither these
-surfaces nor their data.
+See [Importing](docs/IMPORTING.md), [Story graph](docs/GRAPH.md), and
+[Generated planning JSON](docs/AGENT_GENERATION.md).
 
-## Import guarantees
+## Develop
 
-Provider `(dm-tools, planning-json)` uses provider API 1 and planning schema
-version 3. Older versions are rejected without conversion. Preview is
-read-only. Commit publishes the exact reviewed plan through one durable host
-transaction. Normal merge imports never delete, change canvas positions, or
-overwrite a record with a stale `expectedUpdatedAt`. An explicit complete
-replacement may overwrite matching IDs, delete omitted planner records, and
-clear saved canvas layouts only after a second preview that lists those exact
-operations. One document may propose at most 256 combined writes and deletes.
-
-The planning client publishes `codex.import-adapter` version 1.1 while DM Tools
-consumes the same contract with cardinality many. New content addons appear
-without a DM Tools change; each owner declares stable JSON `format` values and
-supplies its localized review/editor UI, provider actions, and safe view/edit
-links. The center routes the untouched file to exactly one matching owner and
-renders only that workflow. Core contributes campaign data through the same
-contract and has no visible import route of its own.
-
-The provider also serves as restricted campaign-bundle contributor
-`(dm-tools, planning)`, so a reviewed campaign bundle can reserve core record
-IDs and refer to them from DM Tools without granting the addon core-write
-authority.
-
-## Development
-
-From this repository:
+Use Node.js 26 and Go 1.26:
 
 ```powershell
-node --test tests/*.mjs
-node ../ttrpg-codex/scripts/browser-rendering-check.mjs --root . --fixture tests/browser/story-planner-rendering.html
+npm install
+npm run check
+go test ./...
+go vet ./...
+go run ./cmd/build-package
 ```
 
-The browser rendering check uses the sibling host's pinned Playwright runner;
-install the host dependencies and Chromium before running it.
-
-From the sibling host repository:
-
-```powershell
-node scripts/dev-install-addon.cjs ../addon-dm-tools
-```
-
-Source changes are invisible to the host until the addon is dev-installed.
-Server-provider or manifest changes also require a host restart and browser
-refresh. A production update that introduces new permissions must use the
-per-addon installation wizard.
-
-## License
-
-The original software and documentation in this repository are licensed under
-the [MIT License](LICENSE).
+The package command builds Windows amd64, Linux amd64, and Linux arm64 workers
+and creates a deterministic checksummed ZIP under `dist/`. Deployment and live
+campaign conversion are performed later with the site owner present.

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["contractVersion", "id", "label", "description", "formats"],
+  "properties": { "contractVersion": { "const": "import-adapter-description.v1" }, "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]+$", "maxLength": 100 }, "label": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "maxLength": 500 }, "formats": { "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9.-]+$", "maxLength": 100 } } }
+}

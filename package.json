@@ -1,0 +1,12 @@
+{
+  "name": "@ttrpg-codex/dm-tools",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tools/clean-web.ts && tsc -p tsconfig.json && node tools/copy-style.ts",
+    "test": "node --test tests/*.mjs",
+    "check": "npm run build && npm test"
+  },
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0" }
+}

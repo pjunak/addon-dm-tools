@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+  "required": ["contractVersion", "committed", "writes", "deletes"],
+  "properties": { "contractVersion": { "const": "import-commit-result.v1" }, "committed": { "const": true }, "writes": { "type": "integer", "minimum": 0 }, "deletes": { "type": "integer", "minimum": 0 } }
+}

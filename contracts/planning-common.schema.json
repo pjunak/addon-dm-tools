@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,119}$", "not": { "enum": ["__proto__", "prototype", "constructor"] } },
+    "schemaVersion": { "const": 3 },
+    "updatedAt": { "type": "integer", "minimum": 0 },
+    "target": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["scope", "collection", "id"], "properties": { "scope": { "const": "core" }, "collection": { "enum": ["characters", "factions", "locations", "mysteries", "artifacts", "events"] }, "id": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "additionalProperties": false, "required": ["scope", "itemId"], "properties": { "scope": { "const": "planning" }, "itemId": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "additionalProperties": false, "required": ["scope", "addonId", "kind", "id", "label"], "properties": { "scope": { "const": "external" }, "addonId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 80 }, "kind": { "type": "string", "minLength": 1, "maxLength": 80 }, "id": { "$ref": "#/$defs/id" }, "label": { "type": "string", "minLength": 1, "maxLength": 200 } } }
+      ]
+    }
+  }
+}
