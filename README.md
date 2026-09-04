@@ -67,7 +67,7 @@ See [Importing](docs/IMPORTING.md), [Story graph](docs/GRAPH.md), and
 
 ## Develop
 
-Use Node.js 26 and Go 1.26:
+Use Node.js 26 and Go 1.27.1, matching the host SDK module:
 
 ```powershell
 npm install
