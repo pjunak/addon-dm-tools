@@ -228,7 +228,7 @@ export function definePlannerElement(generation?: string): string {
       });
     }
 
-    async #create(kind: PlanningKind): Promise<void> { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime) => runtime.repository.put("planning_items", item, 0), `Created ${item.title}.`, item.id); }
+    async #create(kind: PlanningKind): Promise<void> { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", item, 0), `Created ${item.title}.`, item.id); }
     async #saveItem(item: PlanningItem, form: HTMLFormElement): Promise<void> {
       const data = new FormData(form); const text = (name: string): string => String(data.get(name) ?? "").trim();
       const tags = [...new Set(text("tags").split(",").map(tag => tag.trim()).filter(Boolean))];
@@ -238,7 +238,7 @@ export function definePlannerElement(generation?: string): string {
         ...(item.kind === "branch" ? { branchType: text("branchType") as NonNullable<PlanningItem["branchType"]> } : {}) };
       if (next.title === "") { this.#message = "A title is required."; this.#messageKind = "alert"; this.#render(); return; }
       const revision = this.#drafts.revision(form); if (revision === undefined) return;
-      await this.#mutate(async (runtime) => runtime.repository.put("planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+      await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
     }
     async #createFlow(source: PlanningItem, form: HTMLFormElement): Promise<void> {
       const snapshot = this.#snapshot; if (snapshot === undefined) return;
@@ -246,14 +246,14 @@ export function definePlannerElement(generation?: string): string {
       if (!targetId) { this.#invalid("Choose a sibling to connect."); return; }
       const flow: PlanningFlow = { id: `flow-${crypto.randomUUID()}`, schemaVersion: 3, sourceId: source.id, targetId, kind: String(data.get("kind")) as PlanningFlow["kind"], label: String(data.get("label") ?? "").trim(), updatedAt: Date.now() };
       const candidate: PlanningDataset = { ...snapshot, flows: [...snapshot.flows, flow] }; const issues = validatePlanning(candidate); if (issues.length > 0) { this.#message = issues[0] as string; this.#messageKind = "alert"; this.#render(); return; }
-      await this.#mutate(async (runtime) => runtime.repository.put("planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
+      await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
     }
     async #saveFlow(flow: PlanningFlow, form: HTMLFormElement, selectedId: string): Promise<void> {
       const snapshot = this.#snapshot; const revision = this.#drafts.revision(form); if (!snapshot || revision === undefined) return;
       const data = new FormData(form); const next: PlanningFlow = { ...flow, kind: String(data.get("kind")) as PlanningFlow["kind"], label: String(data.get("label") ?? "").trim(), updatedAt: Date.now() };
       const issues = validatePlanning({ ...snapshot, flows: snapshot.flows.map(value => value.id === flow.id ? next : value) });
       if (issues.length) { this.#invalid(issues[0]!); return; }
-      await this.#mutate(runtime => runtime.repository.put("planning_flow_links", next, revision), "Flow saved.", selectedId, `planning_flow_links:${flow.id}`);
+      await this.#mutate((runtime, snapshot) => runtime.repository.put(snapshot, "planning_flow_links", next, revision), "Flow saved.", selectedId, `planning_flow_links:${flow.id}`);
     }
     async #deleteFlow(flow: PlanningFlow, selectedId: string): Promise<void> {
       const snapshot = this.#snapshot; if (!snapshot) return;
@@ -266,10 +266,10 @@ export function definePlannerElement(generation?: string): string {
     async #addReference(item: PlanningItem, snapshot: PlanningSnapshot, targetId: string): Promise<void> {
       const target = snapshot.items.find((candidate) => candidate.id === targetId && candidate.id !== item.id); if (target === undefined) { this.#message = "Choose an existing planning item to reference."; this.#messageKind = "alert"; this.#render(); return; }
       const reference: PlanningReference = { id: `reference-${crypto.randomUUID()}`, schemaVersion: 3, itemId: item.id, name: target.title, relation: "related", target: { scope: "planning", itemId: target.id }, quantity: 1, notes: "", updatedAt: Date.now() };
-      await this.#mutate(async (runtime) => runtime.repository.put("planning_references", reference, 0), "Planning reference added.", item.id);
+      await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_references", reference, 0), "Planning reference added.", item.id);
     }
-    async #addConsequence(item: PlanningItem): Promise<void> { const consequence: PlanningConsequence = { id: `consequence-${crypto.randomUUID()}`, schemaVersion: 3, anchor: { scope: "item", itemId: item.id }, kind: "world", title: "Planned consequence", body: "", updatedAt: Date.now() }; await this.#mutate(async (runtime) => runtime.repository.put("planning_consequences", consequence, 0), "Consequence added.", item.id); }
-    async #addNote(item: PlanningItem): Promise<void> { const note: DmNote = { id: `note-${crypto.randomUUID()}`, schemaVersion: 3, title: "DM note", body: "", anchorIds: [item.id], updatedAt: Date.now() }; await this.#mutate(async (runtime) => runtime.repository.put("dm_notes", note, 0), "DM note added.", item.id); }
+    async #addConsequence(item: PlanningItem): Promise<void> { const consequence: PlanningConsequence = { id: `consequence-${crypto.randomUUID()}`, schemaVersion: 3, anchor: { scope: "item", itemId: item.id }, kind: "world", title: "Planned consequence", body: "", updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_consequences", consequence, 0), "Consequence added.", item.id); }
+    async #addNote(item: PlanningItem): Promise<void> { const note: DmNote = { id: `note-${crypto.randomUUID()}`, schemaVersion: 3, title: "DM note", body: "", anchorIds: [item.id], updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "dm_notes", note, 0), "DM note added.", item.id); }
     async #saveReference(reference: PlanningReference, form: HTMLFormElement, selectedId: string): Promise<void> { const data = new FormData(form); const next: PlanningReference = { ...reference, name: String(data.get("name") ?? "").trim(), relation: String(data.get("relation") ?? "related"), notes: String(data.get("notes") ?? "").trim(), updatedAt: Date.now() }; if (next.name === "") { this.#invalid("A reference name is required."); return; } await this.#putExisting("planning_references", next, form, selectedId, "Reference saved."); }
     async #saveConsequence(consequence: PlanningConsequence, form: HTMLFormElement, selectedId: string): Promise<void> {
       const snapshot = this.#snapshot; if (!snapshot) return;
@@ -284,9 +284,9 @@ export function definePlannerElement(generation?: string): string {
     async #saveNote(note: DmNote, form: HTMLFormElement, selectedId: string): Promise<void> { const data = new FormData(form); const next: DmNote = { ...note, title: String(data.get("title") ?? "").trim(), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() }; if (next.title === "") { this.#invalid("A DM note title is required."); return; } await this.#putExisting("dm_notes", next, form, selectedId, "DM note saved."); }
     async #putExisting(collection: "planning_references" | "planning_consequences" | "dm_notes", value: PlanningReference | PlanningConsequence | DmNote, form: HTMLFormElement, selectedId: string, success: string): Promise<void> {
       const revision = this.#drafts.revision(form); if (revision === undefined) { this.#invalid("This record changed or no longer exists. Reload the planner."); return; }
-      await this.#mutate(async (runtime) => runtime.repository.put(collection, value, revision), success, selectedId, `${collection}:${value.id}`);
+      await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, collection, value, revision), success, selectedId, `${collection}:${value.id}`);
     }
-    async #deleteRecord(collection: string, id: string, success: string, selectedId: string): Promise<void> { const revision = this.#snapshot?.revisions.get(`${collection}:${id}`); if (revision === undefined) { this.#invalid("This record changed or no longer exists. Reload the planner."); return; } const mutation: DataMutation = { operation: "delete", kind: "collection", dataId: collection, key: id, expectedRevision: revision }; await this.#mutate(async (runtime) => runtime.repository.transact([mutation]), success, selectedId, `${collection}:${id}`); }
+    async #deleteRecord(collection: string, id: string, success: string, selectedId: string): Promise<void> { const revision = this.#snapshot?.revisions.get(`${collection}:${id}`); if (revision === undefined) { this.#invalid("This record changed or no longer exists. Reload the planner."); return; } const mutation: DataMutation = { operation: "delete", kind: "collection", dataId: collection, key: id, expectedRevision: revision }; await this.#mutate(async (runtime, snapshot) => runtime.repository.transact(snapshot, [mutation]), success, selectedId, `${collection}:${id}`); }
     #invalid(message: string): void { this.#message = message; this.#messageKind = "alert"; this.#render(); }
 
     #bindDraft(form: HTMLFormElement, key: string, revision: number | undefined): void {
@@ -312,10 +312,10 @@ export function definePlannerElement(generation?: string): string {
 
     #acceptCommittedDrafts(): void { for (const key of this.#committedDrafts) this.#drafts.clear(key); this.#committedDrafts.clear(); }
 
-    async #mutate(operation: (runtime: DmToolsRuntime) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<void> {
-      const runtime = this.#runtime; if (runtime === undefined || this.#busy || this.#needsReload) return; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
+    async #mutate(operation: (runtime: DmToolsRuntime, snapshot: PlanningSnapshot) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<void> {
+      const runtime = this.#runtime; const original = this.#snapshot; if (runtime === undefined || original === undefined || this.#busy || this.#needsReload) return; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
       try {
-        await operation(runtime); if (this.#runtime !== runtime || !this.isConnected) return;
+        await operation(runtime, original); if (this.#runtime !== runtime || !this.isConnected) return;
         // A confirmed write must not be offered again if the following read fails.
         if (draftKey) this.#committedDrafts.add(draftKey);
         const request = new AbortController(); this.#readRequest?.abort(); this.#readRequest = request;

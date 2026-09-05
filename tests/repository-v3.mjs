@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PlanningRepository } from "../web/planning-repository.js";
+const collectionIds = ["planning_items", "planning_flow_links", "planning_references", "planning_consequences", "dm_notes", "planning_views"];
+const dataRevisions = collectionIds.map(dataId => ({ kind: "collection", dataId, revision: 0 }));
 import { validatePlanning } from "../web/planning-model.js";
 
 test("repository loads all declared collections and keeps exact revisions", async () => {
@@ -9,7 +11,7 @@ test("repository loads all declared collections and keeps exact revisions", asyn
     signal: new AbortController().signal,
     data: {
       collection: id => ({
-        query: async () => { calls.push(id); return { documents: id === "planning_items" ? [{ key: "quest-a", revision: 7, value: validQuest() }] : [] }; },
+        query: async () => { calls.push(id); return { dataRevision: 12, documents: id === "planning_items" ? [{ key: "quest-a", revision: 7, value: validQuest() }] : [] }; },
         put: async () => assert.fail("not used"), delete: async () => assert.fail("not used"),
       }),
       transact: async () => assert.fail("not used"),
@@ -35,7 +37,7 @@ test("subtree deletion publishes one explicit cross-collection transaction", asy
   const quest = validQuest(); const event = { ...validQuest(), id: "event-a", kind: "event", parentId: "quest-a", eventType: "story" };
   const sibling = { ...validQuest(), id: "quest-b", title: "Quest B" };
   const note = { id: "note-a", schemaVersion: 3, title: "Shared note", body: "", anchorIds: ["quest-a", "quest-b"], updatedAt: 1 };
-  const snapshot = { items: [quest, event, sibling], flows: [], references: [], consequences: [], notes: [note], views: [], revisions: new Map([["planning_items:quest-a", 2], ["planning_items:event-a", 3], ["planning_items:quest-b", 4], ["dm_notes:note-a", 5]]) };
+  const snapshot = { dataRevisions, items: [quest, event, sibling], flows: [], references: [], consequences: [], notes: [note], views: [], revisions: new Map([["planning_items:quest-a", 2], ["planning_items:event-a", 3], ["planning_items:quest-b", 4], ["dm_notes:note-a", 5]]) };
   await repository.deleteSubtree(snapshot, "quest-a");
   assert.deepEqual(mutations.map(entry => [entry.operation, entry.dataId, entry.key, entry.expectedRevision]), [["delete", "planning_items", "quest-a", 2], ["delete", "planning_items", "event-a", 3], ["put", "dm_notes", "note-a", 5]]);
   assert.deepEqual(mutations[2].value.anchorIds, ["quest-b"]);
@@ -52,7 +54,7 @@ function deletionFixture() {
     notes: [{ id: "shared-note", anchorIds: ["event-a", "quest-b"], title: "Shared", body: "Keep me" }],
     views: [{ id: "scope-root", schemaVersion: 3, scopeId: null, positions: { "quest-a": { x: 24, y: 24 }, "quest-b": { x: 300, y: 24 } }, updatedAt: 1 },
       { id: "scope-quest-a", schemaVersion: 3, scopeId: "quest-a", positions: { "event-a": { x: 48, y: 48 } }, updatedAt: 1 }],
-    revisions: new Map(),
+    dataRevisions, revisions: new Map(),
   };
   const collections = { items: "planning_items", flows: "planning_flow_links", references: "planning_references", consequences: "planning_consequences", notes: "dm_notes", views: "planning_views" };
   for (const [key, collection] of Object.entries(collections)) for (const record of dataset[key]) dataset.revisions.set(`${collection}:${record.id}`, dataset.revisions.size + 1);
@@ -110,4 +112,34 @@ test("leaving a view aborts paginated reads without stopping its activation gene
   }) } });
   await assert.rejects(repository.load(view.signal), { name: "AbortError" });
   assert.equal(calls, 1); assert.equal(generation.signal.aborted, false);
+});
+
+
+test("paginated loads pin the first revision and refuse missing or changed revisions", async () => {
+  for (const nextRevision of [undefined, 5, 4]) {
+    const calls = [];
+    const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: id => ({ query: async options => {
+      if (id !== "planning_items") return { documents: [], dataRevision: 0 };
+      calls.push(options);
+      return options.cursor ? { documents: [], dataRevision: nextRevision } : { documents: [], dataRevision: 4, nextCursor: "next" };
+    } }) } });
+    if (nextRevision === 4) assert.equal((await repository.load()).dataRevisions[0].revision, 4);
+    else await assert.rejects(repository.load(), /revision|changed/);
+    assert.equal(calls[0].includeDataRevision, true); assert.equal(calls[1].expectedDataRevision, 4);
+  }
+});
+
+test("all writes retain the validated snapshot including empty collections", async () => {
+  const writes = [];
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: {
+    collection: () => ({ query: async () => ({ documents: [], dataRevision: 0 }) }),
+    transact: async (mutations, options) => { writes.push({ mutations, options }); },
+  } });
+  const snapshot = await repository.load();
+  await repository.put(snapshot, "planning_items", validQuest(), 7);
+  await repository.savePosition(snapshot, null, "quest-a", 20, 30);
+  for (const write of writes) assert.deepEqual(write.options.expectedDataSets, dataRevisions);
+  assert.equal(writes[0].mutations[0].expectedRevision, 7);
+  await assert.rejects(repository.put({ ...snapshot, dataRevisions: [] }, "planning_items", validQuest(), 0), /revisions are missing/);
+  assert.equal(writes.length, 2);
 });

@@ -1,12 +1,13 @@
 export interface AddonDocument<T> { readonly key: string; readonly revision: number; readonly value: T }
-export interface QueryResult<T> { readonly documents: readonly AddonDocument<T>[]; readonly nextCursor?: string }
+export interface QueryResult<T> { readonly documents: readonly AddonDocument<T>[]; readonly nextCursor?: string; readonly dataRevision?: number }
+export interface DataSetRevision { readonly kind: DataKind; readonly dataId: string; readonly revision: number }
 export type DataKind = "collection" | "record-extension";
 export type DataMutation =
   | { readonly operation: "put"; readonly kind: DataKind; readonly dataId: string; readonly key: string; readonly expectedRevision: number; readonly value: unknown }
   | { readonly operation: "delete"; readonly kind: DataKind; readonly dataId: string; readonly key: string; readonly expectedRevision: number };
 export interface CommitReceipt { readonly results: readonly { readonly dataId: string; readonly key: string; readonly afterRevision: number; readonly deleted: boolean }[] }
 export interface CollectionHandle<T> {
-  query(options?: { readonly cursor?: string; readonly limit?: number; readonly signal?: AbortSignal }): Promise<QueryResult<T>>;
+  query(options?: { readonly cursor?: string; readonly limit?: number; readonly includeDataRevision?: boolean; readonly expectedDataRevision?: number; readonly signal?: AbortSignal }): Promise<QueryResult<T>>;
   put(key: string, value: T, expectedRevision: number, options?: { readonly signal?: AbortSignal }): Promise<CommitReceipt>;
   delete(key: string, expectedRevision: number, options?: { readonly signal?: AbortSignal }): Promise<CommitReceipt>;
 }
@@ -22,7 +23,7 @@ export interface AddonContext {
   readonly capabilities: { require(id: string): void };
   readonly data: {
     collection<T>(id: string): CollectionHandle<T>;
-    transact(mutations: readonly DataMutation[], options?: { readonly signal?: AbortSignal }): Promise<CommitReceipt>;
+    transact(mutations: readonly DataMutation[], options?: { readonly signal?: AbortSignal; readonly expectedDataSets?: readonly DataSetRevision[] }): Promise<CommitReceipt>;
   };
   readonly services: { connect(contract: string, options: { readonly range: string; readonly cardinality: "many"; readonly includeOwn?: boolean; readonly signal?: AbortSignal }): Promise<ServiceHandle> };
   readonly ui: { bind(id: string, binding: { readonly kind: "element"; readonly tag: string }): { dispose(): void } };

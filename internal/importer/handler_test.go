@@ -11,14 +11,23 @@ import (
 )
 
 type fakeData struct {
+	revisions map[string]int64
+	guards    [][]workerrpc.AddonDataSetRevision
 	documents map[string][]workerrpc.AddonDataDocument
 	commits   [][]workerrpc.AddonDataMutation
 }
 
 func (fake *fakeData) Query(_ context.Context, _ *workerrpc.Meta, query workerrpc.AddonDataQuery) (workerrpc.AddonDataQueryResult, error) {
-	return workerrpc.AddonDataQueryResult{Documents: append([]workerrpc.AddonDataDocument(nil), fake.documents[query.Reference.DataID]...)}, nil
+	revision := fake.revisions[query.Reference.DataID]
+	return workerrpc.AddonDataQueryResult{DataRevision: &revision, Documents: append([]workerrpc.AddonDataDocument(nil), fake.documents[query.Reference.DataID]...)}, nil
 }
-func (fake *fakeData) Transact(_ context.Context, _ *workerrpc.Meta, mutations []workerrpc.AddonDataMutation) (workerrpc.AddonDataCommit, error) {
+func (fake *fakeData) TransactGuarded(_ context.Context, _ *workerrpc.Meta, mutations []workerrpc.AddonDataMutation, guards []workerrpc.AddonDataSetRevision) (workerrpc.AddonDataCommit, error) {
+	fake.guards = append(fake.guards, append([]workerrpc.AddonDataSetRevision(nil), guards...))
+	for _, guard := range guards {
+		if fake.revisions[guard.DataID] != guard.Revision {
+			return workerrpc.AddonDataCommit{}, workerrpc.NewRPCError(workerrpc.JSONRPCApplication, workerrpc.KindConflict, "data changed", true, nil)
+		}
+	}
 	fake.commits = append(fake.commits, append([]workerrpc.AddonDataMutation(nil), mutations...))
 	return workerrpc.AddonDataCommit{CommitID: 1, OccurredAt: time.Now(), Results: []workerrpc.AddonDataMutationResult{{Kind: "collection", DataID: mutations[0].Reference.DataID, Key: mutations[0].Key, AfterRevision: mutations[0].ExpectedRevision + 1}}, DataSets: []workerrpc.AddonDataSetRevision{{Kind: "collection", DataID: mutations[0].Reference.DataID, Revision: 1}}}, nil
 }
@@ -104,5 +113,37 @@ func TestImportMethodsRequireHostIssuedDMActor(t *testing.T) {
 				t.Fatalf("%s without DM = %v", method, err)
 			}
 		}
+	}
+}
+
+func TestCommitRetainsAllCollectionGuardsFromPreview(t *testing.T) {
+	for _, changed := range append(append([]string{}, planningCollections...), "planning_views") {
+		t.Run(changed, func(t *testing.T) {
+			data := &fakeData{documents: map[string][]workerrpc.AddonDataDocument{}, revisions: map[string]int64{}}
+			handler, _ := New(data)
+			params := mustJSON(t, map[string]any{"contractVersion": "import-preview.v1", "format": "dm-tools-planning", "document": map[string]any{
+				"format": "dm-tools-planning", "schemaVersion": 3, "generatedAt": 100, "items": []any{validItem("guarded-quest", nil)}, "flowLinks": []any{}, "references": []any{}, "consequences": []any{}, "notes": []any{},
+			}})
+			preview, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "preview", Params: params, Meta: testMeta()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data.revisions[changed] = 1 // A record outside the accepted mutation set changed.
+			request := workerrpc.Request{Method: methodPrefix + "commit", Params: mustJSON(t, map[string]any{"contractVersion": "import-commit.v1", "token": preview.(map[string]any)["token"]}), Meta: testMeta()}
+			if _, err := handler.HandleRPC(context.Background(), request); err == nil {
+				t.Fatal("stale preview committed")
+			}
+			if len(data.commits) != 0 || len(data.guards) != 1 || len(data.guards[0]) != 6 {
+				t.Fatalf("unguarded or partial commit: %+v", data)
+			}
+			for _, guard := range data.guards[0] {
+				if guard.Revision != 0 {
+					t.Fatal("commit refreshed a reviewed revision")
+				}
+			}
+			if _, err := handler.HandleRPC(context.Background(), request); err == nil {
+				t.Fatal("consumed conflict token reused")
+			}
+		})
 	}
 }

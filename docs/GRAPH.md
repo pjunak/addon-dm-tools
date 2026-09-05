@@ -61,6 +61,12 @@ views, and trims shared-note anchors. Missing revisions and plans over the
 checks reference ownership/targets and note/consequence anchors against the
 same rules as the Go dataset validator.
 
-Exact revisions protect the records included in the fetched snapshot. They do
-not fence new records created concurrently after that read; broader structural
-concurrency remains tracked in the suite backlog.
+Every loaded collection carries its host revision, including empty collections.
+Subsequent pages require the same revision. Every planner mutation checks all
+six observed collection revisions atomically, alongside the exact document
+revisions. An unseen child, annotation, reference, layout change, or simultaneous
+flow edit therefore rejects the entire stale write. The editor retains drafts
+and requires Reload; it does not automatically retry with newer revisions.
+This deliberately also conflicts on unrelated edits in another planner view.
+Hosts that omit collection revisions cannot enable planner writes. These guards
+cover add-on collections, not changes to core records referenced by the planner.

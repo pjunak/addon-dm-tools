@@ -30,7 +30,7 @@ var planningCollections = []string{"planning_items", "planning_flow_links", "pla
 
 type DataStore interface {
 	Query(context.Context, *workerrpc.Meta, workerrpc.AddonDataQuery) (workerrpc.AddonDataQueryResult, error)
-	Transact(context.Context, *workerrpc.Meta, []workerrpc.AddonDataMutation) (workerrpc.AddonDataCommit, error)
+	TransactGuarded(context.Context, *workerrpc.Meta, []workerrpc.AddonDataMutation, []workerrpc.AddonDataSetRevision) (workerrpc.AddonDataCommit, error)
 }
 
 type Handler struct {
@@ -40,10 +40,11 @@ type Handler struct {
 	plans map[string]storedPlan
 }
 type storedPlan struct {
-	expires   time.Time
-	mutations []workerrpc.AddonDataMutation
-	writes    int
-	deletes   int
+	dataRevisions []workerrpc.AddonDataSetRevision
+	expires       time.Time
+	mutations     []workerrpc.AddonDataMutation
+	writes        int
+	deletes       int
 }
 type storedDocument struct {
 	normalized planning.Normalized
@@ -136,7 +137,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 	if err != nil {
 		return nil, invalid("planning import document is invalid", map[string]any{"issue": err.Error()})
 	}
-	stored, dataset, err := handler.load(ctx, meta)
+	stored, dataset, dataRevisions, err := handler.load(ctx, meta)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +236,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 		}
 		return changes[i].Collection < changes[j].Collection
 	})
-	token, err := handler.storePlan(storedPlan{mutations: mutations, writes: result.Creates + result.Updates, deletes: result.Deletes})
+	token, err := handler.storePlan(storedPlan{mutations: mutations, dataRevisions: dataRevisions, writes: result.Creates + result.Updates, deletes: result.Deletes})
 	if err != nil {
 		return nil, unavailable("could not retain the reviewed import plan")
 	}
@@ -254,7 +255,7 @@ func (handler *Handler) commit(ctx context.Context, meta *workerrpc.Meta, token 
 		return nil, workerrpc.NewRPCError(workerrpc.JSONRPCApplication, workerrpc.KindNotFound, "The reviewed import plan is missing or expired.", false, nil)
 	}
 	if len(plan.mutations) > 0 {
-		if _, err := handler.data.Transact(ctx, meta, plan.mutations); err != nil {
+		if _, err := handler.data.TransactGuarded(ctx, meta, plan.mutations, plan.dataRevisions); err != nil {
 			return nil, err
 		}
 	}
@@ -344,22 +345,28 @@ func decodeEntry(collection string, body json.RawMessage, generatedAt int64) (im
 	return importEntry{Operation: operation, ExpectedUpdatedAt: expected, Record: normalized}, nil
 }
 
-func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[string]map[string]storedDocument, planning.Dataset, error) {
+func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[string]map[string]storedDocument, planning.Dataset, []workerrpc.AddonDataSetRevision, error) {
+	dataRevisions := make([]workerrpc.AddonDataSetRevision, 0, 6)
 	stored := make(map[string]map[string]storedDocument)
 	dataset := planning.Dataset{Items: map[string]planning.Item{}, Flows: map[string]planning.Flow{}, References: map[string]planning.Reference{}, Consequences: map[string]planning.Consequence{}, Notes: map[string]planning.Note{}, Views: map[string]planning.View{}}
 	for _, collection := range append(append([]string{}, planningCollections...), "planning_views") {
 		stored[collection] = make(map[string]storedDocument)
 		cursor := ""
+		var revision *int64
 		for {
-			page, err := handler.data.Query(ctx, meta, workerrpc.AddonDataQuery{Reference: workerrpc.AddonDataReference{Kind: workerrpc.AddonDataCollection, DataID: collection}, Cursor: cursor, Limit: 200})
+			page, err := handler.data.Query(ctx, meta, workerrpc.AddonDataQuery{Reference: workerrpc.AddonDataReference{Kind: workerrpc.AddonDataCollection, DataID: collection}, Cursor: cursor, Limit: 200, IncludeDataRevision: true, ExpectedDataRevision: revision})
 			if err != nil {
-				return nil, dataset, err
+				return nil, dataset, nil, err
 			}
+			if page.DataRevision == nil || *page.DataRevision < 0 || (revision != nil && *revision != *page.DataRevision) {
+				return nil, dataset, nil, invalid("planning collection revision is missing or changed; update the host and preview again", nil)
+			}
+			revision = page.DataRevision
 			for _, document := range page.Documents {
 				if collection == "planning_views" {
 					var view planning.View
 					if decodeExact(document.Value, &view) != nil || view.SchemaVersion != planning.SchemaVersion {
-						return nil, dataset, invalid("stored planning view is invalid", map[string]any{"id": document.Key})
+						return nil, dataset, nil, invalid("stored planning view is invalid", map[string]any{"id": document.Key})
 					}
 					normalized := planning.Normalized{Collection: collection, ID: view.ID, Label: "Saved canvas layout", UpdatedAt: view.UpdatedAt, Value: &view, Body: document.Value}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
@@ -367,7 +374,7 @@ func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[str
 				} else {
 					normalized, err := planning.DecodeStored(collection, document.Value)
 					if err != nil {
-						return nil, dataset, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key})
+						return nil, dataset, nil, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key})
 					}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
 					apply(dataset, normalized)
@@ -378,11 +385,12 @@ func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[str
 			}
 			cursor = page.NextCursor
 		}
+		dataRevisions = append(dataRevisions, workerrpc.AddonDataSetRevision{Kind: workerrpc.AddonDataCollection, DataID: collection, Revision: *revision})
 	}
 	if issues := planning.Validate(dataset); len(issues) > 0 {
-		return nil, dataset, invalid("stored planning data violates dataset invariants", map[string]any{"issues": issues[:min(20, len(issues))]})
+		return nil, dataset, nil, invalid("stored planning data violates dataset invariants", map[string]any{"issues": issues[:min(20, len(issues))]})
 	}
-	return stored, dataset, nil
+	return stored, dataset, dataRevisions, nil
 }
 
 func apply(dataset planning.Dataset, record planning.Normalized) {

@@ -483,7 +483,7 @@ export function definePlannerElement(generation) {
                 card.addEventListener("lostpointercapture", end);
             });
         }
-        async #create(kind) { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime) => runtime.repository.put("planning_items", item, 0), `Created ${item.title}.`, item.id); }
+        async #create(kind) { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", item, 0), `Created ${item.title}.`, item.id); }
         async #saveItem(item, form) {
             const data = new FormData(form);
             const text = (name) => String(data.get(name) ?? "").trim();
@@ -504,7 +504,7 @@ export function definePlannerElement(generation) {
             const revision = this.#drafts.revision(form);
             if (revision === undefined)
                 return;
-            await this.#mutate(async (runtime) => runtime.repository.put("planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
         }
         async #createFlow(source, form) {
             const snapshot = this.#snapshot;
@@ -525,7 +525,7 @@ export function definePlannerElement(generation) {
                 this.#render();
                 return;
             }
-            await this.#mutate(async (runtime) => runtime.repository.put("planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
+            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
         }
         async #saveFlow(flow, form, selectedId) {
             const snapshot = this.#snapshot;
@@ -539,7 +539,7 @@ export function definePlannerElement(generation) {
                 this.#invalid(issues[0]);
                 return;
             }
-            await this.#mutate(runtime => runtime.repository.put("planning_flow_links", next, revision), "Flow saved.", selectedId, `planning_flow_links:${flow.id}`);
+            await this.#mutate((runtime, snapshot) => runtime.repository.put(snapshot, "planning_flow_links", next, revision), "Flow saved.", selectedId, `planning_flow_links:${flow.id}`);
         }
         async #deleteFlow(flow, selectedId) {
             const snapshot = this.#snapshot;
@@ -563,10 +563,10 @@ export function definePlannerElement(generation) {
                 return;
             }
             const reference = { id: `reference-${crypto.randomUUID()}`, schemaVersion: 3, itemId: item.id, name: target.title, relation: "related", target: { scope: "planning", itemId: target.id }, quantity: 1, notes: "", updatedAt: Date.now() };
-            await this.#mutate(async (runtime) => runtime.repository.put("planning_references", reference, 0), "Planning reference added.", item.id);
+            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_references", reference, 0), "Planning reference added.", item.id);
         }
-        async #addConsequence(item) { const consequence = { id: `consequence-${crypto.randomUUID()}`, schemaVersion: 3, anchor: { scope: "item", itemId: item.id }, kind: "world", title: "Planned consequence", body: "", updatedAt: Date.now() }; await this.#mutate(async (runtime) => runtime.repository.put("planning_consequences", consequence, 0), "Consequence added.", item.id); }
-        async #addNote(item) { const note = { id: `note-${crypto.randomUUID()}`, schemaVersion: 3, title: "DM note", body: "", anchorIds: [item.id], updatedAt: Date.now() }; await this.#mutate(async (runtime) => runtime.repository.put("dm_notes", note, 0), "DM note added.", item.id); }
+        async #addConsequence(item) { const consequence = { id: `consequence-${crypto.randomUUID()}`, schemaVersion: 3, anchor: { scope: "item", itemId: item.id }, kind: "world", title: "Planned consequence", body: "", updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_consequences", consequence, 0), "Consequence added.", item.id); }
+        async #addNote(item) { const note = { id: `note-${crypto.randomUUID()}`, schemaVersion: 3, title: "DM note", body: "", anchorIds: [item.id], updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "dm_notes", note, 0), "DM note added.", item.id); }
         async #saveReference(reference, form, selectedId) { const data = new FormData(form); const next = { ...reference, name: String(data.get("name") ?? "").trim(), relation: String(data.get("relation") ?? "related"), notes: String(data.get("notes") ?? "").trim(), updatedAt: Date.now() }; if (next.name === "") {
             this.#invalid("A reference name is required.");
             return;
@@ -600,12 +600,12 @@ export function definePlannerElement(generation) {
                 this.#invalid("This record changed or no longer exists. Reload the planner.");
                 return;
             }
-            await this.#mutate(async (runtime) => runtime.repository.put(collection, value, revision), success, selectedId, `${collection}:${value.id}`);
+            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, collection, value, revision), success, selectedId, `${collection}:${value.id}`);
         }
         async #deleteRecord(collection, id, success, selectedId) { const revision = this.#snapshot?.revisions.get(`${collection}:${id}`); if (revision === undefined) {
             this.#invalid("This record changed or no longer exists. Reload the planner.");
             return;
-        } const mutation = { operation: "delete", kind: "collection", dataId: collection, key: id, expectedRevision: revision }; await this.#mutate(async (runtime) => runtime.repository.transact([mutation]), success, selectedId, `${collection}:${id}`); }
+        } const mutation = { operation: "delete", kind: "collection", dataId: collection, key: id, expectedRevision: revision }; await this.#mutate(async (runtime, snapshot) => runtime.repository.transact(snapshot, [mutation]), success, selectedId, `${collection}:${id}`); }
         #invalid(message) { this.#message = message; this.#messageKind = "alert"; this.#render(); }
         #bindDraft(form, key, revision) {
             this.#drafts.bind(form, key, revision);
@@ -640,14 +640,15 @@ export function definePlannerElement(generation) {
             this.#drafts.clear(key); this.#committedDrafts.clear(); }
         async #mutate(operation, success, selected, draftKey) {
             const runtime = this.#runtime;
-            if (runtime === undefined || this.#busy || this.#needsReload)
+            const original = this.#snapshot;
+            if (runtime === undefined || original === undefined || this.#busy || this.#needsReload)
                 return;
             this.#busy = true;
             this.#message = "Saving…";
             this.#messageKind = "status";
             this.#render();
             try {
-                await operation(runtime);
+                await operation(runtime, original);
                 if (this.#runtime !== runtime || !this.isConnected)
                     return;
                 // A confirmed write must not be offered again if the following read fails.

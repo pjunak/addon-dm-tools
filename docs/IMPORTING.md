@@ -28,16 +28,21 @@ already completed transaction. An unchanged host context does not reset a review
 The Go worker:
 
 1. strictly parses schema-v3 records and rejects unknown or missing fields;
-2. loads one revisioned snapshot of all six planning collections;
+2. loads all six planning collections and pins each collection's paginated
+   reads to its initial host revision;
 3. reconciles create, update, identical skip, and replacement deletion;
 4. validates ownership, anchors, references, same-parent flow, and cycles over
    the complete candidate;
-5. retains at most 256 exact mutations behind a random 15-minute token.
+5. retains at most 256 exact mutations and all six collection revisions behind
+   a random 15-minute token.
 
 Preview never writes. Commit requires an idempotency key, consumes the token
-once, and submits the retained mutations in one host transaction. Exact record
-revisions make a concurrent planner change fail as a conflict. The worker does
-not rerun reconciliation or silently merge newer data.
+once, and submits the retained mutations and collection guards in one host
+transaction. Exact record revisions and the original collection revisions make
+a concurrent planner change fail as a conflict, even for records absent from
+the review. The worker does not rerun reconciliation, refresh accepted guards,
+or silently merge newer data. A host without collection revisions cannot preview
+an import. Read-only empty plans do not issue a transaction.
 
 `merge` retains omitted records and never touches `planning_views`. `replace`
 requires every incoming record to use `create`, deletes omitted semantic
