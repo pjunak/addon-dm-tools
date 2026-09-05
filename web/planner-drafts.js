@@ -1,7 +1,9 @@
 /** View-local edits keep the revision at which editing began, even after refresh. */
 export class PlannerDrafts {
+    #changed;
     #drafts = new Map();
     #forms = new WeakMap();
+    constructor(changed = () => undefined) { this.#changed = changed; }
     bind(form, key, revision) {
         const existing = this.#drafts.get(key);
         const baseline = existing?.baseline ?? valuesOf(form);
@@ -19,6 +21,7 @@ export class PlannerDrafts {
                 this.#drafts.delete(key);
             else
                 this.#drafts.set(key, { revision: openingRevision, baseline, values });
+            this.#changed();
         };
         form.addEventListener("input", capture);
         form.addEventListener("change", capture);
@@ -26,8 +29,9 @@ export class PlannerDrafts {
     revision(form) { return this.#forms.get(form)?.revision; }
     has(key) { return this.#drafts.has(key); }
     entries() { return this.#drafts.entries(); }
-    clear(key) { this.#drafts.delete(key); }
-    clearAll() { this.#drafts.clear(); }
+    clear(key) { if (this.#drafts.delete(key))
+        this.#changed(); }
+    clearAll() { this.#drafts.clear(); this.#changed(); }
 }
 function controlsOf(form) {
     return Array.from(form.querySelectorAll("input[name],textarea[name],select[name]"));

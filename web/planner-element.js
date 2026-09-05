@@ -22,9 +22,11 @@ export function definePlannerElement(generation) {
         #targetId;
         #targetPending = false;
         #readRequest;
-        #drafts = new PlannerDrafts();
+        #drafts = new PlannerDrafts(() => this.#syncEdits());
         #committedDrafts = new Set();
         #needsReload = false;
+        #writing = false;
+        #invalidTarget = false;
         #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
         set codexContribution(value) {
             const previous = this.#contribution;
@@ -37,7 +39,8 @@ export function definePlannerElement(generation) {
             }
             try {
                 const target = plannerTarget(value.host);
-                if (target !== this.#targetId) {
+                if (target !== this.#targetId || this.#invalidTarget) {
+                    this.#invalidTarget = false;
                     this.#targetId = target;
                     this.#targetPending = true;
                     if (!this.#busy && this.#snapshot) {
@@ -51,11 +54,15 @@ export function definePlannerElement(generation) {
             }
         }
         connectedCallback() { this.classList.add("dm-tools-planner"); void this.#connect(); }
-        disconnectedCallback() { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; }
+        disconnectedCallback() { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false }); }
         async #connect() {
             const contribution = this.#contribution;
             if (contribution === undefined) {
                 this.#unavailable("The host did not provide a planner generation.");
+                return;
+            }
+            if (contribution.edits === undefined) {
+                this.#unavailable("Update the host to protect unsaved planner edits before using this package.");
                 return;
             }
             const runtime = runtimeFor(contribution.addon.generation);
@@ -72,6 +79,8 @@ export function definePlannerElement(generation) {
             }
             this.#readRequest?.abort();
             this.#busy = false;
+            this.#writing = false;
+            this.#invalidTarget = false;
             this.#snapshot = undefined;
             this.#targetPending = true;
             this.#drafts.clearAll();
@@ -138,6 +147,12 @@ export function definePlannerElement(generation) {
             }
         }
         #invalidLink(error) {
+            if (this.#snapshot && this.#runtime) {
+                this.#invalidTarget = true;
+                this.#fail(error, "Invalid planner link.");
+                this.#render();
+                return;
+            }
             this.#readRequest?.abort();
             this.#runtime = undefined;
             this.#unavailable(error instanceof Error ? error.message : "Invalid planner link.");
@@ -638,6 +653,10 @@ export function definePlannerElement(generation) {
         }
         #acceptCommittedDrafts() { for (const key of this.#committedDrafts)
             this.#drafts.clear(key); this.#committedDrafts.clear(); }
+        #syncEdits() {
+            const dirty = [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
+            this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
+        }
         async #mutate(operation, success, selected, draftKey) {
             const runtime = this.#runtime;
             const original = this.#snapshot;
@@ -647,6 +666,8 @@ export function definePlannerElement(generation) {
             this.#message = "Saving…";
             this.#messageKind = "status";
             this.#render();
+            this.#writing = true;
+            this.#syncEdits();
             try {
                 await operation(runtime, original);
                 if (this.#runtime !== runtime || !this.isConnected)
@@ -676,6 +697,8 @@ export function definePlannerElement(generation) {
             finally {
                 if (this.#runtime === runtime && this.isConnected) {
                     this.#busy = false;
+                    this.#writing = false;
+                    this.#syncEdits();
                     this.#render();
                 }
             }

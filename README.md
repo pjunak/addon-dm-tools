@@ -68,14 +68,18 @@ Writes lock the form until their outcome is known. After a write/read failure,
 available to copy. A confirmed write followed by a failed refresh is not
 offered again. Canceled pointer drags restore the original position without a
 write. The planner uses the host's classic theme tokens and keeps card text at
-native scale. Draft persistence across leaving the planner or reloading the
-browser, broader interaction parity, and full localization remain in the suite
-backlog.
+native scale. Leaving the planner or signing out asks before discarding drafts;
+browser reload/close uses the host's unsaved-edit warning. Saves in progress
+block navigation until their outcome is known. Canceling keeps the current
+view and all its drafts; confirming discards them. Drafts are not persisted
+across an accepted reload or forced package/authority teardown. Broader
+interaction parity and full localization remain in the suite backlog.
 
 Planner canvas links use `#/addons/dm-tools/planner?item=<id>`. Containers open
 their own canvas; events and branches open their parent and select the linked
 item. Reload, a new tab and browser Back retain that target. Invalid parameters
-show a recovery link; a deleted target falls back to the campaign canvas with
+retain an already open planner and its drafts, or show a recovery link on first
+entry; a deleted target falls back to the campaign canvas with
 an explanation. An unchanged route-context refresh preserves editor input.
 
 ## Stored contracts

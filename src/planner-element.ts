@@ -15,7 +15,8 @@ export function definePlannerElement(generation?: string): string {
     #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #snapshot: PlanningSnapshot | undefined;
     #scopeId: string | null = null; #selectedId: string | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
     #targetId: string | undefined; #targetPending = false; #readRequest: AbortController | undefined;
-    #drafts = new PlannerDrafts(); #committedDrafts = new Set<string>(); #needsReload = false;
+    #drafts = new PlannerDrafts(() => this.#syncEdits()); #committedDrafts = new Set<string>(); #needsReload = false;
+    #writing = false; #invalidTarget = false;
     #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
 
     set codexContribution(value: ContributionContext) {
@@ -24,18 +25,19 @@ export function definePlannerElement(generation?: string): string {
       if (previous?.addon.generation !== value.addon.generation || !this.#runtime) { void this.#connect(); return; }
       try {
         const target = plannerTarget(value.host);
-        if (target !== this.#targetId) { this.#targetId = target; this.#targetPending = true; if (!this.#busy && this.#snapshot) { this.#applyTarget(); this.#render(); } }
+        if (target !== this.#targetId || this.#invalidTarget) { this.#invalidTarget = false; this.#targetId = target; this.#targetPending = true; if (!this.#busy && this.#snapshot) { this.#applyTarget(); this.#render(); } }
       } catch (error) { this.#invalidLink(error); }
     }
     connectedCallback(): void { this.classList.add("dm-tools-planner"); void this.#connect(); }
-    disconnectedCallback(): void { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; }
+    disconnectedCallback(): void { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false }); }
 
     async #connect(): Promise<void> {
       const contribution = this.#contribution; if (contribution === undefined) { this.#unavailable("The host did not provide a planner generation."); return; }
+      if (contribution.edits === undefined) { this.#unavailable("Update the host to protect unsaved planner edits before using this package."); return; }
       const runtime = runtimeFor(contribution.addon.generation); if (runtime === undefined || runtime.signal.aborted) { this.#unavailable("This DM Tools generation is no longer active."); return; }
       try { this.#targetId = plannerTarget(contribution.host); }
       catch (error) { this.#invalidLink(error); return; }
-      this.#readRequest?.abort(); this.#busy = false; this.#snapshot = undefined; this.#targetPending = true;
+      this.#readRequest?.abort(); this.#busy = false; this.#writing = false; this.#invalidTarget = false; this.#snapshot = undefined; this.#targetPending = true;
       this.#drafts.clearAll(); this.#committedDrafts.clear(); this.#needsReload = false;
       this.#runtime = runtime; await this.#reload("Loading story planner…");
     }
@@ -63,6 +65,9 @@ export function definePlannerElement(generation?: string): string {
       catch (error) { this.#scopeId = null; this.#selectedId = undefined; this.#fail(error, "This planning item no longer exists."); }
     }
     #invalidLink(error: unknown): void {
+      if (this.#snapshot && this.#runtime) {
+        this.#invalidTarget = true; this.#fail(error, "Invalid planner link."); this.#render(); return;
+      }
       this.#readRequest?.abort(); this.#runtime = undefined;
       this.#unavailable(error instanceof Error ? error.message : "Invalid planner link.");
     }
@@ -312,8 +317,14 @@ export function definePlannerElement(generation?: string): string {
 
     #acceptCommittedDrafts(): void { for (const key of this.#committedDrafts) this.#drafts.clear(key); this.#committedDrafts.clear(); }
 
+    #syncEdits(): void {
+      const dirty = [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
+      this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
+    }
+
     async #mutate(operation: (runtime: DmToolsRuntime, snapshot: PlanningSnapshot) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<void> {
       const runtime = this.#runtime; const original = this.#snapshot; if (runtime === undefined || original === undefined || this.#busy || this.#needsReload) return; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
+      this.#writing = true; this.#syncEdits();
       try {
         await operation(runtime, original); if (this.#runtime !== runtime || !this.isConnected) return;
         // A confirmed write must not be offered again if the following read fails.
@@ -323,7 +334,7 @@ export function definePlannerElement(generation?: string): string {
         this.#acceptCommittedDrafts();
         this.#selectedId = selected; this.#snapshot = snapshot; this.#message = success; if (this.#targetPending) this.#applyTarget();
       } catch (error) { if (this.#runtime === runtime && this.isConnected) { this.#needsReload = true; this.#fail(error, "Planning change failed."); } }
-      finally { if (this.#runtime === runtime && this.isConnected) { this.#busy = false; this.#render(); } }
+      finally { if (this.#runtime === runtime && this.isConnected) { this.#busy = false; this.#writing = false; this.#syncEdits(); this.#render(); } }
     }
     #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
     #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); const link = this.ownerDocument.createElement("a"); link.textContent = "Open campaign canvas"; link.href = plannerLink(this.#contribution?.addon.id ?? "dm-tools"); this.append(link); }

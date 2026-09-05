@@ -6,8 +6,11 @@ interface Draft {
 
 /** View-local edits keep the revision at which editing began, even after refresh. */
 export class PlannerDrafts {
+  readonly #changed: () => void;
   #drafts = new Map<string, Draft>();
   #forms = new WeakMap<HTMLFormElement, { key: string; revision: number | undefined }>();
+
+  constructor(changed: () => void = () => undefined) { this.#changed = changed; }
 
   bind(form: HTMLFormElement, key: string, revision: number | undefined): void {
     const existing = this.#drafts.get(key);
@@ -23,6 +26,7 @@ export class PlannerDrafts {
       const values = valuesOf(form);
       if (JSON.stringify(values) === JSON.stringify(baseline)) this.#drafts.delete(key);
       else this.#drafts.set(key, { revision: openingRevision, baseline, values });
+      this.#changed();
     };
     form.addEventListener("input", capture);
     form.addEventListener("change", capture);
@@ -31,8 +35,8 @@ export class PlannerDrafts {
   revision(form: HTMLFormElement): number | undefined { return this.#forms.get(form)?.revision; }
   has(key: string): boolean { return this.#drafts.has(key); }
   entries(): IterableIterator<[string, Draft]> { return this.#drafts.entries(); }
-  clear(key: string): void { this.#drafts.delete(key); }
-  clearAll(): void { this.#drafts.clear(); }
+  clear(key: string): void { if (this.#drafts.delete(key)) this.#changed(); }
+  clearAll(): void { this.#drafts.clear(); this.#changed(); }
 }
 
 function controlsOf(form: HTMLFormElement): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[] {

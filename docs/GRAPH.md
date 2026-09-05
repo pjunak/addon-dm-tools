@@ -44,6 +44,15 @@ refresh before another mutation. Refresh preserves opening revisions, exposes
 concurrent changes, and retains removed-record drafts for copying. This is
 local editor state, never campaign data or an automatic conflict merge.
 
+The mounted contribution's public `edits.set` handle reports whether any
+uncommitted draft remains and whether a write (including its confirming read)
+is pending. The host owns navigation, sign-out, and browser-unload guards. The
+planner opts into retaining drafts across its route queries and keeps the open
+editor on invalid query targets. Confirmed writes whose read failed are not
+reported as unsaved, but unrelated drafts still are. A host without this handle
+cannot open the editor. Disposal clears its flags; forced generation/authority
+teardown never waits for a save or persists drafts.
+
 Pointer cancellation or capture loss restores the card's original coordinates;
 only a completed pointer release persists a moved position.
 

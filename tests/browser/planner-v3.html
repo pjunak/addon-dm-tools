@@ -61,7 +61,7 @@
     });
     definePlannerElement();
     const planner = document.createElement("dm-tools-planner-page");
-    planner.codexContribution = { addon: { id: "dm-tools", generation }, contribution: { id: "planner.route", config: {} }, signal };
+    planner.codexContribution = { addon: { id: "dm-tools", generation }, contribution: { id: "planner.route", config: {} }, signal, edits: { set() {} } };
     document.querySelector("#fixture").append(planner);
 
     for (let attempt = 0; attempt < 60 && planner.querySelectorAll(".dm-plan-card").length !== 2; attempt += 1) {
