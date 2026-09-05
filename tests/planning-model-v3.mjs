@@ -1,8 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { directChildren, localFlows, newItem, subtreeIds, validatePlanning } from "../web/planning-model.js";
+import { availableParents, directChildren, localFlows, newItem, subtreeIds, validateItemEdit, validatePlanning } from "../web/planning-model.js";
 
 const item = (id, kind, parentId = null) => ({ id, schemaVersion: 3, kind, parentId, title: id, summary: "", body: "", objective: "", setup: "", resolution: "", tags: [], updatedAt: 1, ...(kind === "event" ? { eventType: "story" } : {}), ...(kind === "branch" ? { branchType: "decision" } : {}) });
+
+test("parent choices omit the item, its descendants, and leaf items", () => {
+  const items = [item("plot", "plotline"), item("quest", "quest", "plot"), item("nested", "quest", "quest"), item("leaf", "event"), item("other", "quest")];
+  assert.deepEqual(availableParents(items, "quest").map(entry => entry.id), ["other", "plot"]);
+});
+
+test("item edits retain tree and local-flow meaning without removing authored records", () => {
+  const quest = item("quest", "quest"), child = item("child", "branch", "quest"), destination = item("destination", "plotline");
+  const dataset = { items: [quest, child, destination], flows: [], references: [], consequences: [], notes: [], views: [] };
+  assert.deepEqual(validateItemEdit(dataset, { ...quest, kind: "plotline", parentId: "destination" }), []);
+  assert.match(validateItemEdit(dataset, { ...quest, kind: "event", eventType: "story" })[0], /children first/);
+  assert.match(validateItemEdit(dataset, { ...quest, parentId: "child" }).join(" "), /leaf|cycle/);
+  assert.match(validateItemEdit(dataset, { ...quest, parentId: "missing" })[0], /missing parent/);
+  const connected = { ...dataset, items: [...dataset.items, item("sibling", "event", "quest")], flows: [{ id: "option", sourceId: "child", targetId: "sibling", kind: "option" }] };
+  assert.match(validateItemEdit(connected, { ...child, parentId: null })[0], /story flows/);
+  assert.match(validateItemEdit(connected, { ...child, kind: "event" })[0], /Option flows/);
+  assert.deepEqual(validateItemEdit(connected, { ...quest, parentId: "destination" }), []);
+  assert.match(validateItemEdit(dataset, item("missing", "quest"))[0], /no longer exists/);
+});
 
 test("projection shows only direct children and real local flow", () => {
   const items = [item("quest-a", "quest"), item("quest-b", "quest"), item("event-a", "event", "quest-a")];

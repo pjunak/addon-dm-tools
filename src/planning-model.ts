@@ -40,6 +40,27 @@ export function subtreeIds(items: readonly PlanningItem[], rootId: string): Read
   while (changed) { changed = false; for (const item of items) if (item.parentId !== null && result.has(item.parentId) && !result.has(item.id)) { result.add(item.id); changed = true; } }
   return result;
 }
+export function availableParents(items: readonly PlanningItem[], itemId: string): readonly PlanningItem[] {
+  const excluded = subtreeIds(items, itemId);
+  return items.filter(item => !excluded.has(item.id) && (item.kind === "plotline" || item.kind === "quest"))
+    .sort((a, b) => a.title.localeCompare(b.title, "en") || a.id.localeCompare(b.id));
+}
+
+export function validateItemEdit(dataset: PlanningDataset, next: PlanningItem): readonly string[] {
+  const current = dataset.items.find(item => item.id === next.id);
+  if (!current) return ["This planning item no longer exists. Reload the planner."];
+  if (next.kind !== "plotline" && next.kind !== "quest" && dataset.items.some(item => item.parentId === next.id)) {
+    return ["Move this item's children first, or keep it as a plotline or quest."];
+  }
+  if (next.parentId !== current.parentId && dataset.flows.some(flow => flow.sourceId === next.id || flow.targetId === next.id)) {
+    return ["This item has story flows on its current canvas. Review and remove those flows before moving it."];
+  }
+  if (next.kind !== "branch" && dataset.flows.some(flow => flow.sourceId === next.id && flow.kind === "option")) {
+    return ["Option flows must start at a branch. Review those flows before changing this item's kind."];
+  }
+  return validatePlanning({ ...dataset, items: dataset.items.map(item => item.id === next.id ? next : item) });
+}
+
 export function validatePlanning(dataset: PlanningDataset): readonly string[] {
   const issues: string[] = []; const byId = new Map<string, PlanningItem>();
   for (const item of dataset.items) { if (byId.has(item.id)) issues.push(`Duplicate planning item ${item.id}.`); byId.set(item.id, item); }

@@ -1,5 +1,5 @@
 import type { AddonContext, AddonDocument, CollectionHandle, DataMutation, DataSetRevision } from "./sdk.js";
-import { scopeViewId, subtreeIds, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningReference, type PlanningView } from "./planning-model.js";
+import { scopeViewId, subtreeIds, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningReference, type PlanningView } from "./planning-model.js";
 
 type CollectionId = "planning_items" | "planning_flow_links" | "planning_references" | "planning_consequences" | "dm_notes" | "planning_views";
 type Stored = PlanningItem | PlanningFlow | PlanningReference | PlanningConsequence | DmNote | PlanningView;
@@ -31,6 +31,11 @@ export class PlanningRepository {
   }
   put(snapshot: PlanningSnapshot, collection: CollectionId, value: Stored, revision: number): Promise<void> {
     return this.transact(snapshot, [{ operation: "put", kind: "collection", dataId: collection, key: value.id, expectedRevision: revision, value }]);
+  }
+  async saveItem(snapshot: PlanningSnapshot, item: PlanningItem, revision: number): Promise<void> {
+    const issues = validateItemEdit(snapshot, item);
+    if (issues.length) throw new Error(issues[0]);
+    await this.put(snapshot, "planning_items", item, revision);
   }
   async transact(snapshot: PlanningSnapshot, mutations: readonly DataMutation[]): Promise<void> {
     const guards = snapshot.dataRevisions;

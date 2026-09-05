@@ -5,6 +5,26 @@ const collectionIds = ["planning_items", "planning_flow_links", "planning_refere
 const dataRevisions = collectionIds.map(dataId => ({ kind: "collection", dataId, revision: 0 }));
 import { validatePlanning } from "../web/planning-model.js";
 
+test("moving a container changes only its record and retains the draft revision and collection guards", async () => {
+  const writes = [];
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: {
+    collection: () => ({}), transact: async (mutations, options) => writes.push({ mutations, options }),
+  } });
+  const quest = validQuest(), target = { ...quest, id: "destination", title: "Destination" };
+  const child = { ...quest, id: "child", parentId: quest.id };
+  const snapshot = { items: [quest, target, child], flows: [], references: [{ id: "ref", itemId: target.id, target: { scope: "planning", itemId: quest.id } }],
+    notes: [{ id: "note", anchorIds: [quest.id, child.id] }], consequences: [{ id: "effect", anchor: { scope: "item", itemId: quest.id } }],
+    views: [{ id: "scope-root", positions: { [quest.id]: { x: 24, y: 48 } } }], dataRevisions, revisions: new Map([[`planning_items:${quest.id}`, 9]]) };
+  const original = structuredClone(snapshot), next = { ...quest, parentId: target.id, kind: "plotline" };
+  await repository.saveItem(snapshot, next, 7);
+  assert.equal(writes.length, 1); assert.deepEqual(writes[0].options.expectedDataSets, dataRevisions);
+  assert.deepEqual(writes[0].mutations, [{ operation: "put", kind: "collection", dataId: "planning_items", key: quest.id, expectedRevision: 7, value: next }]);
+  assert.deepEqual(snapshot, original);
+  await assert.rejects(repository.saveItem(snapshot, { ...quest, parentId: child.id }, 7), /cycle/);
+  await assert.rejects(repository.saveItem(snapshot, { ...quest, kind: "event" }, 7), /children first/);
+  assert.equal(writes.length, 1);
+});
+
 test("repository loads all declared collections and keeps exact revisions", async () => {
   const calls = [];
   const context = {

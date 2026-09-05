@@ -1,4 +1,4 @@
-import { directChildren, localFlows, newItem, scopeTrail, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningKind, type PlanningReference, type PlanningView } from "./planning-model.js";
+import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningKind, type PlanningReference, type PlanningView } from "./planning-model.js";
 import type { PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext, DataMutation } from "./sdk.js";
@@ -55,6 +55,11 @@ export function definePlannerElement(generation?: string): string {
         if (this.#selectedId !== undefined && !this.#snapshot.items.some((item) => item.id === this.#selectedId)) this.#selectedId = undefined;
         this.#message = "";
         if (this.#targetPending) this.#applyTarget();
+        else {
+          const selected = snapshot.items.find(item => item.id === this.#selectedId);
+          if (selected && selected.parentId !== this.#scopeId) this.#revealItem(selected);
+          else if (this.#scopeId !== null && snapshot.items.some(item => item.id === this.#scopeId && item.kind !== "plotline" && item.kind !== "quest")) this.#applyTarget();
+        }
       } catch (error) { if (!request.signal.aborted && this.#runtime === runtime) { this.#needsReload = true; this.#fail(error, "Could not load planning data."); } }
       finally { if (this.#runtime === runtime && this.#readRequest === request && !request.signal.aborted && this.isConnected) { this.#busy = false; this.#render(); } }
     }
@@ -149,11 +154,11 @@ export function definePlannerElement(generation?: string): string {
       const selected = snapshot.items.find((item) => item.id === this.#selectedId); if (selected === undefined) { const hint = document.createElement("p"); hint.textContent = "Select a card to edit details, manage flow, or add planning annotations."; aside.append(hint); return aside; }
       const form = document.createElement("form"); form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveItem(selected, form); });
       form.setAttribute("aria-label", "Planning item details");
-      if (selected.kind === "event") form.append(selectField(document, "Event type", "eventType", selected.eventType ?? "story", [["story", "Story"], ["encounter", "Encounter"], ["puzzle", "Puzzle"]]));
-      if (selected.kind === "branch") form.append(selectField(document, "Branch type", "branchType", selected.branchType ?? "decision", [["decision", "Decision"], ["condition", "Condition"], ["random", "Random"]]));
+      const refreshStructure = appendItemStructure(document, form, selected, snapshot.items);
       form.append(textField(document, "Title", "title", selected.title), textArea(document, "Summary", "summary", selected.summary, 3), textArea(document, "Objective", "objective", selected.objective, 3), textArea(document, "Body", "body", selected.body, 7), textArea(document, "Setup", "setup", selected.setup, 5), textArea(document, "Resolution", "resolution", selected.resolution, 5), textField(document, "Tags", "tags", selected.tags.join(", ")));
       for (const [name, limit] of Object.entries({ title: 160, summary: 2000, objective: 10000, body: 80000, setup: 30000, resolution: 30000, tags: 2440 })) form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.maxLength = limit;
       this.#bindDraft(form, `planning_items:${selected.id}`, snapshot.revisions.get(`planning_items:${selected.id}`));
+      refreshStructure();
       const save = actionButton(document, "Save details", () => undefined, "primary"); save.type = "submit"; form.append(save); aside.append(form);
       if (selected.kind === "plotline" || selected.kind === "quest") aside.append(actionButton(document, "Enter this canvas", () => this.#openCanvas(selected.id)));
       aside.append(this.#flowEditor(document, snapshot, selected));
@@ -235,15 +240,28 @@ export function definePlannerElement(generation?: string): string {
 
     async #create(kind: PlanningKind): Promise<void> { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", item, 0), `Created ${item.title}.`, item.id); }
     async #saveItem(item: PlanningItem, form: HTMLFormElement): Promise<void> {
+      const snapshot = this.#snapshot; if (!snapshot) return;
       const data = new FormData(form); const text = (name: string): string => String(data.get(name) ?? "").trim();
       const tags = [...new Set(text("tags").split(",").map(tag => tag.trim()).filter(Boolean))];
       if (tags.length > 40 || tags.some(tag => tag.length > 60)) { this.#invalid("Use up to 40 tags, with at most 60 characters each."); return; }
-      const next: PlanningItem = { ...item, title: text("title"), summary: text("summary"), objective: text("objective"), body: text("body"), setup: text("setup"), resolution: text("resolution"), tags, updatedAt: Date.now(),
-        ...(item.kind === "event" ? { eventType: text("eventType") as NonNullable<PlanningItem["eventType"]> } : {}),
-        ...(item.kind === "branch" ? { branchType: text("branchType") as NonNullable<PlanningItem["branchType"]> } : {}) };
+      const { eventType, branchType, ...common } = item;
+      const kind = text("kind") as PlanningKind;
+      const next: PlanningItem = { ...common, kind, parentId: text("parentId") || null, title: text("title"), summary: text("summary"), objective: text("objective"), body: text("body"), setup: text("setup"), resolution: text("resolution"), tags, updatedAt: Date.now(),
+        ...(kind === "event" ? { eventType: (text("eventType") || eventType || "story") as NonNullable<PlanningItem["eventType"]> } : {}),
+        ...(kind === "branch" ? { branchType: (text("branchType") || branchType || "decision") as NonNullable<PlanningItem["branchType"]> } : {}) };
       if (next.title === "") { this.#message = "A title is required."; this.#messageKind = "alert"; this.#render(); return; }
+      const issues = validateItemEdit(snapshot, next); if (issues.length) { this.#invalid(issues[0]!); return; }
       const revision = this.#drafts.revision(form); if (revision === undefined) return;
-      await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+      const saved = await this.#mutate(async (runtime, snapshot) => runtime.repository.saveItem(snapshot, next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+      const current = saved ? this.#snapshot?.items.find(value => value.id === item.id) : undefined;
+      if (current && (item.parentId !== current.parentId || item.kind !== current.kind)) this.#revealItem(current);
+    }
+
+    #revealItem(item: PlanningItem): void {
+      this.#scopeId = item.parentId; this.#selectedId = item.id;
+      this.#targetId = item.kind === "event" || item.kind === "branch" ? item.id : item.parentId ?? undefined;
+      this.#targetPending = false; this.#invalidTarget = false;
+      this.#openCanvas(this.#targetId); this.#render();
     }
     async #createFlow(source: PlanningItem, form: HTMLFormElement): Promise<void> {
       const snapshot = this.#snapshot; if (snapshot === undefined) return;
@@ -322,24 +340,40 @@ export function definePlannerElement(generation?: string): string {
       this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
     }
 
-    async #mutate(operation: (runtime: DmToolsRuntime, snapshot: PlanningSnapshot) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<void> {
-      const runtime = this.#runtime; const original = this.#snapshot; if (runtime === undefined || original === undefined || this.#busy || this.#needsReload) return; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
+    async #mutate(operation: (runtime: DmToolsRuntime, snapshot: PlanningSnapshot) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<boolean> {
+      const runtime = this.#runtime; const original = this.#snapshot; if (runtime === undefined || original === undefined || this.#busy || this.#needsReload) return false; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
       this.#writing = true; this.#syncEdits();
       try {
-        await operation(runtime, original); if (this.#runtime !== runtime || !this.isConnected) return;
+        await operation(runtime, original); if (this.#runtime !== runtime || !this.isConnected) return false;
         // A confirmed write must not be offered again if the following read fails.
         if (draftKey) this.#committedDrafts.add(draftKey);
         const request = new AbortController(); this.#readRequest?.abort(); this.#readRequest = request;
-        const snapshot = await runtime.repository.load(request.signal); if (this.#runtime !== runtime || request.signal.aborted || !this.isConnected) return;
+        const snapshot = await runtime.repository.load(request.signal); if (this.#runtime !== runtime || request.signal.aborted || !this.isConnected) return false;
         this.#acceptCommittedDrafts();
         this.#selectedId = selected; this.#snapshot = snapshot; this.#message = success; if (this.#targetPending) this.#applyTarget();
-      } catch (error) { if (this.#runtime === runtime && this.isConnected) { this.#needsReload = true; this.#fail(error, "Planning change failed."); } }
+        return true;
+      } catch (error) { if (this.#runtime === runtime && this.isConnected) { this.#needsReload = true; this.#fail(error, "Planning change failed."); } return false; }
       finally { if (this.#runtime === runtime && this.isConnected) { this.#busy = false; this.#writing = false; this.#syncEdits(); this.#render(); } }
     }
     #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
     #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); const link = this.ownerDocument.createElement("a"); link.textContent = "Open campaign canvas"; link.href = plannerLink(this.#contribution?.addon.id ?? "dm-tools"); this.append(link); }
   }
   customElements.define(tag, PlannerElement); return tag;
+}
+
+function appendItemStructure(document: Document, form: HTMLFormElement, item: PlanningItem, items: readonly PlanningItem[]): () => void {
+  const row = document.createElement("div"); row.className = "dm-planner-form-row";
+  const kind = selectField(document, "Kind", "kind", item.kind, [["plotline", "Plotline"], ["quest", "Quest"], ["event", "Event"], ["branch", "Branch"]]);
+  const parents = availableParents(items, item.id).map(parent => [parent.id, scopeTrail(items, parent.id).map(entry => entry.title).join(" / ")] as const);
+  row.append(kind, selectField(document, "Parent", "parentId", item.parentId ?? "", [["", "Campaign"], ...parents]));
+  const event = document.createElement("div"), branch = document.createElement("div");
+  event.append(selectField(document, "Event type", "eventType", item.eventType ?? "story", [["story", "Story"], ["encounter", "Encounter"], ["puzzle", "Puzzle"]]));
+  branch.append(selectField(document, "Branch type", "branchType", item.branchType ?? "decision", [["decision", "Decision"], ["condition", "Condition"], ["random", "Random"]]));
+  const help = document.createElement("small"); help.textContent = "Moving an item keeps its children and annotations. Connected story flows must stay on the same canvas.";
+  form.append(row, event, branch, help);
+  const refresh = (): void => { const value = kind.querySelector("select")!.value; event.hidden = value !== "event"; branch.hidden = value !== "branch"; };
+  kind.addEventListener("change", refresh);
+  return refresh;
 }
 
 function positionsFor(views: readonly PlanningView[], scopeId: string | null, items: readonly PlanningItem[]): Map<string, { x: number; y: number }> { const view = views.find((candidate) => candidate.scopeId === scopeId); return new Map(items.map((item, index) => [item.id, view?.positions[item.id] ?? { x: 72 + (index % 3) * 300, y: 72 + Math.floor(index / 3) * 190 }])); }

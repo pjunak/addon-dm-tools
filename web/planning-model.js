@@ -31,6 +31,26 @@ export function subtreeIds(items, rootId) {
     }
     return result;
 }
+export function availableParents(items, itemId) {
+    const excluded = subtreeIds(items, itemId);
+    return items.filter(item => !excluded.has(item.id) && (item.kind === "plotline" || item.kind === "quest"))
+        .sort((a, b) => a.title.localeCompare(b.title, "en") || a.id.localeCompare(b.id));
+}
+export function validateItemEdit(dataset, next) {
+    const current = dataset.items.find(item => item.id === next.id);
+    if (!current)
+        return ["This planning item no longer exists. Reload the planner."];
+    if (next.kind !== "plotline" && next.kind !== "quest" && dataset.items.some(item => item.parentId === next.id)) {
+        return ["Move this item's children first, or keep it as a plotline or quest."];
+    }
+    if (next.parentId !== current.parentId && dataset.flows.some(flow => flow.sourceId === next.id || flow.targetId === next.id)) {
+        return ["This item has story flows on its current canvas. Review and remove those flows before moving it."];
+    }
+    if (next.kind !== "branch" && dataset.flows.some(flow => flow.sourceId === next.id && flow.kind === "option")) {
+        return ["Option flows must start at a branch. Review those flows before changing this item's kind."];
+    }
+    return validatePlanning({ ...dataset, items: dataset.items.map(item => item.id === next.id ? next : item) });
+}
 export function validatePlanning(dataset) {
     const issues = [];
     const byId = new Map();

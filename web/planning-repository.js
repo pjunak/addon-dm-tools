@@ -1,4 +1,4 @@
-import { scopeViewId, subtreeIds, validatePlanning } from "./planning-model.js";
+import { scopeViewId, subtreeIds, validateItemEdit, validatePlanning } from "./planning-model.js";
 export class PlanningRepository {
     #context;
     #handles;
@@ -28,6 +28,12 @@ export class PlanningRepository {
     }
     put(snapshot, collection, value, revision) {
         return this.transact(snapshot, [{ operation: "put", kind: "collection", dataId: collection, key: value.id, expectedRevision: revision, value }]);
+    }
+    async saveItem(snapshot, item, revision) {
+        const issues = validateItemEdit(snapshot, item);
+        if (issues.length)
+            throw new Error(issues[0]);
+        await this.put(snapshot, "planning_items", item, revision);
     }
     async transact(snapshot, mutations) {
         const guards = snapshot.dataRevisions;

@@ -46,6 +46,16 @@ positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+The original **Kind** and **Parent** controls are available in item details.
+Move an item to the campaign root or another plotline/quest, or change its kind;
+the matching event/branch subtype field follows the selection. Parent choices
+exclude the item itself, its descendants, and leaf items. Moving a container
+keeps its children and their internal flow, references, consequences, notes,
+and saved canvas layouts. The editor follows the moved item to its destination.
+Existing flows that would cross canvases, option flows that would lose their
+branch source, and children of a proposed leaf prevent saving with an
+explanation. Review those relationships before changing the structure.
+
 Flow labels and direction are visible on the canvas. **Edit flow** changes the
 label and type from either endpoint; option flow is offered only for a branch
 source. Consequences may apply to the whole item or one of its flows, and
@@ -62,6 +72,8 @@ planner refresh while the planner stays open. Each edit keeps its opening
 revision; a refresh never silently rebases a draft over another saved change.
 **Discard edits** loads that record's latest fetched values. Drafts of removed
 records remain available to copy before discarding.
+If a draft's parent choice disappears during refresh, it remains visibly
+unavailable until you choose a valid parent or discard the edit.
 
 Writes lock the form until their outcome is known. After a write/read failure,
 **Reload planner** is required before further editing; retained text stays

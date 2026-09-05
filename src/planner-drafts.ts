@@ -18,7 +18,13 @@ export class PlannerDrafts {
     const openingRevision = existing ? existing.revision : revision;
     if (existing) {
       for (const control of controlsOf(form)) {
-        if (Object.hasOwn(existing.values, control.name)) control.value = existing.values[control.name]!;
+        if (!Object.hasOwn(existing.values, control.name)) continue;
+        const value = existing.values[control.name]!;
+        // A removed destination must not silently turn into an empty/root choice.
+        if (control.tagName === "SELECT" && !Array.from((control as HTMLSelectElement).options).some(option => option.value === value)) {
+          const missing = form.ownerDocument.createElement("option"); missing.value = value; missing.textContent = `Unavailable: ${value}`; control.append(missing);
+        }
+        control.value = value;
       }
     }
     this.#forms.set(form, { key, revision: openingRevision });

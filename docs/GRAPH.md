@@ -27,6 +27,22 @@ The package owns its DOM and SVG. The host owns route mounting, lifecycle,
 authorization, schema validation, and persistence. No private graph library or
 host DOM selector is part of the contract.
 
+Item kind/parent changes use the same full-dataset validation as other planner
+edits, followed by an exact-revision write guarded by all six collection
+revisions. The parent selector excludes self, descendants, and leaf items.
+A move updates only that item: child ownership, internal flows, annotations,
+and per-canvas positions retain their records. Positions in the old canvas
+remain available if the item returns. Cross-scope incident flows, an option
+flow losing its branch source, or a container with children becoming a leaf
+reject the edit before writing. The planner does not infer replacement links
+or delete annotations to make a move possible.
+
+Kind changes store only their relevant event/branch subtype. Hidden subtype
+choices survive view-local draft switches, while successful saves normalize
+the record to its chosen kind. Missing draft options remain explicit unavailable
+choices rather than falling back to the root. A successful move and a manual
+reload after a confirmed move both reveal the saved destination.
+
 `dashboard-model.ts` projects counts and recent-item links from a validated
 repository snapshot. `dashboard-element.ts` owns only its view request;
 disconnect cancels reads without aborting the activation generation. The

@@ -1,4 +1,4 @@
-import { directChildren, localFlows, newItem, scopeTrail, validatePlanning } from "./planning-model.js";
+import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning } from "./planning-model.js";
 import { runtimeFor } from "./runtime.js";
 import { plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
 import { PlannerDrafts } from "./planner-drafts.js";
@@ -116,6 +116,13 @@ export function definePlannerElement(generation) {
                 this.#message = "";
                 if (this.#targetPending)
                     this.#applyTarget();
+                else {
+                    const selected = snapshot.items.find(item => item.id === this.#selectedId);
+                    if (selected && selected.parentId !== this.#scopeId)
+                        this.#revealItem(selected);
+                    else if (this.#scopeId !== null && snapshot.items.some(item => item.id === this.#scopeId && item.kind !== "plotline" && item.kind !== "quest"))
+                        this.#applyTarget();
+                }
             }
             catch (error) {
                 if (!request.signal.aborted && this.#runtime === runtime) {
@@ -338,14 +345,12 @@ export function definePlannerElement(generation) {
             const form = document.createElement("form");
             form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveItem(selected, form); });
             form.setAttribute("aria-label", "Planning item details");
-            if (selected.kind === "event")
-                form.append(selectField(document, "Event type", "eventType", selected.eventType ?? "story", [["story", "Story"], ["encounter", "Encounter"], ["puzzle", "Puzzle"]]));
-            if (selected.kind === "branch")
-                form.append(selectField(document, "Branch type", "branchType", selected.branchType ?? "decision", [["decision", "Decision"], ["condition", "Condition"], ["random", "Random"]]));
+            const refreshStructure = appendItemStructure(document, form, selected, snapshot.items);
             form.append(textField(document, "Title", "title", selected.title), textArea(document, "Summary", "summary", selected.summary, 3), textArea(document, "Objective", "objective", selected.objective, 3), textArea(document, "Body", "body", selected.body, 7), textArea(document, "Setup", "setup", selected.setup, 5), textArea(document, "Resolution", "resolution", selected.resolution, 5), textField(document, "Tags", "tags", selected.tags.join(", ")));
             for (const [name, limit] of Object.entries({ title: 160, summary: 2000, objective: 10000, body: 80000, setup: 30000, resolution: 30000, tags: 2440 }))
                 form.querySelector(`[name="${name}"]`).maxLength = limit;
             this.#bindDraft(form, `planning_items:${selected.id}`, snapshot.revisions.get(`planning_items:${selected.id}`));
+            refreshStructure();
             const save = actionButton(document, "Save details", () => undefined, "primary");
             save.type = "submit";
             form.append(save);
@@ -500,6 +505,9 @@ export function definePlannerElement(generation) {
         }
         async #create(kind) { const item = newItem(kind, this.#scopeId); await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", item, 0), `Created ${item.title}.`, item.id); }
         async #saveItem(item, form) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
             const data = new FormData(form);
             const text = (name) => String(data.get(name) ?? "").trim();
             const tags = [...new Set(text("tags").split(",").map(tag => tag.trim()).filter(Boolean))];
@@ -507,19 +515,38 @@ export function definePlannerElement(generation) {
                 this.#invalid("Use up to 40 tags, with at most 60 characters each.");
                 return;
             }
-            const next = { ...item, title: text("title"), summary: text("summary"), objective: text("objective"), body: text("body"), setup: text("setup"), resolution: text("resolution"), tags, updatedAt: Date.now(),
-                ...(item.kind === "event" ? { eventType: text("eventType") } : {}),
-                ...(item.kind === "branch" ? { branchType: text("branchType") } : {}) };
+            const { eventType, branchType, ...common } = item;
+            const kind = text("kind");
+            const next = { ...common, kind, parentId: text("parentId") || null, title: text("title"), summary: text("summary"), objective: text("objective"), body: text("body"), setup: text("setup"), resolution: text("resolution"), tags, updatedAt: Date.now(),
+                ...(kind === "event" ? { eventType: (text("eventType") || eventType || "story") } : {}),
+                ...(kind === "branch" ? { branchType: (text("branchType") || branchType || "decision") } : {}) };
             if (next.title === "") {
                 this.#message = "A title is required.";
                 this.#messageKind = "alert";
                 this.#render();
                 return;
             }
+            const issues = validateItemEdit(snapshot, next);
+            if (issues.length) {
+                this.#invalid(issues[0]);
+                return;
+            }
             const revision = this.#drafts.revision(form);
             if (revision === undefined)
                 return;
-            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+            const saved = await this.#mutate(async (runtime, snapshot) => runtime.repository.saveItem(snapshot, next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+            const current = saved ? this.#snapshot?.items.find(value => value.id === item.id) : undefined;
+            if (current && (item.parentId !== current.parentId || item.kind !== current.kind))
+                this.#revealItem(current);
+        }
+        #revealItem(item) {
+            this.#scopeId = item.parentId;
+            this.#selectedId = item.id;
+            this.#targetId = item.kind === "event" || item.kind === "branch" ? item.id : item.parentId ?? undefined;
+            this.#targetPending = false;
+            this.#invalidTarget = false;
+            this.#openCanvas(this.#targetId);
+            this.#render();
         }
         async #createFlow(source, form) {
             const snapshot = this.#snapshot;
@@ -661,7 +688,7 @@ export function definePlannerElement(generation) {
             const runtime = this.#runtime;
             const original = this.#snapshot;
             if (runtime === undefined || original === undefined || this.#busy || this.#needsReload)
-                return;
+                return false;
             this.#busy = true;
             this.#message = "Saving…";
             this.#messageKind = "status";
@@ -671,7 +698,7 @@ export function definePlannerElement(generation) {
             try {
                 await operation(runtime, original);
                 if (this.#runtime !== runtime || !this.isConnected)
-                    return;
+                    return false;
                 // A confirmed write must not be offered again if the following read fails.
                 if (draftKey)
                     this.#committedDrafts.add(draftKey);
@@ -680,19 +707,21 @@ export function definePlannerElement(generation) {
                 this.#readRequest = request;
                 const snapshot = await runtime.repository.load(request.signal);
                 if (this.#runtime !== runtime || request.signal.aborted || !this.isConnected)
-                    return;
+                    return false;
                 this.#acceptCommittedDrafts();
                 this.#selectedId = selected;
                 this.#snapshot = snapshot;
                 this.#message = success;
                 if (this.#targetPending)
                     this.#applyTarget();
+                return true;
             }
             catch (error) {
                 if (this.#runtime === runtime && this.isConnected) {
                     this.#needsReload = true;
                     this.#fail(error, "Planning change failed.");
                 }
+                return false;
             }
             finally {
                 if (this.#runtime === runtime && this.isConnected) {
@@ -708,6 +737,22 @@ export function definePlannerElement(generation) {
     }
     customElements.define(tag, PlannerElement);
     return tag;
+}
+function appendItemStructure(document, form, item, items) {
+    const row = document.createElement("div");
+    row.className = "dm-planner-form-row";
+    const kind = selectField(document, "Kind", "kind", item.kind, [["plotline", "Plotline"], ["quest", "Quest"], ["event", "Event"], ["branch", "Branch"]]);
+    const parents = availableParents(items, item.id).map(parent => [parent.id, scopeTrail(items, parent.id).map(entry => entry.title).join(" / ")]);
+    row.append(kind, selectField(document, "Parent", "parentId", item.parentId ?? "", [["", "Campaign"], ...parents]));
+    const event = document.createElement("div"), branch = document.createElement("div");
+    event.append(selectField(document, "Event type", "eventType", item.eventType ?? "story", [["story", "Story"], ["encounter", "Encounter"], ["puzzle", "Puzzle"]]));
+    branch.append(selectField(document, "Branch type", "branchType", item.branchType ?? "decision", [["decision", "Decision"], ["condition", "Condition"], ["random", "Random"]]));
+    const help = document.createElement("small");
+    help.textContent = "Moving an item keeps its children and annotations. Connected story flows must stay on the same canvas.";
+    form.append(row, event, branch, help);
+    const refresh = () => { const value = kind.querySelector("select").value; event.hidden = value !== "event"; branch.hidden = value !== "branch"; };
+    kind.addEventListener("change", refresh);
+    return refresh;
 }
 function positionsFor(views, scopeId, items) { const view = views.find((candidate) => candidate.scopeId === scopeId); return new Map(items.map((item, index) => [item.id, view?.positions[item.id] ?? { x: 72 + (index % 3) * 300, y: 72 + Math.floor(index / 3) * 190 }])); }
 function orthogonalPath(sourceX, sourceY, targetX, targetY) { const middle = sourceX + (targetX - sourceX) / 2; return `M ${sourceX} ${sourceY} H ${middle} V ${targetY} H ${targetX}`; }
