@@ -59,6 +59,18 @@ export function validatePlanning(dataset: PlanningDataset): readonly string[] {
   const visiting = new Set<string>(); const visited = new Set<string>();
   const visit = (id: string): void => { if (visiting.has(id)) { issues.push(`Flow cycle reaches ${id}.`); return; } if (visited.has(id)) return; visiting.add(id); for (const target of adjacency.get(id) ?? []) visit(target); visiting.delete(id); visited.add(id); };
   for (const id of adjacency.keys()) visit(id);
+  for (const reference of dataset.references) {
+    if (!byId.has(reference.itemId)) issues.push(`Reference ${reference.id} has a missing item.`);
+    if (reference.target["scope"] === "planning" && !byId.has(String(reference.target["itemId"]))) issues.push(`Reference ${reference.id} has a missing planning target.`);
+  }
+  const flowIds = new Set(dataset.flows.map(flow => flow.id));
+  for (const consequence of dataset.consequences) {
+    const anchor = consequence.anchor;
+    if (anchor["scope"] === "item") { if (!byId.has(String(anchor["itemId"]))) issues.push(`Consequence ${consequence.id} has a missing item anchor.`); }
+    else if (anchor["scope"] === "flow") { if (!flowIds.has(String(anchor["flowId"]))) issues.push(`Consequence ${consequence.id} has a missing flow anchor.`); }
+    else issues.push(`Consequence ${consequence.id} has an invalid anchor.`);
+  }
+  for (const note of dataset.notes) for (const id of note.anchorIds) if (!byId.has(id)) issues.push(`Note ${note.id} has a missing anchor ${id}.`);
   return [...new Set(issues)];
 }
 

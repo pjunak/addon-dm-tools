@@ -86,6 +86,9 @@
       check("planner keeps deterministic default positions", cards[0]?.style.left === "72px" && cards[0]?.style.top === "72px" && cards[1]?.style.left === "372px" && cards[1]?.style.top === "72px", cards.map(card => ({ left: card.style.left, top: card.style.top })), [{ left: "72px", top: "72px" }, { left: "372px", top: "72px" }]);
       check("flow follows the card geometry", path?.getAttribute("d") === "M 312 138 H 342 V 138 H 372", path?.getAttribute("d"), "M 312 138 H 342 V 138 H 372");
       check("flow retains its accessible label", path?.getAttribute("aria-label") === "Follow the silver thread", path?.getAttribute("aria-label"), "Follow the silver thread");
+      const flowLabel = planner.querySelector(".dm-planner-flow-label");
+      check("flow label is visible native SVG text", flowLabel?.textContent === "Follow the silver thread" && getComputedStyle(flowLabel).transform === "none", flowLabel?.textContent, "Follow the silver thread");
+      check("flow direction has an arrowhead", path?.getAttribute("marker-end") === `url(#${planner.querySelector("marker")?.id})`, path?.getAttribute("marker-end"), "the planner's arrow marker");
       check("planner does not raster-scale the canvas", getComputedStyle(stage).transform === "none" && cards.every(card => getComputedStyle(card).transform === "none"), { stage: getComputedStyle(stage).transform, cards: cards.map(card => getComputedStyle(card).transform) }, "no transforms");
 
       for (const [index, card] of cards.entries()) {

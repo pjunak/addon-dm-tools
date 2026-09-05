@@ -25,6 +25,7 @@ export function definePlannerElement(generation) {
         #drafts = new PlannerDrafts();
         #committedDrafts = new Set();
         #needsReload = false;
+        #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
         set codexContribution(value) {
             const previous = this.#contribution;
             this.#contribution = value;
@@ -224,6 +225,21 @@ export function definePlannerElement(generation) {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             svg.classList.add("dm-planner-flows");
             svg.setAttribute("aria-label", "Story flow");
+            const defs = document.createElementNS(svg.namespaceURI, "defs");
+            const marker = document.createElementNS(svg.namespaceURI, "marker");
+            marker.id = this.#flowMarkerId;
+            marker.setAttribute("viewBox", "0 0 10 8");
+            marker.setAttribute("refX", "10");
+            marker.setAttribute("refY", "4");
+            marker.setAttribute("markerWidth", "8");
+            marker.setAttribute("markerHeight", "8");
+            marker.setAttribute("orient", "auto");
+            const arrow = document.createElementNS(svg.namespaceURI, "polygon");
+            arrow.setAttribute("points", "0,0 10,4 0,8");
+            arrow.setAttribute("fill", "context-stroke");
+            marker.append(arrow);
+            defs.append(marker);
+            svg.append(defs);
             for (const flow of localFlows(snapshot, this.#scopeId)) {
                 const source = positions.get(flow.sourceId);
                 const target = positions.get(flow.targetId);
@@ -233,7 +249,18 @@ export function definePlannerElement(generation) {
                 path.setAttribute("d", orthogonalPath(source.x + cardWidth, source.y + cardHeight / 2, target.x, target.y + cardHeight / 2));
                 path.classList.add(flow.kind);
                 path.setAttribute("aria-label", flow.label || `${flow.sourceId} to ${flow.targetId}`);
+                path.setAttribute("marker-end", `url(#${this.#flowMarkerId})`);
+                path.setAttribute("data-flow-id", flow.id);
                 svg.append(path);
+                if (flow.label !== "") {
+                    const label = document.createElementNS(svg.namespaceURI, "text");
+                    label.classList.add("dm-planner-flow-label");
+                    label.setAttribute("x", String(Math.round((source.x + cardWidth + target.x) / 2)));
+                    label.setAttribute("y", String(Math.round((source.y + target.y + cardHeight) / 2) - 8));
+                    label.setAttribute("text-anchor", "middle");
+                    label.textContent = flow.label;
+                    svg.append(label);
+                }
             }
             stage.append(svg);
             for (const item of children) {
@@ -324,16 +351,16 @@ export function definePlannerElement(generation) {
             for (const sibling of directChildren(snapshot.items, this.#scopeId).filter((item) => item.id !== selected.id))
                 select.append(option(document, sibling.id, sibling.title));
             const form = document.createElement("form");
+            form.setAttribute("aria-label", "Create story flow");
             select.name = "targetId";
             select.setAttribute("aria-label", "Flow target");
-            form.append(select, textField(document, "Flow label", "label", ""));
+            form.append(select, selectField(document, "Flow type", "kind", selected.kind === "branch" ? "option" : "continues", flowKindOptions(selected)), textField(document, "Flow label", "label", ""));
             form.querySelector("input").maxLength = 200;
             const create = actionButton(document, "Create flow", () => undefined, "primary");
             create.type = "submit";
             form.append(create);
             this.#bindDraft(form, `new-flow:${selected.id}`, 0);
-            form.addEventListener("submit", event => { event.preventDefault(); if (select.value !== "")
-                void this.#createFlow(selected, select.value, String(new FormData(form).get("label") ?? "")); });
+            form.addEventListener("submit", event => { event.preventDefault(); void this.#createFlow(selected, form); });
             section.append(title, form);
             const attached = localFlows(snapshot, this.#scopeId).filter((flow) => flow.sourceId === selected.id || flow.targetId === selected.id);
             for (const flow of attached) {
@@ -343,8 +370,29 @@ export function definePlannerElement(generation) {
                 row.className = "dm-planner-record-row";
                 const description = document.createElement("span");
                 description.textContent = `${flow.sourceId === selected.id ? "To" : "From"} ${peer?.title ?? peerId}${flow.label === "" ? "" : `: ${flow.label}`}`;
-                row.append(description, actionButton(document, "Remove", () => void this.#deleteRecord("planning_flow_links", flow.id, "Flow removed.", selected.id), "danger"));
-                section.append(row);
+                const entry = document.createElement("article");
+                entry.className = "dm-planner-flow-entry";
+                entry.dataset["flowId"] = flow.id;
+                row.append(description, actionButton(document, "Remove flow", () => void this.#deleteFlow(flow, selected.id), "danger"));
+                entry.append(row);
+                const editor = document.createElement("details");
+                const editLabel = document.createElement("summary");
+                editLabel.textContent = "Edit flow";
+                editor.append(editLabel);
+                editor.open = this.#drafts.has(`planning_flow_links:${flow.id}`);
+                const editForm = document.createElement("form");
+                editForm.setAttribute("aria-label", "Edit story flow");
+                const source = snapshot.items.find(item => item.id === flow.sourceId);
+                editForm.append(selectField(document, "Flow type", "kind", flow.kind, flowKindOptions(source)), textField(document, "Flow label", "label", flow.label));
+                editForm.querySelector("input").maxLength = 200;
+                const save = actionButton(document, "Save flow", () => undefined, "primary");
+                save.type = "submit";
+                editForm.append(save);
+                this.#bindDraft(editForm, `planning_flow_links:${flow.id}`, snapshot.revisions.get(`planning_flow_links:${flow.id}`));
+                editForm.addEventListener("submit", event => { event.preventDefault(); void this.#saveFlow(flow, editForm, selected.id); });
+                editor.append(editForm);
+                entry.append(editor);
+                section.append(entry);
             }
             return section;
         }
@@ -372,10 +420,15 @@ export function definePlannerElement(generation) {
                 this.#bindDraft(form, `planning_references:${reference.id}`, snapshot.revisions.get(`planning_references:${reference.id}`));
             }
             section.append(actionButton(document, "Add consequence", () => void this.#addConsequence(selected)));
-            for (const consequence of snapshot.consequences.filter((entry) => entry.anchor["scope"] === "item" && entry.anchor["itemId"] === selected.id)) {
+            const attachedFlows = snapshot.flows.filter(flow => flow.sourceId === selected.id || flow.targetId === selected.id);
+            const anchorOptions = [[`item:${selected.id}`, "Whole item"], ...attachedFlows.map(flow => [`flow:${flow.id}`, flowDescription(snapshot, flow)])];
+            for (const consequence of snapshot.consequences.filter(entry => entry.anchor["scope"] === "item" ? entry.anchor["itemId"] === selected.id : attachedFlows.some(flow => flow.id === entry.anchor["flowId"]))) {
                 const form = document.createElement("form");
                 form.className = "dm-planner-annotation";
                 form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveConsequence(consequence, form, selected.id); });
+                form.dataset["consequenceId"] = consequence.id;
+                const anchorKey = consequence.anchor["scope"] === "item" ? `item:${consequence.anchor["itemId"]}` : `flow:${consequence.anchor["flowId"]}`;
+                form.append(selectField(document, "Consequence applies to", "anchor", anchorKey, anchorOptions));
                 form.append(textField(document, "Consequence", "title", consequence.title), selectField(document, "Kind", "kind", consequence.kind, [["world", "World"], ["reward", "Reward"], ["information", "Information"], ["complication", "Complication"]]), textArea(document, "Details", "body", consequence.body, 3));
                 const save = actionButton(document, "Save consequence", () => undefined, "primary");
                 save.type = "submit";
@@ -453,11 +506,17 @@ export function definePlannerElement(generation) {
                 return;
             await this.#mutate(async (runtime) => runtime.repository.put("planning_items", next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
         }
-        async #createFlow(source, targetId, label) {
+        async #createFlow(source, form) {
             const snapshot = this.#snapshot;
             if (snapshot === undefined)
                 return;
-            const flow = { id: `flow-${crypto.randomUUID()}`, schemaVersion: 3, sourceId: source.id, targetId, kind: source.kind === "branch" ? "option" : "continues", label: label.trim(), updatedAt: Date.now() };
+            const data = new FormData(form);
+            const targetId = String(data.get("targetId") ?? "");
+            if (!targetId) {
+                this.#invalid("Choose a sibling to connect.");
+                return;
+            }
+            const flow = { id: `flow-${crypto.randomUUID()}`, schemaVersion: 3, sourceId: source.id, targetId, kind: String(data.get("kind")), label: String(data.get("label") ?? "").trim(), updatedAt: Date.now() };
             const candidate = { ...snapshot, flows: [...snapshot.flows, flow] };
             const issues = validatePlanning(candidate);
             if (issues.length > 0) {
@@ -468,9 +527,32 @@ export function definePlannerElement(generation) {
             }
             await this.#mutate(async (runtime) => runtime.repository.put("planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
         }
+        async #saveFlow(flow, form, selectedId) {
+            const snapshot = this.#snapshot;
+            const revision = this.#drafts.revision(form);
+            if (!snapshot || revision === undefined)
+                return;
+            const data = new FormData(form);
+            const next = { ...flow, kind: String(data.get("kind")), label: String(data.get("label") ?? "").trim(), updatedAt: Date.now() };
+            const issues = validatePlanning({ ...snapshot, flows: snapshot.flows.map(value => value.id === flow.id ? next : value) });
+            if (issues.length) {
+                this.#invalid(issues[0]);
+                return;
+            }
+            await this.#mutate(runtime => runtime.repository.put("planning_flow_links", next, revision), "Flow saved.", selectedId, `planning_flow_links:${flow.id}`);
+        }
+        async #deleteFlow(flow, selectedId) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
+            const consequences = snapshot.consequences.filter(entry => entry.anchor["scope"] === "flow" && entry.anchor["flowId"] === flow.id);
+            if (consequences.length && !confirm(`Remove this flow and its ${consequences.length} attached consequences?`))
+                return;
+            await this.#mutate(runtime => runtime.repository.deleteFlow(snapshot, flow.id), "Flow removed.", selectedId, `planning_flow_links:${flow.id}`);
+        }
         async #savePosition(itemId, x, y) { const snapshot = this.#snapshot; if (snapshot === undefined)
             return; await this.#mutate(async (runtime) => runtime.repository.savePosition(snapshot, this.#scopeId, itemId, x, y), "Position saved.", itemId); }
-        async #delete(item) { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(`Delete ${item.title} and every nested planning record?`))
+        async #delete(item) { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(`Delete ${item.title} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links.`))
             return; await this.#mutate(async (runtime) => runtime.repository.deleteSubtree(snapshot, item.id), "Planning subtree deleted."); }
         async #addReference(item, snapshot, targetId) {
             const target = snapshot.items.find((candidate) => candidate.id === targetId && candidate.id !== item.id);
@@ -489,10 +571,25 @@ export function definePlannerElement(generation) {
             this.#invalid("A reference name is required.");
             return;
         } await this.#putExisting("planning_references", next, form, selectedId, "Reference saved."); }
-        async #saveConsequence(consequence, form, selectedId) { const data = new FormData(form); const next = { ...consequence, title: String(data.get("title") ?? "").trim(), kind: String(data.get("kind") ?? "world"), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() }; if (next.title === "") {
-            this.#invalid("A consequence title is required.");
-            return;
-        } await this.#putExisting("planning_consequences", next, form, selectedId, "Consequence saved."); }
+        async #saveConsequence(consequence, form, selectedId) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
+            const data = new FormData(form);
+            const anchorKey = String(data.get("anchor") ?? "");
+            const flow = snapshot.flows.find(entry => `flow:${entry.id}` === anchorKey && (entry.sourceId === selectedId || entry.targetId === selectedId));
+            if (anchorKey !== `item:${selectedId}` && !flow) {
+                this.#invalid("Choose this item or one of its existing flows for the consequence.");
+                return;
+            }
+            const anchor = flow ? { scope: "flow", flowId: flow.id } : { scope: "item", itemId: selectedId };
+            const next = { ...consequence, anchor, title: String(data.get("title") ?? "").trim(), kind: String(data.get("kind") ?? "world"), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() };
+            if (next.title === "") {
+                this.#invalid("A consequence title is required.");
+                return;
+            }
+            await this.#putExisting("planning_consequences", next, form, selectedId, "Consequence saved.");
+        }
         async #saveNote(note, form, selectedId) { const data = new FormData(form); const next = { ...note, title: String(data.get("title") ?? "").trim(), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() }; if (next.title === "") {
             this.#invalid("A DM note title is required.");
             return;
@@ -592,6 +689,8 @@ function positionsFor(views, scopeId, items) { const view = views.find((candidat
 function orthogonalPath(sourceX, sourceY, targetX, targetY) { const middle = sourceX + (targetX - sourceX) / 2; return `M ${sourceX} ${sourceY} H ${middle} V ${targetY} H ${targetX}`; }
 function snap(value) { return Math.max(24, Math.round(value / grid) * grid); }
 function subtype(item) { return item.kind === "event" ? item.eventType ?? "event" : item.kind === "branch" ? item.branchType ?? "branch" : item.kind; }
+function flowKindOptions(source) { return source.kind === "branch" ? [["continues", "Continues"], ["option", "Option"]] : [["continues", "Continues"]]; }
+function flowDescription(snapshot, flow) { const source = snapshot.items.find(item => item.id === flow.sourceId); const target = snapshot.items.find(item => item.id === flow.targetId); return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`; }
 function actionButton(document, label, action, style) { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined)
     button.className = style; button.addEventListener("click", action); return button; }
 function option(document, value, label) { const item = document.createElement("option"); item.value = value; item.textContent = label; return item; }

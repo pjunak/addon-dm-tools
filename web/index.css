@@ -60,3 +60,7 @@
 .dm-tools-planner :focus-visible { outline: 2px solid var(--accent-gold, #c8a040); outline-offset: 3px; }
 .dm-tools-planner button:disabled, .dm-tools-planner input:disabled, .dm-tools-planner textarea:disabled, .dm-tools-planner select:disabled { opacity: .6; cursor: wait; }
 .dm-planner-removed-draft pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dm-planner-flow-label { fill: var(--text-parchment, #f5edd8); font: 12px var(--font-ui, sans-serif); paint-order: stroke; stroke: var(--bg-base, #141008); stroke-width: 4px; stroke-linejoin: round; }
+.dm-planner-flow-entry { min-width: 0; padding: .65rem; border: 1px solid var(--border-subtle, #ffffff12); border-radius: var(--radius, 6px); background: var(--bg-raised, #241c0d); }
+.dm-planner-flow-entry summary { padding-block: .4rem; color: var(--accent-gold, #c8a040); cursor: pointer; }
+.dm-planner-flow-entry .dm-planner-record-row span { overflow-wrap: anywhere; }

@@ -46,3 +46,21 @@ local editor state, never campaign data or an automatic conflict merge.
 
 Pointer cancellation or capture loss restores the card's original coordinates;
 only a completed pointer release persists a moved position.
+
+Flow editing preserves endpoints and opening revisions. Available types follow
+the source item's kind, including when editing from the destination. Flow
+labels use native SVG text; paths show arrowheads for direction. Consequences
+can switch between the selected item and its attached flows. Existing flow
+consequences are visible from either endpoint.
+
+The repository builds flow/subtree cleanup before issuing one transaction.
+Deleting a flow removes its anchored consequences. Subtree deletion additionally
+removes incoming planning references and deleted-item positions in surviving
+views, and trims shared-note anchors. Missing revisions and plans over the
+256-operation host limit fail before any write. Browser snapshot validation now
+checks reference ownership/targets and note/consequence anchors against the
+same rules as the Go dataset validator.
+
+Exact revisions protect the records included in the fetched snapshot. They do
+not fence new records created concurrently after that read; broader structural
+concurrency remains tracked in the suite backlog.

@@ -46,6 +46,15 @@ positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+Flow labels and direction are visible on the canvas. **Edit flow** changes the
+label and type from either endpoint; option flow is offered only for a branch
+source. Consequences may apply to the whole item or one of its flows, and
+flow consequences appear at both endpoints. Removing a flow with consequences
+asks for confirmation and deletes the flow and those consequences in one
+revision-checked transaction. Whole-item consequences and endpoint records stay
+intact. Subtree deletion also cleans incoming planning references and saved
+positions, while shared notes retain their remaining anchors.
+
 Item details include the original objective, setup, resolution, tags, and
 event/branch type fields. Item, annotation, and new-flow drafts survive card
 selection, canvas navigation, other saves, validation errors, and explicit

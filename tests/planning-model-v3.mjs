@@ -26,3 +26,18 @@ test("new records use schema v3 and stable safe IDs", () => {
   assert.equal(created.branchType, "decision");
   assert.match(created.id, /^branch-[a-f0-9-]+$/);
 });
+
+test("annotation validation matches the Go ownership and anchor boundary", () => {
+  const dataset = { items: [item("quest-a", "quest"), item("quest-b", "quest"), item("event-a", "event", "quest-a")],
+    flows: [{ id: "flow-a", sourceId: "quest-a", targetId: "quest-b", kind: "continues" }],
+    references: [{ id: "ref-a", itemId: "quest-b", target: { scope: "planning", itemId: "event-a" } }],
+    consequences: [{ id: "consequence-a", anchor: { scope: "flow", flowId: "flow-a" } }],
+    notes: [{ id: "note-a", anchorIds: ["quest-a", "event-a"] }], views: [] };
+  assert.deepEqual(validatePlanning(dataset), []);
+  assert.match(validatePlanning({ ...dataset, flows: [] }).join(" "), /missing flow anchor/);
+  const withoutEvent = { ...dataset, items: dataset.items.filter(entry => entry.id !== "event-a") };
+  assert.match(validatePlanning(withoutEvent).join(" "), /missing planning target/);
+  assert.match(validatePlanning(withoutEvent).join(" "), /missing anchor event-a/);
+  assert.match(validatePlanning({ ...dataset, references: [{ ...dataset.references[0], itemId: "missing" }] }).join(" "), /missing item/);
+  assert.match(validatePlanning({ ...dataset, consequences: [{ id: "bad", anchor: { scope: "item", itemId: "missing" } }] }).join(" "), /missing item anchor/);
+});
