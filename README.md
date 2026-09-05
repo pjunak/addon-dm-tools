@@ -46,6 +46,23 @@ positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+Item details include the original objective, setup, resolution, tags, and
+event/branch type fields. Item, annotation, and new-flow drafts survive card
+selection, canvas navigation, other saves, validation errors, and explicit
+planner refresh while the planner stays open. Each edit keeps its opening
+revision; a refresh never silently rebases a draft over another saved change.
+**Discard edits** loads that record's latest fetched values. Drafts of removed
+records remain available to copy before discarding.
+
+Writes lock the form until their outcome is known. After a write/read failure,
+**Reload planner** is required before further editing; retained text stays
+available to copy. A confirmed write followed by a failed refresh is not
+offered again. Canceled pointer drags restore the original position without a
+write. The planner uses the host's classic theme tokens and keeps card text at
+native scale. Draft persistence across leaving the planner or reloading the
+browser, broader interaction parity, and full localization remain in the suite
+backlog.
+
 Planner canvas links use `#/addons/dm-tools/planner?item=<id>`. Containers open
 their own canvas; events and branches open their parent and select the linked
 item. Reload, a new tab and browser Back retain that target. Invalid parameters

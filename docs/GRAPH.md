@@ -36,3 +36,13 @@ the loaded item tree. Unchanged targets do not re-render an edited form, while
 scope changes update the URL so browser history and copied links remain useful.
 Element definitions include the package generation so replacement cannot reuse
 an older generation's browser implementation.
+
+`planner-drafts.ts` keeps view-local named form values and their opening record
+revisions. Only the confirmed submitted draft is cleared after a successful
+read; unrelated drafts survive. Failed writes or reads require an explicit
+refresh before another mutation. Refresh preserves opening revisions, exposes
+concurrent changes, and retains removed-record drafts for copying. This is
+local editor state, never campaign data or an automatic conflict merge.
+
+Pointer cancellation or capture loss restores the card's original coordinates;
+only a completed pointer release persists a moved position.
