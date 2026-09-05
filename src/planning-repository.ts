@@ -12,8 +12,11 @@ export class PlanningRepository {
     this.#context = context;
     this.#handles = Object.fromEntries(collections.map((id) => [id, context.data.collection<Stored>(id)])) as Record<CollectionId, CollectionHandle<Stored>>;
   }
-  async load(): Promise<PlanningSnapshot> {
-    const pages = await Promise.all(collections.map((id) => this.#all(id)));
+  async load(signal: AbortSignal = this.#context.signal): Promise<PlanningSnapshot> {
+    signal = AbortSignal.any([this.#context.signal, signal]);
+    signal.throwIfAborted();
+    const pages = await Promise.all(collections.map((id) => this.#all(id, signal)));
+    signal.throwIfAborted();
     const revisions = new Map<string, number>();
     pages.forEach((documents, index) => { const id = collections[index] as CollectionId; for (const document of documents) revisions.set(`${id}:${document.key}`, document.revision); });
     const snapshot: PlanningSnapshot = {
@@ -48,7 +51,7 @@ export class PlanningRepository {
     const next: PlanningView = { id, schemaVersion: 3, scopeId, positions: { ...(current?.positions ?? {}), [itemId]: { x, y } }, updatedAt: Date.now() };
     await this.put("planning_views", next, snapshot.revisions.get(`planning_views:${id}`) ?? 0);
   }
-  async #all(id: CollectionId): Promise<readonly AddonDocument<Stored>[]> { const documents: AddonDocument<Stored>[] = []; let cursor: string | undefined; do { const page = await this.#handles[id].query({ ...(cursor === undefined ? {} : { cursor }), limit: 200, signal: this.#context.signal }); documents.push(...page.documents); cursor = page.nextCursor; } while (cursor !== undefined); return documents; }
+  async #all(id: CollectionId, signal: AbortSignal): Promise<readonly AddonDocument<Stored>[]> { const documents: AddonDocument<Stored>[] = []; let cursor: string | undefined; do { signal.throwIfAborted(); const page = await this.#handles[id].query({ ...(cursor === undefined ? {} : { cursor }), limit: 200, signal }); documents.push(...page.documents); cursor = page.nextCursor; } while (cursor !== undefined); return documents; }
 }
 
 const collections = ["planning_items", "planning_flow_links", "planning_references", "planning_consequences", "dm_notes", "planning_views"] as const;

@@ -31,5 +31,6 @@ export interface ContributionContext {
   readonly addon: { readonly id: string; readonly generation: string };
   readonly contribution: { readonly id: string; readonly config: Readonly<Record<string, unknown>> };
   readonly signal: AbortSignal;
+  readonly host?: unknown;
 }
 export interface Disposable { dispose(): void | Promise<void> }

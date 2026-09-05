@@ -41,3 +41,13 @@ test("subtree deletion publishes one explicit cross-collection transaction", asy
 });
 
 function validQuest() { return { id: "quest-a", schemaVersion: 3, kind: "quest", parentId: null, title: "Quest A", summary: "", body: "", objective: "", setup: "", resolution: "", tags: [], updatedAt: 1 }; }
+
+test("leaving a view aborts paginated reads without stopping its activation generation", async () => {
+  const generation = new AbortController(), view = new AbortController();
+  let calls = 0;
+  const repository = new PlanningRepository({ signal: generation.signal, data: { collection: () => ({
+    query: async ({ signal }) => { calls++; assert.equal(signal.aborted, false); view.abort(); return { documents: [], nextCursor: "next" }; },
+  }) } });
+  await assert.rejects(repository.load(view.signal), { name: "AbortError" });
+  assert.equal(calls, 1); assert.equal(generation.signal.aborted, false);
+});

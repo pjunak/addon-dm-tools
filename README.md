@@ -9,6 +9,20 @@ TTRPG Codex. Version 3 is a clean Add-on API v3 package:
 
 ## Story planner
 
+The DM panel includes the original planning overview: total items, plotlines,
+quests, encounters and marginalia, links to the planner and Import Center, and
+the twelve most recently changed items. It follows the host's English/Czech
+language and dark/gold presentation. Counts reload on entry or **Refresh
+overview**. Failed reads retain tool links and a retry; unavailable import
+providers do not prevent direct planning edits. Import availability follows
+advertised formats, independently of provider add-on IDs.
+
+The host currently excludes a consumer's own service from provider resolution,
+so the installed planning import worker is not discoverable by this package's
+Import Center. The required integration repair is tracked in the suite
+[backlog](../ttrpg-codex/docs/BACKLOG.md); opening the center does not constitute
+accepted import preview/commit parity.
+
 Ownership is a tree. Plotlines and quests can contain planning items; events
 and branches are leaves. Every open scope is its own local directed acyclic
 flow graph:
@@ -31,6 +45,12 @@ The planner supports nested navigation, card creation and editing, drag-saved
 positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
+
+Planner canvas links use `#/addons/dm-tools/planner?item=<id>`. Containers open
+their own canvas; events and branches open their parent and select the linked
+item. Reload, a new tab and browser Back retain that target. Invalid parameters
+show a recovery link; a deleted target falls back to the campaign canvas with
+an explanation. An unchanged route-context refresh preserves editor input.
 
 ## Stored contracts
 

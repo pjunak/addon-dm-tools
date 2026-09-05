@@ -10,11 +10,12 @@ interface ImportPreview {
   readonly warnings: readonly string[]; readonly changes: readonly { readonly collection: string; readonly id: string; readonly operation: "create" | "update" | "delete"; readonly label: string }[];
 }
 
-export function defineImportElement(): void {
-  if (customElements.get(importElementTag) !== undefined) return;
+export function defineImportElement(generation?: string): string {
+  const tag = generation ? `${importElementTag}-${generation}` : importElementTag;
+  if (customElements.get(tag) !== undefined) return tag;
   class ImportCenterElement extends HTMLElement {
     #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #adapters: readonly Adapter[] = []; #selected: Adapter | undefined; #preview: ImportPreview | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
-    set codexContribution(value: ContributionContext) { this.#contribution = value; if (this.isConnected) void this.#connect(); }
+    set codexContribution(value: ContributionContext) { const previous = this.#contribution; this.#contribution = value; if (this.isConnected && previous?.addon.generation !== value.addon.generation) void this.#connect(); }
     connectedCallback(): void { this.classList.add("dm-tools-import"); void this.#connect(); }
     disconnectedCallback(): void { this.#runtime = undefined; }
 
@@ -84,7 +85,7 @@ export function defineImportElement(): void {
     #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
     #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); }
   }
-  customElements.define(importElementTag, ImportCenterElement);
+  customElements.define(tag, ImportCenterElement); return tag;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

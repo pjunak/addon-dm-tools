@@ -29,6 +29,7 @@
   },
   "permissions": [],
   "contributions": [
+    { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard" } },
     { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner" } },
     { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route" } },
     { "id": "imports.route", "surface": "route", "label": "Import Center", "roles": ["dm"], "config": { "path": "imports" } },

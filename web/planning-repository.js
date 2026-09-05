@@ -6,8 +6,11 @@ export class PlanningRepository {
         this.#context = context;
         this.#handles = Object.fromEntries(collections.map((id) => [id, context.data.collection(id)]));
     }
-    async load() {
-        const pages = await Promise.all(collections.map((id) => this.#all(id)));
+    async load(signal = this.#context.signal) {
+        signal = AbortSignal.any([this.#context.signal, signal]);
+        signal.throwIfAborted();
+        const pages = await Promise.all(collections.map((id) => this.#all(id, signal)));
+        signal.throwIfAborted();
         const revisions = new Map();
         pages.forEach((documents, index) => { const id = collections[index]; for (const document of documents)
             revisions.set(`${id}:${document.key}`, document.revision); });
@@ -58,8 +61,9 @@ export class PlanningRepository {
         const next = { id, schemaVersion: 3, scopeId, positions: { ...(current?.positions ?? {}), [itemId]: { x, y } }, updatedAt: Date.now() };
         await this.put("planning_views", next, snapshot.revisions.get(`planning_views:${id}`) ?? 0);
     }
-    async #all(id) { const documents = []; let cursor; do {
-        const page = await this.#handles[id].query({ ...(cursor === undefined ? {} : { cursor }), limit: 200, signal: this.#context.signal });
+    async #all(id, signal) { const documents = []; let cursor; do {
+        signal.throwIfAborted();
+        const page = await this.#handles[id].query({ ...(cursor === undefined ? {} : { cursor }), limit: 200, signal });
         documents.push(...page.documents);
         cursor = page.nextCursor;
     } while (cursor !== undefined); return documents; }

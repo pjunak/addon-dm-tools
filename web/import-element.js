@@ -1,8 +1,9 @@
 import { runtimeFor } from "./runtime.js";
 export const importElementTag = "dm-tools-import-center";
-export function defineImportElement() {
-    if (customElements.get(importElementTag) !== undefined)
-        return;
+export function defineImportElement(generation) {
+    const tag = generation ? `${importElementTag}-${generation}` : importElementTag;
+    if (customElements.get(tag) !== undefined)
+        return tag;
     class ImportCenterElement extends HTMLElement {
         #contribution;
         #runtime;
@@ -12,7 +13,7 @@ export function defineImportElement() {
         #busy = false;
         #message = "";
         #messageKind = "status";
-        set codexContribution(value) { this.#contribution = value; if (this.isConnected)
+        set codexContribution(value) { const previous = this.#contribution; this.#contribution = value; if (this.isConnected && previous?.addon.generation !== value.addon.generation)
             void this.#connect(); }
         connectedCallback() { this.classList.add("dm-tools-import"); void this.#connect(); }
         disconnectedCallback() { this.#runtime = undefined; }
@@ -184,7 +185,8 @@ export function defineImportElement() {
         #fail(error, fallback) { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
         #unavailable(message) { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); }
     }
-    customElements.define(importElementTag, ImportCenterElement);
+    customElements.define(tag, ImportCenterElement);
+    return tag;
 }
 function isRecord(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function actionButton(document, label, action, style) { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined)

@@ -26,3 +26,13 @@ in one transaction.
 The package owns its DOM and SVG. The host owns route mounting, lifecycle,
 authorization, schema validation, and persistence. No private graph library or
 host DOM selector is part of the contract.
+
+`dashboard-model.ts` projects counts and recent-item links from a validated
+repository snapshot. `dashboard-element.ts` owns only its view request;
+disconnect cancels reads without aborting the activation generation. The
+planner uses the bounded public `addon-route-context.v1` query to choose a
+scope/selection, never to grant record access. Route targets are checked against
+the loaded item tree. Unchanged targets do not re-render an edited form, while
+scope changes update the URL so browser history and copied links remain useful.
+Element definitions include the package generation so replacement cannot reuse
+an older generation's browser implementation.

@@ -15,7 +15,7 @@ test("compiled entry binds planner and import routes and disposes idempotently",
     };
     const disposable = await activate(context);
     assert.equal(collections.length, 6); assert.equal(connection.contract, "codex.import-adapter"); assert.equal(connection.options.cardinality, "many");
-    assert.deepEqual(bindings.map(entry => entry.id), ["planner.route", "imports.route"]); assert.ok(definitions.has("dm-tools-planner-page")); assert.ok(definitions.has("dm-tools-import-center"));
+    assert.deepEqual(bindings.map(entry => entry.id), ["planner.route", "imports.route", "dashboard.slot"]); assert.ok(definitions.has(`dm-tools-planner-page-${context.addon.generation}`)); assert.ok(definitions.has(`dm-tools-import-center-${context.addon.generation}`));
     disposable.dispose(); disposable.dispose(); assert.ok(bindings.every(entry => entry.disposed));
   } finally { if (oldHTMLElement === undefined) delete globalThis.HTMLElement; else globalThis.HTMLElement = oldHTMLElement; if (oldCustomElements === undefined) delete globalThis.customElements; else globalThis.customElements = oldCustomElements; }
 });

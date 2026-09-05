@@ -2,36 +2,68 @@ import { directChildren, localFlows, newItem, scopeTrail, validatePlanning, type
 import type { PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext, DataMutation } from "./sdk.js";
+import { plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
 
 export const plannerElementTag = "dm-tools-planner-page";
 const cardWidth = 240; const cardHeight = 132; const grid = 24;
 
-export function definePlannerElement(): void {
-  if (customElements.get(plannerElementTag) !== undefined) return;
+export function definePlannerElement(generation?: string): string {
+  const tag = generation ? `${plannerElementTag}-${generation}` : plannerElementTag;
+  if (customElements.get(tag) !== undefined) return tag;
   class PlannerElement extends HTMLElement {
     #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #snapshot: PlanningSnapshot | undefined;
     #scopeId: string | null = null; #selectedId: string | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
+    #targetId: string | undefined; #targetPending = false; #readRequest: AbortController | undefined;
 
-    set codexContribution(value: ContributionContext) { this.#contribution = value; if (this.isConnected) void this.#connect(); }
+    set codexContribution(value: ContributionContext) {
+      const previous = this.#contribution; this.#contribution = value;
+      if (!this.isConnected) return;
+      if (previous?.addon.generation !== value.addon.generation || !this.#runtime) { void this.#connect(); return; }
+      try {
+        const target = plannerTarget(value.host);
+        if (target !== this.#targetId) { this.#targetId = target; this.#targetPending = true; if (!this.#busy && this.#snapshot) { this.#applyTarget(); this.#render(); } }
+      } catch (error) { this.#invalidLink(error); }
+    }
     connectedCallback(): void { this.classList.add("dm-tools-planner"); void this.#connect(); }
-    disconnectedCallback(): void { this.#runtime = undefined; }
+    disconnectedCallback(): void { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; }
 
     async #connect(): Promise<void> {
       const contribution = this.#contribution; if (contribution === undefined) { this.#unavailable("The host did not provide a planner generation."); return; }
       const runtime = runtimeFor(contribution.addon.generation); if (runtime === undefined || runtime.signal.aborted) { this.#unavailable("This DM Tools generation is no longer active."); return; }
+      try { this.#targetId = plannerTarget(contribution.host); }
+      catch (error) { this.#invalidLink(error); return; }
+      this.#readRequest?.abort(); this.#busy = false; this.#snapshot = undefined; this.#targetPending = true;
       this.#runtime = runtime; await this.#reload("Loading story planner…");
     }
 
     async #reload(loading?: string): Promise<void> {
       const runtime = this.#runtime; if (runtime === undefined || this.#busy) return;
+      const request = new AbortController(); this.#readRequest?.abort(); this.#readRequest = request;
       this.#busy = true; if (loading !== undefined) { this.#message = loading; this.#messageKind = "status"; } this.#render();
       try {
-        this.#snapshot = await runtime.repository.load();
+        const snapshot = await runtime.repository.load(request.signal);
+        if (this.#runtime !== runtime || this.#readRequest !== request || request.signal.aborted || !this.isConnected) return;
+        this.#snapshot = snapshot;
         if (this.#scopeId !== null && !this.#snapshot.items.some((item) => item.id === this.#scopeId)) this.#scopeId = null;
         if (this.#selectedId !== undefined && !this.#snapshot.items.some((item) => item.id === this.#selectedId)) this.#selectedId = undefined;
         this.#message = "";
-      } catch (error) { this.#fail(error, "Could not load planning data."); }
-      finally { this.#busy = false; this.#render(); }
+        if (this.#targetPending) this.#applyTarget();
+      } catch (error) { if (!request.signal.aborted && this.#runtime === runtime) this.#fail(error, "Could not load planning data."); }
+      finally { if (this.#runtime === runtime && this.#readRequest === request && !request.signal.aborted && this.isConnected) { this.#busy = false; this.#render(); } }
+    }
+
+    #applyTarget(): void {
+      this.#targetPending = false; if (!this.#snapshot) return;
+      try { const selection = plannerSelection(this.#snapshot.items, this.#targetId); this.#scopeId = selection.scopeId; this.#selectedId = selection.selectedId; this.#message = ""; }
+      catch (error) { this.#scopeId = null; this.#selectedId = undefined; this.#fail(error, "This planning item no longer exists."); }
+    }
+    #invalidLink(error: unknown): void {
+      this.#readRequest?.abort(); this.#runtime = undefined;
+      this.#unavailable(error instanceof Error ? error.message : "Invalid planner link.");
+    }
+    #openCanvas(id?: string): void {
+      const addonId = this.#contribution?.addon.id; if (!addonId) return;
+      this.ownerDocument.defaultView!.location.hash = plannerLink(addonId, id);
     }
 
     #render(): void {
@@ -46,8 +78,8 @@ export function definePlannerElement(): void {
 
     #breadcrumbs(document: Document, snapshot: PlanningSnapshot): HTMLElement {
       const nav = document.createElement("nav"); nav.className = "dm-planner-breadcrumbs"; nav.setAttribute("aria-label", "Planner scope");
-      nav.append(actionButton(document, "Campaign", () => { this.#scopeId = null; this.#selectedId = undefined; this.#render(); }, this.#scopeId === null ? "active" : undefined));
-      for (const item of scopeTrail(snapshot.items, this.#scopeId)) nav.append(actionButton(document, item.title, () => { this.#scopeId = item.id; this.#selectedId = undefined; this.#render(); }, item.id === this.#scopeId ? "active" : undefined));
+      nav.append(actionButton(document, "Campaign", () => this.#openCanvas(), this.#scopeId === null ? "active" : undefined));
+      for (const item of scopeTrail(snapshot.items, this.#scopeId)) nav.append(actionButton(document, item.title, () => this.#openCanvas(item.id), item.id === this.#scopeId ? "active" : undefined));
       return nav;
     }
 
@@ -69,8 +101,8 @@ export function definePlannerElement(): void {
       for (const item of children) {
         const position = positions.get(item.id) as { x: number; y: number }; const card = document.createElement("article"); card.className = `dm-plan-card ${item.kind}${item.id === this.#selectedId ? " selected" : ""}`; card.dataset["itemId"] = item.id; card.style.left = `${position.x}px`; card.style.top = `${position.y}px`; card.tabIndex = 0;
         const kind = document.createElement("span"); kind.className = "kind"; kind.textContent = subtype(item); const title = document.createElement("h3"); title.textContent = item.title; const summary = document.createElement("p"); summary.textContent = item.summary || "Needs details";
-        card.append(kind, title, summary); card.addEventListener("click", () => { this.#selectedId = item.id; this.#render(); }); card.addEventListener("dblclick", () => { if (item.kind === "plotline" || item.kind === "quest") { this.#scopeId = item.id; this.#selectedId = undefined; this.#render(); } });
-        card.addEventListener("keydown", (event) => { if (event.key === "Enter" && (item.kind === "plotline" || item.kind === "quest")) { this.#scopeId = item.id; this.#selectedId = undefined; this.#render(); } });
+        card.append(kind, title, summary); card.addEventListener("click", () => { this.#selectedId = item.id; this.#render(); }); card.addEventListener("dblclick", () => { if (item.kind === "plotline" || item.kind === "quest") this.#openCanvas(item.id); });
+        card.addEventListener("keydown", (event) => { if (event.key === "Enter" && (item.kind === "plotline" || item.kind === "quest")) this.#openCanvas(item.id); });
         this.#makeDraggable(card, item.id, position); stage.append(card);
       }
       if (children.length === 0) { const empty = messageBlock(document, "This canvas is empty. Add a planning item from the Atlas.", "status"); empty.classList.add("empty"); stage.append(empty); }
@@ -83,7 +115,7 @@ export function definePlannerElement(): void {
       const form = document.createElement("form"); form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveItem(selected, form); });
       form.append(textField(document, "Title", "title", selected.title), textArea(document, "Summary", "summary", selected.summary, 3), textArea(document, "Body", "body", selected.body, 7), textField(document, "Tags", "tags", selected.tags.join(", ")));
       const save = actionButton(document, "Save details", () => undefined, "primary"); save.type = "submit"; form.append(save); aside.append(form);
-      if (selected.kind === "plotline" || selected.kind === "quest") aside.append(actionButton(document, "Enter this canvas", () => { this.#scopeId = selected.id; this.#selectedId = undefined; this.#render(); }));
+      if (selected.kind === "plotline" || selected.kind === "quest") aside.append(actionButton(document, "Enter this canvas", () => this.#openCanvas(selected.id)));
       aside.append(this.#flowEditor(document, snapshot, selected));
       aside.append(this.#annotations(document, snapshot, selected));
       aside.append(actionButton(document, "Delete item and subtree", () => void this.#delete(selected), "danger")); return aside;
@@ -165,14 +197,17 @@ export function definePlannerElement(): void {
 
     async #mutate(operation: (runtime: DmToolsRuntime) => Promise<unknown>, success: string, selected?: string): Promise<void> {
       const runtime = this.#runtime; if (runtime === undefined || this.#busy) return; this.#busy = true; this.#message = "Saving…"; this.#messageKind = "status"; this.#render();
-      try { await operation(runtime); this.#selectedId = selected; this.#snapshot = await runtime.repository.load(); this.#message = success; }
-      catch (error) { this.#fail(error, "Planning change failed."); }
-      finally { this.#busy = false; this.#render(); }
+      try {
+        await operation(runtime); if (this.#runtime !== runtime || !this.isConnected) return;
+        const snapshot = await runtime.repository.load(); if (this.#runtime !== runtime || !this.isConnected) return;
+        this.#selectedId = selected; this.#snapshot = snapshot; this.#message = success; if (this.#targetPending) this.#applyTarget();
+      } catch (error) { if (this.#runtime === runtime && this.isConnected) this.#fail(error, "Planning change failed."); }
+      finally { if (this.#runtime === runtime && this.isConnected) { this.#busy = false; this.#render(); } }
     }
     #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
-    #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); }
+    #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); const link = this.ownerDocument.createElement("a"); link.textContent = "Open campaign canvas"; link.href = plannerLink(this.#contribution?.addon.id ?? "dm-tools"); this.append(link); }
   }
-  customElements.define(plannerElementTag, PlannerElement);
+  customElements.define(tag, PlannerElement); return tag;
 }
 
 function positionsFor(views: readonly PlanningView[], scopeId: string | null, items: readonly PlanningItem[]): Map<string, { x: number; y: number }> { const view = views.find((candidate) => candidate.scopeId === scopeId); return new Map(items.map((item, index) => [item.id, view?.positions[item.id] ?? { x: 72 + (index % 3) * 300, y: 72 + Math.floor(index / 3) * 190 }])); }
