@@ -15,25 +15,32 @@ export function defineImportElement(generation?: string): string {
   if (customElements.get(tag) !== undefined) return tag;
   class ImportCenterElement extends HTMLElement {
     #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #adapters: readonly Adapter[] = []; #selected: Adapter | undefined; #preview: ImportPreview | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
+    #request: AbortController | undefined;
     set codexContribution(value: ContributionContext) { const previous = this.#contribution; this.#contribution = value; if (this.isConnected && previous?.addon.generation !== value.addon.generation) void this.#connect(); }
     connectedCallback(): void { this.classList.add("dm-tools-import"); void this.#connect(); }
-    disconnectedCallback(): void { this.#runtime = undefined; }
+    disconnectedCallback(): void { this.#request?.abort(); this.#request = undefined; this.#runtime = undefined; this.#preview = undefined; this.#selected = undefined; }
+
+    #startRequest(): AbortController { this.#request?.abort(); const request = new AbortController(); this.#request = request; return request; }
+    #current(runtime: DmToolsRuntime, request: AbortController): boolean { return this.isConnected && this.#runtime === runtime && this.#request === request && !request.signal.aborted && !runtime.signal.aborted; }
 
     async #connect(): Promise<void> {
       const contribution = this.#contribution; if (contribution === undefined) { this.#unavailable("The host did not provide an import generation."); return; }
       const runtime = runtimeFor(contribution.addon.generation); if (runtime === undefined || runtime.signal.aborted) { this.#unavailable("This Import Center generation is no longer active."); return; }
-      this.#runtime = runtime; this.#busy = true; this.#message = "Discovering import adapters…"; this.#render();
+      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
+      this.#runtime = runtime; this.#adapters = []; this.#preview = undefined; this.#selected = undefined;
+      this.#busy = true; this.#message = "Discovering import adapters…"; this.#messageKind = "status"; this.#render();
       try {
         const adapters: Adapter[] = [];
         for (const provider of runtime.adapters.providers) {
+          signal.throwIfAborted();
           try {
-            const description = await runtime.adapters.call<AdapterDescription>("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal: runtime.signal });
+            const description = await runtime.adapters.call<AdapterDescription>("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal });
             if (description.contractVersion === "import-adapter-description.v1" && description.formats.length > 0) adapters.push({ provider, description });
           } catch { /* A broken optional adapter must not hide healthy providers. */ }
         }
-        this.#adapters = adapters.sort((left, right) => left.description.label.localeCompare(right.description.label, "en")); this.#message = "";
-      } catch (error) { this.#fail(error, "Could not discover import adapters."); }
-      finally { this.#busy = false; this.#render(); }
+        if (this.#current(runtime, request)) { this.#adapters = adapters.sort((left, right) => left.description.label.localeCompare(right.description.label, "en")); this.#message = ""; }
+      } catch (error) { if (this.#current(runtime, request)) this.#fail(error, "Could not discover import adapters."); }
+      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
     }
 
     #render(): void {
@@ -55,31 +62,42 @@ export function defineImportElement(generation?: string): string {
       section.append(title, summary);
       for (const warning of preview.warnings) section.append(messageBlock(document, warning, "alert"));
       const list = document.createElement("ul"); for (const change of preview.changes) { const item = document.createElement("li"); item.textContent = `${change.operation}: ${change.label} (${change.collection}/${change.id})`; list.append(item); } section.append(list);
-      const destructive = preview.summary.deletes > 0; const button = actionButton(document, destructive ? `Commit replacement with ${preview.summary.deletes} deletions` : "Commit reviewed import", () => void this.#commit(), destructive ? "danger" : "primary"); button.disabled = this.#busy; section.append(button); return section;
+      const destructive = preview.summary.deletes > 0; const button = actionButton(document, destructive ? `Commit replacement with ${preview.summary.deletes} deletions` : "Commit reviewed import", () => void this.#commit(), destructive ? "danger" : "primary"); button.disabled = this.#busy;
+      const cancel = actionButton(document, "Cancel preview", () => { this.#preview = undefined; this.#selected = undefined; this.#message = "Preview cancelled. No campaign data has changed."; this.#messageKind = "status"; this.#render(); }); cancel.disabled = this.#busy;
+      section.append(button, cancel); return section;
     }
 
     async #open(file: File): Promise<void> {
       const runtime = this.#runtime; if (runtime === undefined || this.#busy) return; this.#busy = true; this.#preview = undefined; this.#selected = undefined; this.#message = "Reading and previewing file…"; this.#messageKind = "status"; this.#render();
+      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
       try {
         if (file.size > 2 * 1024 * 1024) throw new Error("Import files are limited to 2 MiB.");
-        const document = JSON.parse(await file.text()) as unknown; if (!isRecord(document) || typeof document["format"] !== "string") throw new Error("The JSON root must contain a string format field.");
+        const source = await file.text(); signal.throwIfAborted();
+        const document = JSON.parse(source) as unknown; if (!isRecord(document) || typeof document["format"] !== "string") throw new Error("The JSON root must contain a string format field.");
         const matches = this.#adapters.filter((adapter) => adapter.description.formats.includes(document["format"] as string));
         if (matches.length === 0) throw new Error(`No adapter owns format ${document["format"]}.`); if (matches.length > 1) throw new Error(`More than one adapter claims format ${document["format"]}; resolve the installation conflict before importing.`);
         const selected = matches[0] as Adapter;
-        const preview = await runtime.adapters.call<ImportPreview>("preview", { contractVersion: "import-preview.v1", format: document["format"], document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal: runtime.signal });
+        const preview = await runtime.adapters.call<ImportPreview>("preview", { contractVersion: "import-preview.v1", format: document["format"], document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal });
+        if (!this.#current(runtime, request)) return;
         this.#selected = selected; this.#preview = preview; this.#message = "Preview ready. No campaign data has changed.";
-      } catch (error) { this.#fail(error, "Could not preview this import."); }
-      finally { this.#busy = false; this.#render(); }
+      } catch (error) { if (this.#current(runtime, request)) this.#fail(error, "Could not preview this import."); }
+      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
     }
 
     async #commit(): Promise<void> {
       const runtime = this.#runtime; const preview = this.#preview; const selected = this.#selected; if (runtime === undefined || preview === undefined || selected === undefined || this.#busy) return;
+      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
+      // A submitted token is single-use, including conflicts and lost replies.
+      this.#preview = undefined; this.#selected = undefined;
       this.#busy = true; this.#message = "Committing the exact reviewed plan…"; this.#messageKind = "status"; this.#render();
       try {
-        const result = await runtime.adapters.call<{ readonly committed: true; readonly writes: number; readonly deletes: number }>("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal: runtime.signal });
+        const result = await runtime.adapters.call<{ readonly committed: true; readonly writes: number; readonly deletes: number }>("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal });
+        if (!this.#current(runtime, request)) return;
         this.#preview = undefined; this.#selected = undefined; this.#message = `Import committed: ${result.writes} writes and ${result.deletes} deletions.`;
-      } catch (error) { this.#fail(error, "The import was not committed."); }
-      finally { this.#busy = false; this.#render(); }
+      } catch (error) { if (this.#current(runtime, request)) { this.#message = isRecord(error) && error["code"] === "CONFLICT"
+        ? "Planning data changed. Choose the file again to review a new preview."
+        : "Could not confirm the import. Check planning data before choosing the file again for a new preview."; this.#messageKind = "alert"; } }
+      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
     }
 
     #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }

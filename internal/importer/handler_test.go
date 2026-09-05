@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -43,6 +44,11 @@ func TestPreviewAndSingleUseCommit(t *testing.T) {
 		t.Fatalf("summary = %+v", summary)
 	}
 	commitParams := mustJSON(t, map[string]any{"contractVersion": "import-commit.v1", "token": token})
+	player := testMeta()
+	player.Actor = &workerrpc.Actor{Role: "player", ID: "player-session"}
+	if _, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "commit", Params: commitParams, Meta: player}); err == nil {
+		t.Fatal("player consumed a DM preview")
+	}
 	if _, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "commit", Params: commitParams, Meta: testMeta()}); err != nil {
 		t.Fatal(err)
 	}
@@ -85,5 +91,18 @@ func mustJSON(t *testing.T, value any) json.RawMessage {
 	return body
 }
 func testMeta() *workerrpc.Meta {
-	return &workerrpc.Meta{RequestID: "request", CorrelationID: "correlation", Generation: "generation", Deadline: time.Now().Add(time.Minute), IdempotencyKey: "commit-key"}
+	return &workerrpc.Meta{RequestID: "request", CorrelationID: "correlation", Generation: "generation", Deadline: time.Now().Add(time.Minute), IdempotencyKey: "commit-key", Actor: &workerrpc.Actor{Role: "dm", ID: "dm-session"}}
+}
+
+func TestImportMethodsRequireHostIssuedDMActor(t *testing.T) {
+	handler, _ := New(&fakeData{documents: map[string][]workerrpc.AddonDataDocument{}})
+	for _, meta := range []*workerrpc.Meta{nil, {}, {Actor: &workerrpc.Actor{Role: "player"}}, {Actor: &workerrpc.Actor{Role: "system"}}} {
+		for _, method := range []string{"describe", "preview", "commit"} {
+			_, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + method, Params: json.RawMessage(`{}`), Meta: meta})
+			var failure *workerrpc.RPCError
+			if !errors.As(err, &failure) || failure.Data.Kind != workerrpc.KindUnauthorized {
+				t.Fatalf("%s without DM = %v", method, err)
+			}
+		}
+	}
 }

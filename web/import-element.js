@@ -13,10 +13,13 @@ export function defineImportElement(generation) {
         #busy = false;
         #message = "";
         #messageKind = "status";
+        #request;
         set codexContribution(value) { const previous = this.#contribution; this.#contribution = value; if (this.isConnected && previous?.addon.generation !== value.addon.generation)
             void this.#connect(); }
         connectedCallback() { this.classList.add("dm-tools-import"); void this.#connect(); }
-        disconnectedCallback() { this.#runtime = undefined; }
+        disconnectedCallback() { this.#request?.abort(); this.#request = undefined; this.#runtime = undefined; this.#preview = undefined; this.#selected = undefined; }
+        #startRequest() { this.#request?.abort(); const request = new AbortController(); this.#request = request; return request; }
+        #current(runtime, request) { return this.isConnected && this.#runtime === runtime && this.#request === request && !request.signal.aborted && !runtime.signal.aborted; }
         async #connect() {
             const contribution = this.#contribution;
             if (contribution === undefined) {
@@ -28,29 +31,40 @@ export function defineImportElement(generation) {
                 this.#unavailable("This Import Center generation is no longer active.");
                 return;
             }
+            const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
             this.#runtime = runtime;
+            this.#adapters = [];
+            this.#preview = undefined;
+            this.#selected = undefined;
             this.#busy = true;
             this.#message = "Discovering import adapters…";
+            this.#messageKind = "status";
             this.#render();
             try {
                 const adapters = [];
                 for (const provider of runtime.adapters.providers) {
+                    signal.throwIfAborted();
                     try {
-                        const description = await runtime.adapters.call("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal: runtime.signal });
+                        const description = await runtime.adapters.call("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal });
                         if (description.contractVersion === "import-adapter-description.v1" && description.formats.length > 0)
                             adapters.push({ provider, description });
                     }
                     catch { /* A broken optional adapter must not hide healthy providers. */ }
                 }
-                this.#adapters = adapters.sort((left, right) => left.description.label.localeCompare(right.description.label, "en"));
-                this.#message = "";
+                if (this.#current(runtime, request)) {
+                    this.#adapters = adapters.sort((left, right) => left.description.label.localeCompare(right.description.label, "en"));
+                    this.#message = "";
+                }
             }
             catch (error) {
-                this.#fail(error, "Could not discover import adapters.");
+                if (this.#current(runtime, request))
+                    this.#fail(error, "Could not discover import adapters.");
             }
             finally {
-                this.#busy = false;
-                this.#render();
+                if (this.#current(runtime, request)) {
+                    this.#busy = false;
+                    this.#render();
+                }
             }
         }
         #render() {
@@ -120,7 +134,9 @@ export function defineImportElement(generation) {
             const destructive = preview.summary.deletes > 0;
             const button = actionButton(document, destructive ? `Commit replacement with ${preview.summary.deletes} deletions` : "Commit reviewed import", () => void this.#commit(), destructive ? "danger" : "primary");
             button.disabled = this.#busy;
-            section.append(button);
+            const cancel = actionButton(document, "Cancel preview", () => { this.#preview = undefined; this.#selected = undefined; this.#message = "Preview cancelled. No campaign data has changed."; this.#messageKind = "status"; this.#render(); });
+            cancel.disabled = this.#busy;
+            section.append(button, cancel);
             return section;
         }
         async #open(file) {
@@ -133,10 +149,13 @@ export function defineImportElement(generation) {
             this.#message = "Reading and previewing file…";
             this.#messageKind = "status";
             this.#render();
+            const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
             try {
                 if (file.size > 2 * 1024 * 1024)
                     throw new Error("Import files are limited to 2 MiB.");
-                const document = JSON.parse(await file.text());
+                const source = await file.text();
+                signal.throwIfAborted();
+                const document = JSON.parse(source);
                 if (!isRecord(document) || typeof document["format"] !== "string")
                     throw new Error("The JSON root must contain a string format field.");
                 const matches = this.#adapters.filter((adapter) => adapter.description.formats.includes(document["format"]));
@@ -145,17 +164,22 @@ export function defineImportElement(generation) {
                 if (matches.length > 1)
                     throw new Error(`More than one adapter claims format ${document["format"]}; resolve the installation conflict before importing.`);
                 const selected = matches[0];
-                const preview = await runtime.adapters.call("preview", { contractVersion: "import-preview.v1", format: document["format"], document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal: runtime.signal });
+                const preview = await runtime.adapters.call("preview", { contractVersion: "import-preview.v1", format: document["format"], document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal });
+                if (!this.#current(runtime, request))
+                    return;
                 this.#selected = selected;
                 this.#preview = preview;
                 this.#message = "Preview ready. No campaign data has changed.";
             }
             catch (error) {
-                this.#fail(error, "Could not preview this import.");
+                if (this.#current(runtime, request))
+                    this.#fail(error, "Could not preview this import.");
             }
             finally {
-                this.#busy = false;
-                this.#render();
+                if (this.#current(runtime, request)) {
+                    this.#busy = false;
+                    this.#render();
+                }
             }
         }
         async #commit() {
@@ -164,22 +188,35 @@ export function defineImportElement(generation) {
             const selected = this.#selected;
             if (runtime === undefined || preview === undefined || selected === undefined || this.#busy)
                 return;
+            const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
+            // A submitted token is single-use, including conflicts and lost replies.
+            this.#preview = undefined;
+            this.#selected = undefined;
             this.#busy = true;
             this.#message = "Committing the exact reviewed plan…";
             this.#messageKind = "status";
             this.#render();
             try {
-                const result = await runtime.adapters.call("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal: runtime.signal });
+                const result = await runtime.adapters.call("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal });
+                if (!this.#current(runtime, request))
+                    return;
                 this.#preview = undefined;
                 this.#selected = undefined;
                 this.#message = `Import committed: ${result.writes} writes and ${result.deletes} deletions.`;
             }
             catch (error) {
-                this.#fail(error, "The import was not committed.");
+                if (this.#current(runtime, request)) {
+                    this.#message = isRecord(error) && error["code"] === "CONFLICT"
+                        ? "Planning data changed. Choose the file again to review a new preview."
+                        : "Could not confirm the import. Check planning data before choosing the file again for a new preview.";
+                    this.#messageKind = "alert";
+                }
             }
             finally {
-                this.#busy = false;
-                this.#render();
+                if (this.#current(runtime, request)) {
+                    this.#busy = false;
+                    this.#render();
+                }
             }
         }
         #fail(error, fallback) { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }

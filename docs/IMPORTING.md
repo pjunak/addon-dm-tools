@@ -8,6 +8,21 @@ string `format`. Exactly one discovered adapter must claim that format. The
 complete document then crosses the broker to that provider for authoritative
 validation.
 
+The browser opts into its own declared worker with `includeOwn: true` while
+keeping other adapters selected through their advertised formats. This does not
+add a worker self-dependency. Every worker import method requires a host-issued
+DM actor, including read-only preview and description.
+
+Leaving the Import Center aborts its outstanding discovery/preview/request and
+discards the visible review. Late responses cannot repopulate a detached or
+replaced page. **Cancel preview** discards an unsubmitted review without writing;
+server-held unused tokens remain bounded by their expiry and plan limit.
+
+Submission removes the visible single-use token immediately. A conflict requires
+a fresh reviewed preview. If the response is lost or otherwise uncertain, inspect
+planning data before previewing again: cancelling a request cannot undo an
+already completed transaction. An unchanged host context does not reset a review.
+
 ## Planning workflow
 
 The Go worker:

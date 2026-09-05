@@ -24,7 +24,7 @@ export interface AddonContext {
     collection<T>(id: string): CollectionHandle<T>;
     transact(mutations: readonly DataMutation[], options?: { readonly signal?: AbortSignal }): Promise<CommitReceipt>;
   };
-  readonly services: { connect(contract: string, options: { readonly range: string; readonly cardinality: "many"; readonly signal?: AbortSignal }): Promise<ServiceHandle> };
+  readonly services: { connect(contract: string, options: { readonly range: string; readonly cardinality: "many"; readonly includeOwn?: boolean; readonly signal?: AbortSignal }): Promise<ServiceHandle> };
   readonly ui: { bind(id: string, binding: { readonly kind: "element"; readonly tag: string }): { dispose(): void } };
 }
 export interface ContributionContext {

@@ -17,11 +17,11 @@ overview**. Failed reads retain tool links and a retry; unavailable import
 providers do not prevent direct planning edits. Import availability follows
 advertised formats, independently of provider add-on IDs.
 
-The host currently excludes a consumer's own service from provider resolution,
-so the installed planning import worker is not discoverable by this package's
-Import Center. The required integration repair is tracked in the suite
-[backlog](../ttrpg-codex/docs/BACKLOG.md); opening the center does not constitute
-accepted import preview/commit parity.
+The browser explicitly includes its own planning worker in service discovery;
+worker startup keeps its normal dependency rules. Actual installed-package checks
+cover planning preview, cancellation, single-use commit, concurrent-edit conflicts
+and generation replacement. Broader presentation and workflow parity remain in
+the suite [backlog](../ttrpg-codex/docs/BACKLOG.md).
 
 Ownership is a tree. Plotlines and quests can contain planning items; events
 and branches are leaves. Every open scope is its own local directed acyclic

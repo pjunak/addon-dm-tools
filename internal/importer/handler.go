@@ -99,6 +99,12 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 	if handler == nil || handler.data == nil {
 		return nil, unavailable("planning import adapter is unavailable")
 	}
+	if request.Meta == nil || request.Meta.Actor == nil || request.Meta.Actor.Role != "dm" {
+		return nil, workerrpc.NewRPCError(workerrpc.JSONRPCApplication, workerrpc.KindUnauthorized, "Planning imports require a DM session.", false, nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	switch request.Method {
 	case methodPrefix + "describe":
 		if err := decodeEmpty(request.Params); err != nil {
