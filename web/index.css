@@ -36,7 +36,7 @@
 .dm-planner-atlas button { text-align: left; }
 .dm-planner-atlas button.plotline { border-left: 4px solid var(--accent-gold, #c8a040); }.dm-planner-atlas button.quest { border-left: 4px solid var(--accent-gold-dim, #8b6914); }.dm-planner-atlas button.event { border-left: 4px solid var(--accent-gold-dim, #8b6914); }.dm-planner-atlas button.branch { border-left: 4px dashed var(--accent-gold, #c8a040); }
 .dm-planner-viewport { position: relative; overflow: auto; border: 1px solid var(--border-subtle, #ffffff12); border-radius: .7rem; background-color: var(--bg-base, #141008); background-image: radial-gradient(circle, color-mix(in srgb, var(--border-subtle, #ffffff12), transparent 35%) 1px, transparent 1px); background-size: 24px 24px; }
-.dm-planner-stage { position: relative; min-width: 1100px; min-height: 780px; }
+.dm-planner-stage { position: relative; }
 .dm-planner-flows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dm-planner-flows path { fill: none; stroke: var(--text-muted, #9a8660); stroke-width: 2; }.dm-planner-flows path.option { stroke: var(--accent-gold, #c8a040); stroke-dasharray: 8 6; }
 .dm-plan-card { position: absolute; width: 240px; min-height: 132px; display: grid; align-content: start; gap: .45rem; padding: .8rem; border: 2px solid var(--accent-gold-dim, #8b6914); border-radius: .7rem; background: var(--bg-raised, #241c0d); box-shadow: 0 8px 20px rgba(0,0,0,.2); cursor: grab; user-select: none; touch-action: none; }
@@ -61,6 +61,14 @@
 .dm-planner-shell h1, .dm-planner-atlas h2, .dm-planner-inspector h2 { color: var(--accent-gold, #c8a040); font-family: var(--font-title, Georgia, serif); }
 .dm-planner-shell button, .dm-planner-inspector { font-family: var(--font-ui, sans-serif); }
 .dm-plan-card h3 { color: var(--text-parchment, #f5edd8); font-family: var(--font-title, Georgia, serif); line-height: 1.4; overflow-wrap: anywhere; }
+.dm-plan-card [hidden] { display: none; }
+.dm-planner-canvas-region { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.dm-planner-canvas-region > .dm-planner-viewport { flex: 1; min-height: 0; overscroll-behavior: contain; }
+.dm-planner-canvas-toolbar { display: flex; flex-wrap: wrap; gap: .3rem; padding: .4rem; border: 1px solid var(--border-subtle, #ffffff12); background: var(--bg-surface, #1c1509); border-radius: .4rem; }
+.dm-planner-canvas-toolbar button { color: var(--accent-gold, #c8a040); background: var(--bg-raised, #241c0d); border: 1px solid var(--border-subtle, #ffffff12); border-radius: .3rem; padding: .4rem .55rem; cursor: pointer; }
+.dm-planner-expanded { position: fixed; inset: 0; z-index: 12000; overflow: auto; padding: 1rem; background: var(--bg-base, #141008); }
+.dm-planner-expanded .dm-planner-workspace { height: calc(100vh - 9rem); }
+@media (max-width: 980px) { .dm-planner-canvas-region > .dm-planner-viewport { flex: none; min-height: 32rem; }.dm-planner-expanded .dm-planner-workspace { height: auto; } }
 .dm-plan-card .kind { color: var(--accent-gold, #c8a040); font-family: var(--font-ui, sans-serif); }
 .dm-tools-planner :focus-visible { outline: 2px solid var(--accent-gold, #c8a040); outline-offset: 3px; }
 .dm-tools-planner button:disabled, .dm-tools-planner input:disabled, .dm-tools-planner textarea:disabled, .dm-tools-planner select:disabled { opacity: .6; cursor: wait; }

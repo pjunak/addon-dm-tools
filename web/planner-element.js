@@ -1,3 +1,4 @@
+import { stepZoom, fittedZoom, canvasBounds, nativePixel, canvasLabels } from "./planner-viewport.js";
 import { appendTargetFields, coreReferences, targetFromForm, targetLabel, targetLink } from "./planner-targets.js";
 import { appendNoteAnchors, noteAnchors } from "./planner-note-anchors.js";
 import { option, textField, textArea, selectField, messageBlock } from "./planner-fields.js";
@@ -30,6 +31,8 @@ export function definePlannerElement(generation) {
         #needsReload = false;
         #writing = false;
         #invalidTarget = false;
+        #canvasViews = new Map();
+        #fullscreen = false;
         #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
         set codexContribution(value) {
             const previous = this.#contribution;
@@ -56,8 +59,9 @@ export function definePlannerElement(generation) {
                 this.#invalidLink(error);
             }
         }
-        connectedCallback() { this.classList.add("dm-tools-planner"); void this.#connect(); }
-        disconnectedCallback() { this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false }); }
+        #fullscreenChanged = () => { this.#fullscreen = this.ownerDocument.fullscreenElement === this; this.#render(); this.querySelector("[data-expand-planner]")?.focus(); };
+        connectedCallback() { this.addEventListener("fullscreenchange", this.#fullscreenChanged); this.classList.add("dm-tools-planner"); void this.#connect(); }
+        disconnectedCallback() { this.removeEventListener("fullscreenchange", this.#fullscreenChanged); this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false }); }
         async #connect() {
             const contribution = this.#contribution;
             if (contribution === undefined) {
@@ -173,7 +177,9 @@ export function definePlannerElement(generation) {
                 return;
             this.ownerDocument.defaultView.location.hash = plannerLink(addonId, id);
         }
-        #render() {
+        #render(captureViewport = true) {
+            if (captureViewport)
+                this.#captureViewport();
             const snapshot = this.#snapshot;
             if (snapshot === undefined) {
                 this.replaceChildren(messageBlock(this.ownerDocument, this.#message, this.#messageKind));
@@ -183,7 +189,7 @@ export function definePlannerElement(generation) {
             }
             const document = this.ownerDocument;
             const root = document.createElement("section");
-            root.className = "dm-planner-shell";
+            root.className = `dm-planner-shell${this.#fullscreen ? " dm-planner-expanded" : ""}`;
             const header = document.createElement("header");
             const heading = document.createElement("div");
             const title = document.createElement("h1");
@@ -207,6 +213,10 @@ export function definePlannerElement(generation) {
             workspace.append(this.#atlas(document), this.#canvas(document, snapshot), this.#inspector(document, snapshot));
             root.append(workspace);
             this.replaceChildren(root);
+            const viewport = root.querySelector(".dm-planner-viewport");
+            const view = this.#canvasView();
+            viewport.scrollLeft = view.x;
+            viewport.scrollTop = view.y;
             root.setAttribute("aria-busy", String(this.#busy));
             for (const control of root.querySelectorAll("input,textarea,select")) {
                 control.disabled = this.#busy || (this.#needsReload && control.tagName === "SELECT");
@@ -241,15 +251,30 @@ export function definePlannerElement(generation) {
             return aside;
         }
         #canvas(document, snapshot) {
+            const labels = canvasLabels(this.#contribution?.host);
+            const region = document.createElement("div");
+            region.className = "dm-planner-canvas-region";
             const viewport = document.createElement("div");
             viewport.className = "dm-planner-viewport";
+            viewport.tabIndex = 0;
+            viewport.setAttribute("aria-label", labels.canvas);
+            viewport.dataset["scope"] = this.#scopeId ?? "";
             const stage = document.createElement("div");
             stage.className = "dm-planner-stage";
             const children = directChildren(snapshot.items, this.#scopeId);
             const positions = positionsFor(snapshot.views, this.#scopeId, children);
+            const view = this.#canvasView();
+            const zoom = view.zoom;
+            const bounds = canvasBounds(positions.values());
+            const plotted = new Map([...positions].map(([id, point]) => [id, { x: point.x - bounds.left, y: point.y - bounds.top }]));
+            const width = Math.max(1100, bounds.width + 72), height = Math.max(780, bounds.height + 72);
+            stage.style.width = `${nativePixel(width * zoom)}px`;
+            stage.style.height = `${nativePixel(height * zoom)}px`;
+            stage.dataset["zoom"] = String(zoom);
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             svg.classList.add("dm-planner-flows");
             svg.setAttribute("aria-label", "Story flow");
+            svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
             const defs = document.createElementNS(svg.namespaceURI, "defs");
             const marker = document.createElementNS(svg.namespaceURI, "marker");
             marker.id = this.#flowMarkerId;
@@ -266,8 +291,8 @@ export function definePlannerElement(generation) {
             defs.append(marker);
             svg.append(defs);
             for (const flow of localFlows(snapshot, this.#scopeId)) {
-                const source = positions.get(flow.sourceId);
-                const target = positions.get(flow.targetId);
+                const source = plotted.get(flow.sourceId);
+                const target = plotted.get(flow.targetId);
                 if (source === undefined || target === undefined)
                     continue;
                 const path = document.createElementNS(svg.namespaceURI, "path");
@@ -290,11 +315,16 @@ export function definePlannerElement(generation) {
             stage.append(svg);
             for (const item of children) {
                 const position = positions.get(item.id);
+                const point = plotted.get(item.id);
                 const card = document.createElement("article");
                 card.className = `dm-plan-card ${item.kind}${item.id === this.#selectedId ? " selected" : ""}`;
                 card.dataset["itemId"] = item.id;
-                card.style.left = `${position.x}px`;
-                card.style.top = `${position.y}px`;
+                card.style.left = `${nativePixel(point.x * zoom)}px`;
+                card.style.top = `${nativePixel(point.y * zoom)}px`;
+                card.style.width = `${nativePixel(cardWidth * zoom)}px`;
+                card.style.minHeight = `${nativePixel(cardHeight * zoom)}px`;
+                card.style.padding = `${nativePixel(12.8 * zoom)}px`;
+                card.style.gap = `${nativePixel(7.2 * zoom)}px`;
                 card.tabIndex = 0;
                 const kind = document.createElement("span");
                 kind.className = "kind";
@@ -303,6 +333,11 @@ export function definePlannerElement(generation) {
                 title.textContent = item.title;
                 const summary = document.createElement("p");
                 summary.textContent = item.summary || "Needs details";
+                title.style.fontSize = `${nativePixel(Math.max(9, 16 * zoom))}px`;
+                summary.style.fontSize = `${nativePixel(Math.max(8, 13.6 * zoom))}px`;
+                kind.style.fontSize = `${nativePixel(Math.max(8, 12 * zoom))}px`;
+                kind.hidden = zoom < .6;
+                summary.hidden = zoom < .8;
                 card.append(kind, title, summary);
                 card.addEventListener("click", () => { if (!this.#busy && this.#selectedId !== item.id) {
                     this.#selectedId = item.id;
@@ -321,7 +356,7 @@ export function definePlannerElement(generation) {
                         this.#render();
                     }
                 });
-                this.#makeDraggable(card, item.id, position);
+                this.#makeDraggable(card, item.id, position, zoom, { x: -bounds.left, y: -bounds.top });
                 stage.append(card);
             }
             if (children.length === 0) {
@@ -329,8 +364,110 @@ export function definePlannerElement(generation) {
                 empty.classList.add("empty");
                 stage.append(empty);
             }
+            const toolbar = document.createElement("div");
+            toolbar.className = "dm-planner-canvas-toolbar";
+            toolbar.setAttribute("role", "group");
+            toolbar.setAttribute("aria-label", labels.controls);
+            toolbar.title = labels.help;
+            const zoomTo = (next, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) => {
+                if (this.#busy || next === view.zoom)
+                    return;
+                this.#captureViewport();
+                view.x = (view.x + x) / view.zoom * next - x;
+                view.y = (view.y + y) / view.zoom * next - y;
+                view.zoom = next;
+                this.#render(false);
+            };
+            const fit = () => {
+                if (this.#busy)
+                    return;
+                const next = fittedZoom(bounds.width, bounds.height, viewport.clientWidth, viewport.clientHeight);
+                view.zoom = next;
+                view.x = Math.max(0, (bounds.width * next - viewport.clientWidth) / 2);
+                view.y = Math.max(0, (bounds.height * next - viewport.clientHeight) / 2);
+                this.#render(false);
+            };
+            const focus = () => {
+                const point = this.#selectedId ? plotted.get(this.#selectedId) : undefined;
+                if (!point || this.#busy)
+                    return;
+                view.x = Math.max(0, (point.x + cardWidth / 2) * zoom - viewport.clientWidth / 2);
+                view.y = Math.max(0, (point.y + cardHeight / 2) * zoom - viewport.clientHeight / 2);
+                this.#render(false);
+            };
+            toolbar.append(actionButton(document, "−", () => zoomTo(stepZoom(zoom, -1))), actionButton(document, `${Math.round(zoom * 100)}%`, () => zoomTo(1)), actionButton(document, "+", () => zoomTo(stepZoom(zoom, 1))), actionButton(document, labels.fit, fit), actionButton(document, labels.focus, focus));
+            const buttons = toolbar.querySelectorAll("button");
+            buttons[0].setAttribute("aria-label", labels.out);
+            buttons[1].setAttribute("aria-label", labels.reset);
+            buttons[2].setAttribute("aria-label", labels.in);
+            const expand = actionButton(document, this.#fullscreen ? labels.exit : labels.fullscreen, () => { if (!this.#busy)
+                void (this.#fullscreen ? document.exitFullscreen() : this.requestFullscreen()).catch(error => this.#invalid(error instanceof Error ? error.message : "Fullscreen is unavailable.")); });
+            expand.dataset["expandPlanner"] = "";
+            expand.setAttribute("aria-pressed", String(this.#fullscreen));
+            toolbar.append(expand);
+            for (const button of toolbar.querySelectorAll("button"))
+                button.dataset["viewAction"] = "";
+            viewport.addEventListener("wheel", event => { if (!event.ctrlKey && !event.metaKey)
+                return; event.preventDefault(); const rect = viewport.getBoundingClientRect(); zoomTo(stepZoom(view.zoom, -Math.sign(event.deltaY)), event.clientX - rect.left, event.clientY - rect.top); }, { passive: false });
+            viewport.addEventListener("keydown", event => {
+                if (event.target !== viewport || this.#busy)
+                    return;
+                if (["+", "=", "-", "0", "f"].includes(event.key)) {
+                    event.preventDefault();
+                    if (event.key === "f")
+                        fit();
+                    else
+                        zoomTo(event.key === "0" ? 1 : stepZoom(view.zoom, event.key === "-" ? -1 : 1));
+                    this.querySelector(".dm-planner-viewport")?.focus({ preventScroll: true });
+                }
+                else if (event.key.startsWith("Arrow")) {
+                    event.preventDefault();
+                    const distance = event.shiftKey ? 160 : 48;
+                    viewport.scrollLeft += event.key === "ArrowRight" ? distance : event.key === "ArrowLeft" ? -distance : 0;
+                    viewport.scrollTop += event.key === "ArrowDown" ? distance : event.key === "ArrowUp" ? -distance : 0;
+                }
+            });
+            viewport.addEventListener("pointerdown", event => {
+                if (this.#busy || event.pointerType === "touch" || event.button !== 0 || event.target.closest(".dm-plan-card"))
+                    return;
+                event.preventDefault();
+                viewport.focus({ preventScroll: true });
+                viewport.setPointerCapture(event.pointerId);
+                const start = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+                const move = (next) => { if (next.pointerId === event.pointerId) {
+                    viewport.scrollLeft = start.left + start.x - next.clientX;
+                    viewport.scrollTop = start.top + start.y - next.clientY;
+                } };
+                const end = (next) => { if (next.pointerId !== event.pointerId)
+                    return; viewport.removeEventListener("pointermove", move); viewport.removeEventListener("pointerup", end); viewport.removeEventListener("pointercancel", end); viewport.removeEventListener("lostpointercapture", end); if (viewport.hasPointerCapture(event.pointerId))
+                    viewport.releasePointerCapture(event.pointerId); };
+                viewport.addEventListener("pointermove", move);
+                viewport.addEventListener("pointerup", end);
+                viewport.addEventListener("pointercancel", end);
+                viewport.addEventListener("lostpointercapture", end);
+            });
             viewport.append(stage);
-            return viewport;
+            region.append(toolbar, viewport);
+            return region;
+        }
+        #canvasView() {
+            const key = this.#scopeId ?? "";
+            let view = this.#canvasViews.get(key);
+            if (!view) {
+                view = { zoom: 1, x: 0, y: 0 };
+                this.#canvasViews.set(key, view);
+            }
+            return view;
+        }
+        #captureViewport() {
+            const viewport = this.querySelector(".dm-planner-viewport");
+            if (!viewport)
+                return;
+            const view = this.#canvasViews.get(viewport.dataset["scope"]);
+            if (view) {
+                view.x = viewport.scrollLeft;
+                view.y = viewport.scrollTop;
+            }
         }
         #inspector(document, snapshot) {
             const aside = document.createElement("aside");
@@ -508,7 +645,7 @@ export function definePlannerElement(generation) {
             }
             return section;
         }
-        #makeDraggable(card, itemId, original) {
+        #makeDraggable(card, itemId, original, zoom, offset) {
             card.addEventListener("pointerdown", (event) => {
                 if (this.#busy || this.#needsReload || event.button !== 0 || event.target.closest("button,input,textarea,select") !== null)
                     return;
@@ -518,7 +655,7 @@ export function definePlannerElement(generation) {
                 card.setPointerCapture(event.pointerId);
                 const move = (next) => { if (next.pointerId !== event.pointerId)
                     return; const dx = next.clientX - startX; const dy = next.clientY - startY; if (Math.abs(dx) + Math.abs(dy) > 4)
-                    moved = true; card.style.left = `${snap(original.x + dx)}px`; card.style.top = `${snap(original.y + dy)}px`; };
+                    moved = true; card.style.left = `${nativePixel((snap(original.x + dx / zoom) + offset.x) * zoom)}px`; card.style.top = `${nativePixel((snap(original.y + dy / zoom) + offset.y) * zoom)}px`; };
                 const end = (next) => {
                     if (next.pointerId !== event.pointerId)
                         return;
@@ -529,10 +666,10 @@ export function definePlannerElement(generation) {
                     if (card.hasPointerCapture(event.pointerId))
                         card.releasePointerCapture(event.pointerId);
                     if (moved && next.type === "pointerup")
-                        void this.#savePosition(itemId, snap(original.x + next.clientX - startX), snap(original.y + next.clientY - startY));
+                        void this.#savePosition(itemId, snap(original.x + (next.clientX - startX) / zoom), snap(original.y + (next.clientY - startY) / zoom));
                     else {
-                        card.style.left = `${original.x}px`;
-                        card.style.top = `${original.y}px`;
+                        card.style.left = `${nativePixel((original.x + offset.x) * zoom)}px`;
+                        card.style.top = `${nativePixel((original.y + offset.y) * zoom)}px`;
                     }
                 };
                 card.addEventListener("pointermove", move);
@@ -846,7 +983,7 @@ function appendItemStructure(document, form, item, items) {
 }
 function positionsFor(views, scopeId, items) { const view = views.find((candidate) => candidate.scopeId === scopeId); return new Map(items.map((item, index) => [item.id, view?.positions[item.id] ?? { x: 72 + (index % 3) * 300, y: 72 + Math.floor(index / 3) * 190 }])); }
 function orthogonalPath(sourceX, sourceY, targetX, targetY) { const middle = sourceX + (targetX - sourceX) / 2; return `M ${sourceX} ${sourceY} H ${middle} V ${targetY} H ${targetX}`; }
-function snap(value) { return Math.max(24, Math.round(value / grid) * grid); }
+function snap(value) { return Math.round(value / grid) * grid; }
 function subtype(item) { return item.kind === "event" ? item.eventType ?? "event" : item.kind === "branch" ? item.branchType ?? "branch" : item.kind; }
 function flowKindOptions(source) { return source.kind === "branch" ? [["continues", "Continues"], ["option", "Option"]] : [["continues", "Continues"]]; }
 function flowDescription(snapshot, flow) { const source = snapshot.items.find(item => item.id === flow.sourceId); const target = snapshot.items.find(item => item.id === flow.targetId); return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`; }

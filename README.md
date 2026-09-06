@@ -46,6 +46,15 @@ positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+Canvas controls restore the fixed 35–200% zoom ladder with a native 100% stop,
+**Fit**, **Focus selected**, and browser fullscreen. Drag empty canvas to pan,
+or focus it and use arrow keys. Ctrl/Command + wheel and +/− zoom; 0 resets and
+F fits. Each canvas keeps its zoom and scroll position while the planner stays
+open, including selection, refresh, saved changes and navigation to another
+canvas. Zoom lays out native text and geometry directly. Card drags convert
+screen movement back to saved coordinates, and distant or negative saved
+positions remain reachable. Controls follow the host's English/Czech language.
+
 The original **Kind** and **Parent** controls are available in item details.
 Move an item to the campaign root or another plotline/quest, or change its kind;
 the matching event/branch subtype field follows the selection. Parent choices

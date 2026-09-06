@@ -72,6 +72,16 @@ teardown never waits for a save or persists drafts.
 Pointer cancellation or capture loss restores the card's original coordinates;
 only a completed pointer release persists a moved position.
 
+`planner-viewport.ts` owns the preserved fixed zoom ladder, fit calculation,
+content bounds and device-pixel rounding. Zoom changes native dimensions and
+text sizes, never a transform of the rendered canvas. SVG uses matching logical
+bounds; pointer movement is divided by the current zoom before snapping and
+saving. Negative coordinates expand the view bounds without rewriting records.
+Zoom/scroll are view-local and separate for each scope; rendering captures the
+old viewport before replacement and restores the selected scope after mounting.
+Fullscreen uses the browser API on the stable planner element and disposes its
+listener with the element. Panning, fit, focus and zoom do not write campaign data.
+
 Flow editing preserves endpoints and opening revisions. Available types follow
 the source item's kind, including when editing from the destination. Flow
 labels use native SVG text; paths show arrowheads for direction. Consequences
