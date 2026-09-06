@@ -27,7 +27,7 @@
       }
     }
   },
-  "permissions": [],
+  "permissions": [{ "id": "core.data.read", "resources": ["characters", "factions", "locations", "mysteries", "artifacts", "events"], "reason": "Choose visible campaign records for planning references and consequence targets." }],
   "contributions": [
     { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard" } },
     { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner" } },

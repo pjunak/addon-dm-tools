@@ -9,6 +9,7 @@ test("manifest declares TypeScript UI, Go worker, and exact planning contracts",
   assert.deepEqual(manifest.collections.map(entry => entry.id), ["planning_items", "planning_flow_links", "planning_references", "planning_consequences", "dm_notes", "planning_views"]);
   assert.equal(manifest.services.provides[0].contract, "codex.import-adapter"); assert.equal(manifest.services.provides[0].version, "2.0.0");
   assert.equal(manifest.services.consumes[0].cardinality, "many"); assert.equal(manifest.services.consumes[0].selection, "all-compatible");
+  assert.deepEqual(manifest.permissions.map(({ id, resources }) => ({ id, resources })), [{ id: "core.data.read", resources: ["characters", "factions", "locations", "mysteries", "artifacts", "events"] }]);
 });
 
 test("every stored collection has a package-owned schema", async () => {

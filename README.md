@@ -65,6 +65,15 @@ revision-checked transaction. Whole-item consequences and endpoint records stay
 intact. Subtree deletion also cleans incoming planning references and saved
 positions, while shared notes retain their remaining anchors.
 
+**Add reference** chooses a planning item, visible campaign record, or explicit
+external add-on record. Saved references expose their name, relation, quantity
+(1–1,000), target, and notes. Campaign choices use the host's approved read
+grants; unavailable saved targets remain visible and survive unrelated edits.
+Consequences optionally target the same kinds of records. **Linked planning
+items** shares a DM note across items or removes its links. Unanchored notes
+remain available in the annotations of any selected item so they can be linked
+again. New-reference choices and note links share the regular draft protections.
+
 Item details include the original objective, setup, resolution, tags, and
 event/branch type fields. Item, annotation, and new-flow drafts survive card
 selection, canvas navigation, other saves, validation errors, and explicit

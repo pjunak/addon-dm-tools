@@ -1,3 +1,6 @@
+import { appendTargetFields, coreReferences, targetFromForm, targetLabel, targetLink } from "./planner-targets.js";
+import { appendNoteAnchors, noteAnchors } from "./planner-note-anchors.js";
+import { option, textField, textArea, selectField, messageBlock } from "./planner-fields.js";
 import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning } from "./planning-model.js";
 import { runtimeFor } from "./runtime.js";
 import { plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
@@ -421,23 +424,49 @@ export function definePlannerElement(generation) {
             const title = document.createElement("h3");
             title.textContent = "Planning annotations";
             section.append(title);
-            const referenceTarget = document.createElement("select");
-            referenceTarget.append(option(document, "", "Reference another planning item…"));
-            for (const target of snapshot.items.filter((item) => item.id !== selected.id))
-                referenceTarget.append(option(document, target.id, target.title));
-            section.append(referenceTarget, actionButton(document, "Add planning reference", () => { if (referenceTarget.value !== "")
-                void this.#addReference(selected, snapshot, referenceTarget.value); }, "primary"));
+            const core = coreReferences(this.#contribution?.host);
+            const create = document.createElement("details");
+            const createLabel = document.createElement("summary");
+            createLabel.textContent = "Add reference";
+            create.append(createLabel);
+            create.open = this.#drafts.has(`new-reference:${selected.id}`);
+            const createForm = document.createElement("form");
+            createForm.setAttribute("aria-label", "Create reference");
+            const refreshNewTarget = appendTargetFields(document, createForm, undefined, snapshot.items, core);
+            createForm.append(textField(document, "Reference name (optional)", "name", ""));
+            createForm.querySelector('[name="name"]').maxLength = 200;
+            const add = actionButton(document, "Add reference", () => undefined, "primary");
+            add.type = "submit";
+            createForm.append(add);
+            this.#bindDraft(createForm, `new-reference:${selected.id}`, 0);
+            refreshNewTarget();
+            createForm.addEventListener("submit", event => { event.preventDefault(); void this.#addReference(selected, createForm); });
+            create.append(createForm);
+            section.append(create);
             for (const reference of snapshot.references.filter((entry) => entry.itemId === selected.id)) {
                 const form = document.createElement("form");
                 form.className = "dm-planner-annotation";
+                form.dataset["referenceId"] = reference.id;
                 form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveReference(reference, form, selected.id); });
+                form.append(targetLink(document, reference.target, snapshot.items, core, this.#contribution.addon.id));
+                const refreshTarget = appendTargetFields(document, form, reference.target, snapshot.items, core);
                 const relation = selectField(document, "Relation", "relation", reference.relation, [["related", "Related"], ["involves", "Involves"], ["features", "Features"], ["located-at", "Located at"], ["opposes", "Opposes"], ["supports", "Supports"], ["reveals", "Reveals"], ["requires", "Requires"], ["rewards", "Rewards"]]);
-                form.append(textField(document, "Reference", "name", reference.name), relation, textArea(document, "Notes", "notes", reference.notes, 2));
+                const quantity = textField(document, "Quantity", "quantity", String(reference.quantity));
+                const input = quantity.querySelector("input");
+                input.type = "number";
+                input.min = "1";
+                input.max = "1000";
+                input.step = "1";
+                input.required = true;
+                form.append(textField(document, "Reference", "name", reference.name), relation, quantity, textArea(document, "Notes", "notes", reference.notes, 2));
+                form.querySelector('[name="name"]').maxLength = 200;
+                form.querySelector('[name="notes"]').maxLength = 2000;
                 const save = actionButton(document, "Save reference", () => undefined, "primary");
                 save.type = "submit";
                 form.append(save, actionButton(document, "Delete reference", () => void this.#deleteRecord("planning_references", reference.id, "Reference deleted.", selected.id), "danger"));
                 section.append(form);
                 this.#bindDraft(form, `planning_references:${reference.id}`, snapshot.revisions.get(`planning_references:${reference.id}`));
+                refreshTarget();
             }
             section.append(actionButton(document, "Add consequence", () => void this.#addConsequence(selected)));
             const attachedFlows = snapshot.flows.filter(flow => flow.sourceId === selected.id || flow.targetId === selected.id);
@@ -454,10 +483,13 @@ export function definePlannerElement(generation) {
                 save.type = "submit";
                 form.append(save, actionButton(document, "Delete consequence", () => void this.#deleteRecord("planning_consequences", consequence.id, "Consequence deleted.", selected.id), "danger"));
                 section.append(form);
+                const refreshTarget = appendTargetFields(document, form, consequence.target, snapshot.items, core, true);
+                form.append(...form.querySelectorAll("button"));
                 this.#bindDraft(form, `planning_consequences:${consequence.id}`, snapshot.revisions.get(`planning_consequences:${consequence.id}`));
+                refreshTarget();
             }
             section.append(actionButton(document, "Add DM note", () => void this.#addNote(selected)));
-            for (const note of snapshot.notes.filter((entry) => entry.anchorIds.includes(selected.id))) {
+            for (const note of snapshot.notes.filter((entry) => entry.anchorIds.length === 0 || entry.anchorIds.includes(selected.id))) {
                 const form = document.createElement("form");
                 form.className = "dm-planner-annotation";
                 form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveNote(note, form, selected.id); });
@@ -466,7 +498,13 @@ export function definePlannerElement(generation) {
                 save.type = "submit";
                 form.append(save, actionButton(document, "Delete note", () => void this.#deleteRecord("dm_notes", note.id, "DM note deleted.", selected.id), "danger"));
                 section.append(form);
+                form.dataset["noteId"] = note.id;
+                if (note.anchorIds.length === 0)
+                    form.prepend(messageBlock(document, "Unanchored note — link it to a planning item below.", "status"));
+                const refreshAnchors = appendNoteAnchors(document, form, note.anchorIds, snapshot.items);
+                form.append(...form.querySelectorAll("button"));
                 this.#bindDraft(form, `dm_notes:${note.id}`, snapshot.revisions.get(`dm_notes:${note.id}`));
+                refreshAnchors();
             }
             return section;
         }
@@ -596,23 +634,50 @@ export function definePlannerElement(generation) {
             return; await this.#mutate(async (runtime) => runtime.repository.savePosition(snapshot, this.#scopeId, itemId, x, y), "Position saved.", itemId); }
         async #delete(item) { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(`Delete ${item.title} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links.`))
             return; await this.#mutate(async (runtime) => runtime.repository.deleteSubtree(snapshot, item.id), "Planning subtree deleted."); }
-        async #addReference(item, snapshot, targetId) {
-            const target = snapshot.items.find((candidate) => candidate.id === targetId && candidate.id !== item.id);
-            if (target === undefined) {
-                this.#message = "Choose an existing planning item to reference.";
-                this.#messageKind = "alert";
-                this.#render();
+        async #addReference(item, form) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
+            const data = new FormData(form);
+            const core = coreReferences(this.#contribution?.host);
+            let target;
+            try {
+                target = targetFromForm(data, snapshot.items, core);
+            }
+            catch (error) {
+                this.#invalid(error.message);
                 return;
             }
-            const reference = { id: `reference-${crypto.randomUUID()}`, schemaVersion: 3, itemId: item.id, name: target.title, relation: "related", target: { scope: "planning", itemId: target.id }, quantity: 1, notes: "", updatedAt: Date.now() };
-            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_references", reference, 0), "Planning reference added.", item.id);
+            const reference = { id: `reference-${crypto.randomUUID()}`, schemaVersion: 3, itemId: item.id, name: String(data.get("name") ?? "").trim() || targetLabel(target, snapshot.items, core), relation: "related", target, quantity: 1, notes: "", updatedAt: Date.now() };
+            await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_references", reference, 0), "Reference added.", item.id, `new-reference:${item.id}`);
         }
         async #addConsequence(item) { const consequence = { id: `consequence-${crypto.randomUUID()}`, schemaVersion: 3, anchor: { scope: "item", itemId: item.id }, kind: "world", title: "Planned consequence", body: "", updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_consequences", consequence, 0), "Consequence added.", item.id); }
         async #addNote(item) { const note = { id: `note-${crypto.randomUUID()}`, schemaVersion: 3, title: "DM note", body: "", anchorIds: [item.id], updatedAt: Date.now() }; await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "dm_notes", note, 0), "DM note added.", item.id); }
-        async #saveReference(reference, form, selectedId) { const data = new FormData(form); const next = { ...reference, name: String(data.get("name") ?? "").trim(), relation: String(data.get("relation") ?? "related"), notes: String(data.get("notes") ?? "").trim(), updatedAt: Date.now() }; if (next.name === "") {
-            this.#invalid("A reference name is required.");
-            return;
-        } await this.#putExisting("planning_references", next, form, selectedId, "Reference saved."); }
+        async #saveReference(reference, form, selectedId) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
+            const data = new FormData(form);
+            const quantity = Number(data.get("quantity"));
+            if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+                this.#invalid("Quantity must be a whole number from 1 to 1000.");
+                return;
+            }
+            let target;
+            try {
+                target = targetFromForm(data, snapshot.items, coreReferences(this.#contribution?.host), reference.target);
+            }
+            catch (error) {
+                this.#invalid(error.message);
+                return;
+            }
+            const next = { ...reference, target, quantity, name: String(data.get("name") ?? "").trim(), relation: String(data.get("relation") ?? "related"), notes: String(data.get("notes") ?? "").trim(), updatedAt: Date.now() };
+            if (next.name === "") {
+                this.#invalid("A reference name is required.");
+                return;
+            }
+            await this.#putExisting("planning_references", next, form, selectedId, "Reference saved.");
+        }
         async #saveConsequence(consequence, form, selectedId) {
             const snapshot = this.#snapshot;
             if (!snapshot)
@@ -625,17 +690,42 @@ export function definePlannerElement(generation) {
                 return;
             }
             const anchor = flow ? { scope: "flow", flowId: flow.id } : { scope: "item", itemId: selectedId };
-            const next = { ...consequence, anchor, title: String(data.get("title") ?? "").trim(), kind: String(data.get("kind") ?? "world"), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() };
+            let target;
+            try {
+                target = targetFromForm(data, snapshot.items, coreReferences(this.#contribution?.host), consequence.target, true);
+            }
+            catch (error) {
+                this.#invalid(error.message);
+                return;
+            }
+            const { target: previousTarget, ...base } = consequence;
+            const next = { ...base, ...(target ? { target } : {}), anchor, title: String(data.get("title") ?? "").trim(), kind: String(data.get("kind") ?? "world"), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() };
             if (next.title === "") {
                 this.#invalid("A consequence title is required.");
                 return;
             }
             await this.#putExisting("planning_consequences", next, form, selectedId, "Consequence saved.");
         }
-        async #saveNote(note, form, selectedId) { const data = new FormData(form); const next = { ...note, title: String(data.get("title") ?? "").trim(), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() }; if (next.title === "") {
-            this.#invalid("A DM note title is required.");
-            return;
-        } await this.#putExisting("dm_notes", next, form, selectedId, "DM note saved."); }
+        async #saveNote(note, form, selectedId) {
+            const snapshot = this.#snapshot;
+            if (!snapshot)
+                return;
+            const data = new FormData(form);
+            let anchorIds;
+            try {
+                anchorIds = noteAnchors(String(data.get("anchorIds")), snapshot.items);
+            }
+            catch (error) {
+                this.#invalid(error.message);
+                return;
+            }
+            const next = { ...note, anchorIds, title: String(data.get("title") ?? "").trim(), body: String(data.get("body") ?? "").trim(), updatedAt: Date.now() };
+            if (next.title === "") {
+                this.#invalid("A DM note title is required.");
+                return;
+            }
+            await this.#putExisting("dm_notes", next, form, selectedId, "DM note saved.");
+        }
         async #putExisting(collection, value, form, selectedId, success) {
             const revision = this.#drafts.revision(form);
             if (revision === undefined) {
@@ -664,7 +754,7 @@ export function definePlannerElement(generation) {
         }
         #removedDrafts(document, root, snapshot) {
             for (const [key, draft] of this.#drafts.entries()) {
-                if (key.startsWith("new-flow:") || snapshot.revisions.has(key))
+                if (key.startsWith("new-flow:") || key.startsWith("new-reference:") || snapshot.revisions.has(key))
                     continue;
                 const details = document.createElement("details");
                 const title = document.createElement("summary");
@@ -762,12 +852,3 @@ function flowKindOptions(source) { return source.kind === "branch" ? [["continue
 function flowDescription(snapshot, flow) { const source = snapshot.items.find(item => item.id === flow.sourceId); const target = snapshot.items.find(item => item.id === flow.targetId); return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`; }
 function actionButton(document, label, action, style) { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined)
     button.className = style; button.addEventListener("click", action); return button; }
-function option(document, value, label) { const item = document.createElement("option"); item.value = value; item.textContent = label; return item; }
-function textField(document, label, name, value) { const wrapper = document.createElement("label"); const text = document.createElement("span"); text.textContent = label; const input = document.createElement("input"); input.name = name; input.value = value; wrapper.append(text, input); return wrapper; }
-function textArea(document, label, name, value, rows) { const wrapper = document.createElement("label"); const text = document.createElement("span"); text.textContent = label; const input = document.createElement("textarea"); input.name = name; input.value = value; input.rows = rows; wrapper.append(text, input); return wrapper; }
-function selectField(document, label, name, value, options) { const wrapper = document.createElement("label"); const text = document.createElement("span"); text.textContent = label; const input = document.createElement("select"); input.name = name; input.setAttribute("aria-label", label); for (const [optionValue, optionLabel] of options) {
-    const entry = option(document, optionValue, optionLabel);
-    entry.selected = optionValue === value;
-    input.append(entry);
-} wrapper.append(text, input); return wrapper; }
-function messageBlock(document, message, role) { const block = document.createElement("div"); block.className = `dm-tools-message ${role}`; block.setAttribute("role", role); block.textContent = message; return block; }

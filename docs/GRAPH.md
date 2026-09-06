@@ -95,3 +95,20 @@ and requires Reload; it does not automatically retry with newer revisions.
 This deliberately also conflicts on unrelated edits in another planner view.
 Hosts that omit collection revisions cannot enable planner writes. These guards
 cover add-on collections, not changes to core records referenced by the planner.
+
+`planner-targets.ts` validates the public route reference catalog and target
+form values. The manifest requests read access only to the six core collections
+accepted by the planning target schema. The host supplies role-visible names
+and links; the package never queries host-private endpoints or DOM. Saved
+unavailable targets are retained on unrelated edits, while new core/planning
+targets must be selectable. External targets require explicit add-on, kind,
+record ID and label; no external URL is inferred. Consequences can clear their
+optional target. Reference quantity is an integer from 1 to 1,000.
+
+`planner-note-anchors.ts` exposes note anchors as a bounded checkbox list backed
+by one named draft value. Duplicate, missing or more than 100 anchors fail
+before writing. An empty anchor set is valid: those notes appear with an
+unanchored notice in the selected item's annotations and can be linked again.
+Saving links never changes the referenced items. Target switches retain hidden
+field drafts, and all annotation writes retain exact opening revisions and
+the six collection guards.
