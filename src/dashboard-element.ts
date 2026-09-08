@@ -2,6 +2,7 @@ import { dashboardLocale, dashboardText, plannerLink, planningImportStatus, summ
 import type { PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
+import { LiveRefresh } from "./live-refresh.js";
 
 export function defineDashboardElement(generation: string): string {
   const tag = `dm-tools-dashboard-${generation}`;
@@ -13,16 +14,26 @@ export function defineDashboardElement(generation: string): string {
     #locale: DashboardLocale = "en";
     #status: "loading" | "ready" | "error" = "loading";
     #provider: "ready" | "missing" | "error" = "ready";
+    #live: LiveRefresh | undefined;
+    #unsubscribe: (() => void) | undefined;
     set codexContribution(value: ContributionContext) {
       const previous = this.#context; this.#context = value;
       const locale = dashboardLocale(value.host), changed = locale !== this.#locale; this.#locale = locale;
       if (!this.isConnected) return;
-      if (previous?.addon.generation !== value.addon.generation) void this.#load();
+      if (previous?.addon.generation !== value.addon.generation) this.#connect();
       else if (changed) this.#render();
     }
-    connectedCallback(): void { this.classList.add("dm-tools-dashboard"); void this.#load(); }
-    disconnectedCallback(): void { this.#request?.abort(); this.#request = undefined; }
+    connectedCallback(): void { this.classList.add("dm-tools-dashboard"); this.#connect(); }
+    disconnectedCallback(): void { this.#unsubscribe?.(); this.#live?.dispose(); this.#request?.abort(); this.#request = undefined; }
+    #connect(): void {
+      this.#unsubscribe?.(); this.#live?.dispose();
+      const context = this.#context, runtime = context && runtimeFor(context.addon.generation);
+      this.#live = new LiveRefresh(() => this.#status !== "loading", () => void this.#load());
+      if (context && runtime) this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), context.signal);
+      void this.#load();
+    }
     async #load(): Promise<void> {
+      this.#live?.consume();
       this.#request?.abort(); const request = new AbortController(); this.#request = request;
       this.#status = "loading"; this.#render();
       const context = this.#context, runtime = context && runtimeFor(context.addon.generation);
@@ -35,7 +46,7 @@ export function defineDashboardElement(generation: string): string {
         if (request.signal.aborted || this.#request !== request || !this.isConnected) return;
         this.#snapshot = undefined; this.#status = "error";
       }
-      if (this.#request === request && this.isConnected) this.#render();
+      if (this.#request === request && this.isConnected) { this.#render(); this.#live?.wake(); }
     }
     #render(): void {
       const document = this.ownerDocument, root = document.createElement("div"); root.className = "dm-dashboard-stack";

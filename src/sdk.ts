@@ -1,4 +1,5 @@
 export interface AddonDocument<T> { readonly key: string; readonly revision: number; readonly value: T }
+export type DataChange = { readonly reason: "reset" } | { readonly reason: "changed"; readonly kind: DataKind; readonly dataId: string };
 export interface QueryResult<T> { readonly documents: readonly AddonDocument<T>[]; readonly nextCursor?: string; readonly dataRevision?: number }
 export interface DataSetRevision { readonly kind: DataKind; readonly dataId: string; readonly revision: number }
 export type DataKind = "collection" | "record-extension";
@@ -22,6 +23,7 @@ export interface AddonContext {
   readonly signal: AbortSignal;
   readonly capabilities: { require(id: string): void };
   readonly data: {
+    subscribe?(listener: (change: DataChange) => void, options?: { readonly signal?: AbortSignal }): () => void;
     collection<T>(id: string): CollectionHandle<T>;
     transact(mutations: readonly DataMutation[], options?: { readonly signal?: AbortSignal; readonly expectedDataSets?: readonly DataSetRevision[] }): Promise<CommitReceipt>;
   };

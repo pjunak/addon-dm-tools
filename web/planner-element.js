@@ -4,7 +4,8 @@ import { appendNoteAnchors, noteAnchors } from "./planner-note-anchors.js";
 import { option, textField, textArea, selectField, messageBlock } from "./planner-fields.js";
 import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning } from "./planning-model.js";
 import { runtimeFor } from "./runtime.js";
-import { plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
+import { dashboardLocale, plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
+import { LiveRefresh } from "./live-refresh.js";
 import { PlannerDrafts } from "./planner-drafts.js";
 export const plannerElementTag = "dm-tools-planner-page";
 const cardWidth = 240;
@@ -34,6 +35,35 @@ export function definePlannerElement(generation) {
         #canvasViews = new Map();
         #fullscreen = false;
         #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
+        #live;
+        #unsubscribe;
+        #pointers = new Set();
+        #wakeLive = () => { this.#live?.wake(); };
+        #pointerStart = (event) => { this.#pointers.add(event.pointerId); };
+        #pointerEnd = (event) => { this.#pointers.delete(event.pointerId); this.#live?.wake(); };
+        #liveSafe() {
+            const focused = this.ownerDocument.activeElement;
+            return !this.#needsReload && !this.#pointers.size && ![...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)) &&
+                !(focused && this.contains(focused) && focused.matches("input,textarea,select"));
+        }
+        #liveNotice() {
+            // Keep the canvas geometry fixed until an active pointer gesture finishes.
+            if (this.#pointers.size)
+                return;
+            let notice = this.querySelector("[data-live-refresh]");
+            if (!this.#live?.pending) {
+                notice?.remove();
+                return;
+            }
+            if (!notice) {
+                notice = messageBlock(this.ownerDocument, "", "status");
+                notice.dataset["liveRefresh"] = "";
+                this.querySelector(".dm-planner-shell > header")?.after(notice);
+            }
+            notice.textContent = dashboardLocale(this.#contribution?.host) === "cs"
+                ? "Plánování se změnilo. Obnovte plánovač, až budete připraveni; rozepsané úpravy zůstanou zachovány."
+                : "Planning data changed. Reload when ready; your unsaved edits will be retained.";
+        }
         set codexContribution(value) {
             const previous = this.#contribution;
             this.#contribution = value;
@@ -60,8 +90,29 @@ export function definePlannerElement(generation) {
             }
         }
         #fullscreenChanged = () => { this.#fullscreen = this.ownerDocument.fullscreenElement === this; this.#render(); this.querySelector("[data-expand-planner]")?.focus(); };
-        connectedCallback() { this.addEventListener("fullscreenchange", this.#fullscreenChanged); this.classList.add("dm-tools-planner"); void this.#connect(); }
-        disconnectedCallback() { this.removeEventListener("fullscreenchange", this.#fullscreenChanged); this.#readRequest?.abort(); this.#readRequest = undefined; this.#runtime = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false }); }
+        connectedCallback() {
+            this.addEventListener("fullscreenchange", this.#fullscreenChanged);
+            this.addEventListener("focusout", this.#wakeLive);
+            this.addEventListener("pointerdown", this.#pointerStart, true);
+            for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+                this.ownerDocument.addEventListener(type, this.#pointerEnd, true);
+            this.classList.add("dm-tools-planner");
+            void this.#connect();
+        }
+        disconnectedCallback() {
+            this.removeEventListener("fullscreenchange", this.#fullscreenChanged);
+            this.removeEventListener("focusout", this.#wakeLive);
+            this.removeEventListener("pointerdown", this.#pointerStart, true);
+            for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+                this.ownerDocument.removeEventListener(type, this.#pointerEnd, true);
+            this.#pointers.clear();
+            this.#unsubscribe?.();
+            this.#live?.dispose();
+            this.#readRequest?.abort();
+            this.#readRequest = undefined;
+            this.#runtime = undefined;
+            this.#contribution?.edits?.set({ dirty: false, saving: false });
+        }
         async #connect() {
             const contribution = this.#contribution;
             if (contribution === undefined) {
@@ -93,26 +144,39 @@ export function definePlannerElement(generation) {
             this.#drafts.clearAll();
             this.#committedDrafts.clear();
             this.#needsReload = false;
+            this.#unsubscribe?.();
+            this.#live?.dispose();
             this.#runtime = runtime;
+            this.#live = new LiveRefresh(() => { this.#liveNotice(); return !this.#busy && this.#liveSafe(); }, () => void this.#reload(undefined, true), () => this.#liveNotice());
+            this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), contribution.signal);
             await this.#reload("Loading story planner…");
         }
-        async #reload(loading) {
+        async #reload(loading, live = false) {
             const runtime = this.#runtime;
             if (runtime === undefined || this.#busy)
                 return;
             const request = new AbortController();
             this.#readRequest?.abort();
             this.#readRequest = request;
+            this.#live?.consume();
+            let render = !live;
             this.#busy = true;
             if (loading !== undefined) {
                 this.#message = loading;
                 this.#messageKind = "status";
             }
-            this.#render();
+            if (!live)
+                this.#render();
             try {
                 const snapshot = await runtime.repository.load(request.signal);
                 if (this.#runtime !== runtime || this.#readRequest !== request || request.signal.aborted || !this.isConnected)
                     return;
+                // An edit or drag can start while the automatic HTTP read is in flight.
+                if (live && !this.#liveSafe()) {
+                    this.#live?.invalidate();
+                    return;
+                }
+                render = true;
                 this.#snapshot = snapshot;
                 this.#acceptCommittedDrafts();
                 this.#needsReload = false;
@@ -120,7 +184,8 @@ export function definePlannerElement(generation) {
                     this.#scopeId = null;
                 if (this.#selectedId !== undefined && !this.#snapshot.items.some((item) => item.id === this.#selectedId))
                     this.#selectedId = undefined;
-                this.#message = "";
+                if (!live)
+                    this.#message = "";
                 if (this.#targetPending)
                     this.#applyTarget();
                 else {
@@ -133,6 +198,7 @@ export function definePlannerElement(generation) {
             }
             catch (error) {
                 if (!request.signal.aborted && this.#runtime === runtime) {
+                    render = true;
                     this.#needsReload = true;
                     this.#fail(error, "Could not load planning data.");
                 }
@@ -140,7 +206,9 @@ export function definePlannerElement(generation) {
             finally {
                 if (this.#runtime === runtime && this.#readRequest === request && !request.signal.aborted && this.isConnected) {
                     this.#busy = false;
-                    this.#render();
+                    if (render)
+                        this.#render();
+                    this.#live?.wake();
                 }
             }
         }
@@ -213,6 +281,7 @@ export function definePlannerElement(generation) {
             workspace.append(this.#atlas(document), this.#canvas(document, snapshot), this.#inspector(document, snapshot));
             root.append(workspace);
             this.replaceChildren(root);
+            this.#liveNotice();
             const viewport = root.querySelector(".dm-planner-viewport");
             const view = this.#canvasView();
             viewport.scrollLeft = view.x;
@@ -910,6 +979,7 @@ export function definePlannerElement(generation) {
         #syncEdits() {
             const dirty = [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
             this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
+            this.#live?.wake();
         }
         async #mutate(operation, success, selected, draftKey) {
             const runtime = this.#runtime;
@@ -932,6 +1002,7 @@ export function definePlannerElement(generation) {
                 const request = new AbortController();
                 this.#readRequest?.abort();
                 this.#readRequest = request;
+                this.#live?.consume();
                 const snapshot = await runtime.repository.load(request.signal);
                 if (this.#runtime !== runtime || request.signal.aborted || !this.isConnected)
                     return false;

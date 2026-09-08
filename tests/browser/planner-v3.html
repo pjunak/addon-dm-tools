@@ -55,7 +55,7 @@
     const signal = new AbortController().signal;
     const generation = "a".repeat(64);
     registerRuntime(generation, {
-      repository: { load: async () => snapshot },
+      repository: { load: async () => snapshot, subscribe: () => () => {} },
       adapters: { available: false, providers: [], call: async () => { throw new Error("No adapters in rendering fixture"); } },
       signal,
     });

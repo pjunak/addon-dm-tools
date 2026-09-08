@@ -1,5 +1,6 @@
 import { dashboardLocale, dashboardText, plannerLink, planningImportStatus, summarizePlanning } from "./dashboard-model.js";
 import { runtimeFor } from "./runtime.js";
+import { LiveRefresh } from "./live-refresh.js";
 export function defineDashboardElement(generation) {
     const tag = `dm-tools-dashboard-${generation}`;
     if (customElements.get(tag))
@@ -11,6 +12,8 @@ export function defineDashboardElement(generation) {
         #locale = "en";
         #status = "loading";
         #provider = "ready";
+        #live;
+        #unsubscribe;
         set codexContribution(value) {
             const previous = this.#context;
             this.#context = value;
@@ -19,13 +22,23 @@ export function defineDashboardElement(generation) {
             if (!this.isConnected)
                 return;
             if (previous?.addon.generation !== value.addon.generation)
-                void this.#load();
+                this.#connect();
             else if (changed)
                 this.#render();
         }
-        connectedCallback() { this.classList.add("dm-tools-dashboard"); void this.#load(); }
-        disconnectedCallback() { this.#request?.abort(); this.#request = undefined; }
+        connectedCallback() { this.classList.add("dm-tools-dashboard"); this.#connect(); }
+        disconnectedCallback() { this.#unsubscribe?.(); this.#live?.dispose(); this.#request?.abort(); this.#request = undefined; }
+        #connect() {
+            this.#unsubscribe?.();
+            this.#live?.dispose();
+            const context = this.#context, runtime = context && runtimeFor(context.addon.generation);
+            this.#live = new LiveRefresh(() => this.#status !== "loading", () => void this.#load());
+            if (context && runtime)
+                this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), context.signal);
+            void this.#load();
+        }
         async #load() {
+            this.#live?.consume();
             this.#request?.abort();
             const request = new AbortController();
             this.#request = request;
@@ -48,8 +61,10 @@ export function defineDashboardElement(generation) {
                 this.#snapshot = undefined;
                 this.#status = "error";
             }
-            if (this.#request === request && this.isConnected)
+            if (this.#request === request && this.isConnected) {
                 this.#render();
+                this.#live?.wake();
+            }
         }
         #render() {
             const document = this.ownerDocument, root = document.createElement("div");

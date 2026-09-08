@@ -12,6 +12,11 @@ export class PlanningRepository {
     this.#context = context;
     this.#handles = Object.fromEntries(collections.map((id) => [id, context.data.collection<Stored>(id)])) as Record<CollectionId, CollectionHandle<Stored>>;
   }
+  subscribe(listener: () => void, signal: AbortSignal): () => void {
+    return this.#context.data.subscribe?.(change => {
+      if (change.reason === "reset" || (change.kind === "collection" && collections.some(id => id === change.dataId))) listener();
+    }, { signal: AbortSignal.any([signal, this.#context.signal]) }) ?? (() => undefined);
+  }
   async load(signal: AbortSignal = this.#context.signal): Promise<PlanningSnapshot> {
     signal = AbortSignal.any([this.#context.signal, signal]);
     signal.throwIfAborted();

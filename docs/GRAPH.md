@@ -122,3 +122,14 @@ unanchored notice in the selected item's annotations and can be linked again.
 Saving links never changes the referenced items. Target switches retain hidden
 field drafts, and all annotation writes retain exact opening revisions and
 the six collection guards.
+
+The repository subscribes to the host's optional `data.subscribe` invalidations
+for all six planning collections and connection/recovery resets. Planner and
+dashboard coalesce bursts and dispose subscriptions/timers when unmounted.
+Older hosts retain manual reload. A clean planner reload preserves scope,
+selection, zoom and scroll position. Active fields, drafts and pointer gestures
+defer refresh with an English/Czech notice. A read that finishes after typing or
+a drag began is also deferred. Reload never replaces a draft's opening revision;
+stale saves still fail atomically. Failed reads expose the existing Reload path
+without starting an automatic retry loop. Confirmed writes consume notifications
+before their post-save read; events received during that read remain pending.

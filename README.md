@@ -12,8 +12,8 @@ TTRPG Codex. Version 3 is a clean Add-on API v3 package:
 The DM panel includes the original planning overview: total items, plotlines,
 quests, encounters and marginalia, links to the planner and Import Center, and
 the twelve most recently changed items. It follows the host's English/Czech
-language and dark/gold presentation. Counts reload on entry or **Refresh
-overview**. Failed reads retain tool links and a retry; unavailable import
+language and dark/gold presentation. Counts reload on entry, **Refresh
+overview**, and live planning changes, including completed imports. Failed reads retain tool links and a retry; unavailable import
 providers do not prevent direct planning edits. Import availability follows
 advertised formats, independently of provider add-on IDs.
 
