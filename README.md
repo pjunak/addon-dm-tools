@@ -93,7 +93,13 @@ F fits. Each canvas keeps its zoom and scroll position while the planner stays
 open, including selection, refresh, saved changes and navigation to another
 canvas. Zoom lays out native text and geometry directly. Card drags convert
 screen movement back to saved coordinates, and distant or negative saved
-positions remain reachable. Controls follow the host's English/Czech language.
+positions remain reachable. The planner follows the host's English/Czech language
+for navigation, creation and editing, annotations, flow actions, shortcuts,
+validation and recovery. Changing language preserves the mounted planner, its
+open draft, and saved record identities. Authored titles and notes remain in their
+original language. Package-owned errors choose their translation in the receiving
+view; provider diagnostics are not rewritten. `src/planner-catalogs.ts` owns these
+messages, while dashboard and Import Center messages remain in their own catalogs.
 
 The original **Kind** and **Parent** controls are available in item details.
 Move an item to the campaign root or another plotline/quest, or change its kind;
@@ -142,8 +148,8 @@ native scale. Leaving the planner or signing out asks before discarding drafts;
 browser reload/close uses the host's unsaved-edit warning. Saves in progress
 block navigation until their outcome is known. Canceling keeps the current
 view and all its drafts; confirming discards them. Drafts are not persisted
-across an accepted reload or forced package/authority teardown. Broader
-interaction parity and full localization remain in the suite backlog.
+across an accepted reload or forced package/authority teardown. Final campaign
+and visual acceptance remains in the suite backlog.
 
 Planner canvas links use `#/addons/dm-tools/planner?item=<id>`. Containers open
 their own canvas; events and branches open their parent and select the linked

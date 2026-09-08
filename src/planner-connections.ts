@@ -1,4 +1,7 @@
+import { plannerTranslator, type PlannerTranslator } from "./planner-catalogs.js";
+
 interface ConnectionOptions {
+  t?: PlannerTranslator;
   viewport: HTMLElement; stage: HTMLElement; svg: SVGSVGElement; zoom: number;
   available: () => boolean; active: (value: boolean) => void;
   connect: (source: string, target: string) => void;
@@ -6,6 +9,7 @@ interface ConnectionOptions {
 
 // A connection stays local until a complete gesture chooses a different card.
 export function mountCanvasConnections(options: ConnectionOptions): { start: (id: string) => void; dispose: () => void } {
+  const t = options.t ?? plannerTranslator();
   const { viewport, stage, svg, zoom } = options, document = stage.ownerDocument;
   const cards = new Map([...stage.querySelectorAll<HTMLElement>("[data-item-id]")].map(card => [card.dataset["itemId"]!, card]));
   let source: string | undefined, pointer: number | undefined, startX = 0, startY = 0, moved = false, suppressClick = false;
@@ -28,7 +32,7 @@ export function mountCanvasConnections(options: ConnectionOptions): { start: (id
   const start = (id: string): void => {
     if (!options.available() || !cards.has(id)) return; cancel(); source = id; options.active(true);
     const card = cards.get(id)!; card.classList.add("connecting"); preview.removeAttribute("hidden");
-    notice.textContent = `Connect from ${card.getAttribute("aria-label")}. Choose another card; Escape cancels.`; notice.hidden = false;
+    notice.textContent = t("Connect from {0}. Choose another card; Escape cancels.", { "0": card.getAttribute("aria-label") }); notice.hidden = false;
     const box = card.getBoundingClientRect(); paint(box.right + 60, box.top + box.height / 2);
   };
   const finish = (target?: string): void => {

@@ -1,5 +1,7 @@
+import { plannerTranslator } from "./planner-catalogs.js";
 // A connection stays local until a complete gesture chooses a different card.
 export function mountCanvasConnections(options) {
+    const t = options.t ?? plannerTranslator();
     const { viewport, stage, svg, zoom } = options, document = stage.ownerDocument;
     const cards = new Map([...stage.querySelectorAll("[data-item-id]")].map(card => [card.dataset["itemId"], card]));
     let source, pointer, startX = 0, startY = 0, moved = false, suppressClick = false;
@@ -42,7 +44,7 @@ export function mountCanvasConnections(options) {
         const card = cards.get(id);
         card.classList.add("connecting");
         preview.removeAttribute("hidden");
-        notice.textContent = `Connect from ${card.getAttribute("aria-label")}. Choose another card; Escape cancels.`;
+        notice.textContent = t("Connect from {0}. Choose another card; Escape cancels.", { "0": card.getAttribute("aria-label") });
         notice.hidden = false;
         const box = card.getBoundingClientRect();
         paint(box.right + 60, box.top + box.height / 2);

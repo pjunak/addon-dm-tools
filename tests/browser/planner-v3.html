@@ -61,7 +61,8 @@
     });
     definePlannerElement();
     const planner = document.createElement("dm-tools-planner-page");
-    planner.codexContribution = { addon: { id: "dm-tools", generation }, contribution: { id: "planner.route", config: {} }, signal, edits: { set() {} } };
+    const contribution = { addon: { id: "dm-tools", generation }, contribution: { id: "planner.route", config: {} }, signal, edits: { set() {} } };
+    planner.codexContribution = contribution;
     document.querySelector("#fixture").append(planner);
 
     for (let attempt = 0; attempt < 60 && planner.querySelectorAll(".dm-plan-card").length !== 2; attempt += 1) {
@@ -103,6 +104,17 @@
         check(`card ${index + 1} title uses whole device pixels`, closeTo(titleSize, Math.round(titleSize), 0.001), titleSize, Math.round(titleSize));
       }
 
+      cards[0].dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      const titleInput = planner.querySelector('dialog input[name="title"]');
+      titleInput.value = "Title {0} $&"; titleInput.dispatchEvent(new Event("input", { bubbles: true }));
+      planner.codexContribution = { ...contribution, host: { locale: "cs" } };
+      check("locale refresh retains the mounted planner", document.querySelector("dm-tools-planner-page") === planner, planner.isConnected, true);
+      check("locale refresh retains a named editor draft", planner.querySelector('dialog input[name="title"]')?.value === "Title {0} $&", planner.querySelector('dialog input[name="title"]')?.value, "Title {0} $&");
+      check("locale refresh translates the open dialog", planner.querySelector('dialog')?.getAttribute("aria-label") === "Upravit plánovací položku", planner.querySelector('dialog')?.getAttribute("aria-label"), "Upravit plánovací položku");
+      check("locale refresh translates the form label", planner.querySelector('dialog form')?.getAttribute("aria-label") === "Podrobnosti plánovací položky", planner.querySelector('dialog form')?.getAttribute("aria-label"), "Podrobnosti plánovací položky");
+      check("locale refresh keeps authored cards unchanged", planner.querySelector('.dm-plan-card h3')?.textContent === "The silver road", planner.querySelector('.dm-plan-card h3')?.textContent, "The silver road");
+      planner.codexContribution = contribution;
+      check("English can be restored without losing edits", planner.querySelector('dialog input[name="title"]')?.value === "Title {0} $&" && planner.querySelector('dialog')?.getAttribute("aria-label") === "Edit planning item", planner.querySelector('dialog')?.getAttribute("aria-label"), "Edit planning item");
       return { name: "DM Tools planner v3 rendering", checks };
     };
   </script>

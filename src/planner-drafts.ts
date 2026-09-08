@@ -1,3 +1,4 @@
+import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
 interface Draft {
   readonly revision: number | undefined;
   readonly baseline: Record<string, string>;
@@ -12,7 +13,7 @@ export class PlannerDrafts {
 
   constructor(changed: () => void = () => undefined) { this.#changed = changed; }
 
-  bind(form: HTMLFormElement, key: string, revision: number | undefined): void {
+  bind(form: HTMLFormElement, key: string, revision: number | undefined, t: PlannerTranslator = plannerTranslator()): void {
     const existing = this.#drafts.get(key);
     const baseline = existing?.baseline ?? valuesOf(form);
     const openingRevision = existing ? existing.revision : revision;
@@ -22,7 +23,7 @@ export class PlannerDrafts {
         const value = existing.values[control.name]!;
         // A removed destination must not silently turn into an empty/root choice.
         if (control.tagName === "SELECT" && !Array.from((control as HTMLSelectElement).options).some(option => option.value === value)) {
-          const missing = form.ownerDocument.createElement("option"); missing.value = value; missing.textContent = `Unavailable: ${value}`; control.append(missing);
+          const missing = form.ownerDocument.createElement("option"); missing.value = value; missing.textContent = t("Unavailable: {0}", { "0": value }); control.append(missing);
         }
         control.value = value;
       }

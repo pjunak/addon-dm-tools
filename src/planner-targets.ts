@@ -1,3 +1,4 @@
+import { PlannerError, type PlannerTranslator, plannerTranslator, plannerLabel } from "./planner-catalogs.js";
 import type { PlanningItem } from "./planning-model.js";
 import { messageBlock, selectField, textField } from "./planner-fields.js";
 
@@ -22,11 +23,11 @@ export function coreReferences(host: unknown): CoreReferences {
   return { records, ready: value.ready, truncated: value.truncated };
 }
 
-export function targetLabel(target: Target | undefined, items: readonly PlanningItem[], core: CoreReferences): string {
-  if (!target) return "No target";
-  if (target["scope"] === "planning") return items.find(item => item.id === target["itemId"])?.title ?? `Unavailable planning item: ${String(target["itemId"])}`;
-  if (target["scope"] === "core") return core.records.find(record => record.collection === target["collection"] && record.id === target["id"])?.label ?? `Unavailable ${String(target["collection"])}: ${String(target["id"])}`;
-  return String(target["label"] ?? target["id"] ?? "External record");
+export function targetLabel(target: Target | undefined, items: readonly PlanningItem[], core: CoreReferences, t: PlannerTranslator = plannerTranslator()): string {
+  if (!target) return t("No target");
+  if (target["scope"] === "planning") return items.find(item => item.id === target["itemId"])?.title ?? t("Unavailable planning item: {0}", { "0": String(target["itemId"]) });
+  if (target["scope"] === "core") return core.records.find(record => record.collection === target["collection"] && record.id === target["id"])?.label ?? t("Unavailable {0}: {1}", { "0": plannerLabel(String(target["collection"]), t), "1": String(target["id"]) });
+  return String(target["label"] ?? target["id"] ?? t("External record"));
 }
 
 export function targetFromForm(data: FormData, items: readonly PlanningItem[], core: CoreReferences, current?: Target, optional = false): Target | undefined {
@@ -36,38 +37,38 @@ export function targetFromForm(data: FormData, items: readonly PlanningItem[], c
   if (scope === "planning") {
     const itemId = text("targetPlanningId");
     if (validId(itemId) && (items.some(item => item.id === itemId) || (current?.["scope"] === scope && current["itemId"] === itemId))) return { scope, itemId };
-    throw new Error("Choose an existing planning item as the target.");
+    throw new PlannerError("Choose an existing planning item as the target.");
   }
   if (scope === "core") {
     const key = text("targetCoreId");
     const record = core.records.find(record => JSON.stringify([record.collection, record.id]) === key);
     if (record) return { scope, collection: record.collection, id: record.id };
     if (current?.["scope"] === scope && JSON.stringify([current["collection"], current["id"]]) === key) return current;
-    throw new Error("Choose an available campaign record as the target.");
+    throw new PlannerError("Choose an available campaign record as the target.");
   }
   if (scope === "external") {
     const addonId = text("targetAddonId"), kind = text("targetKind"), id = text("targetRecordId"), label = text("targetLabel");
     if (/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(addonId) && addonId.length <= 80 && kind.length > 0 && kind.length <= 80 && validId(id) && label.length > 0 && label.length <= 200) return { scope, addonId, kind, id, label };
-    throw new Error("Enter an add-on ID, record kind, record ID, and label for the external target.");
+    throw new PlannerError("Enter an add-on ID, record kind, record ID, and label for the external target.");
   }
-  throw new Error("Choose a target type.");
+  throw new PlannerError("Choose a target type.");
 }
 
 /** All fields stay in the form so switching target types cannot erase a draft. */
-export function appendTargetFields(document: Document, form: HTMLFormElement, current: Target | undefined, items: readonly PlanningItem[], core: CoreReferences, optional = false): () => void {
-  const scope = selectField(document, "Target type", "targetScope", String(current?.["scope"] ?? (optional ? "none" : "planning")), [
-    ...(optional ? [["none", "No target"] as const] : []), ["planning", "Planning item"], ["core", "Campaign record"], ["external", "External add-on record"],
+export function appendTargetFields(document: Document, form: HTMLFormElement, current: Target | undefined, items: readonly PlanningItem[], core: CoreReferences, optional = false, t: PlannerTranslator = plannerTranslator()): () => void {
+  const scope = selectField(document, t("Target type"), "targetScope", String(current?.["scope"] ?? (optional ? "none" : "planning")), [
+    ...(optional ? [["none", t("No target")] as const] : []), ["planning", t("Planning item")], ["core", t("Campaign record")], ["external", t("External add-on record")],
   ]);
   const planning = document.createElement("div"), campaign = document.createElement("div"), external = document.createElement("div");
   const planningOptions = items.map(item => [item.id, item.title] as [string, string]);
-  if (current?.["scope"] === "planning" && !items.some(item => item.id === current["itemId"])) planningOptions.push([String(current["itemId"]), targetLabel(current, items, core)]);
-  planning.append(selectField(document, "Planning target", "targetPlanningId", String(current?.["itemId"] ?? ""), [["", "Choose a planning item…"], ...planningOptions]));
-  const coreOptions = core.records.map(record => [JSON.stringify([record.collection, record.id]), `${record.collection} — ${record.label}`] as [string, string]);
+  if (current?.["scope"] === "planning" && !items.some(item => item.id === current["itemId"])) planningOptions.push([String(current["itemId"]), targetLabel(current, items, core, t)]);
+  planning.append(selectField(document, t("Planning target"), "targetPlanningId", String(current?.["itemId"] ?? ""), [["", t("Choose a planning item…")], ...planningOptions]));
+  const coreOptions = core.records.map(record => [JSON.stringify([record.collection, record.id]), `${plannerLabel(record.collection, t)} — ${record.label}`] as [string, string]);
   const coreKey = current?.["scope"] === "core" ? JSON.stringify([current["collection"], current["id"]]) : "";
-  if (coreKey && !coreOptions.some(([key]) => key === coreKey)) coreOptions.push([coreKey, targetLabel(current, items, core)]);
-  campaign.append(selectField(document, "Campaign target", "targetCoreId", coreKey, [["", "Choose a campaign record…"], ...coreOptions]));
-  if (!core.ready || core.truncated) campaign.append(messageBlock(document, core.ready ? "Some campaign records are outside this list. Existing saved targets are retained." : "Campaign record choices are unavailable. Existing saved targets are retained.", "status"));
-  for (const [label, name, key, limit] of [["Add-on ID", "targetAddonId", "addonId", 80], ["Record kind", "targetKind", "kind", 80], ["Record ID", "targetRecordId", "id", 120], ["Target label", "targetLabel", "label", 200]] as const) {
+  if (coreKey && !coreOptions.some(([key]) => key === coreKey)) coreOptions.push([coreKey, targetLabel(current, items, core, t)]);
+  campaign.append(selectField(document, t("Campaign target"), "targetCoreId", coreKey, [["", t("Choose a campaign record…")], ...coreOptions]));
+  if (!core.ready || core.truncated) campaign.append(messageBlock(document, core.ready ? t("Some campaign records are outside this list. Existing saved targets are retained.") : t("Campaign record choices are unavailable. Existing saved targets are retained."), "status"));
+  for (const [label, name, key, limit] of [[t("Add-on ID"), "targetAddonId", "addonId", 80], [t("Record kind"), "targetKind", "kind", 80], [t("Record ID"), "targetRecordId", "id", 120], [t("Target label"), "targetLabel", "label", 200]] as const) {
     const field = textField(document, label, name, current?.["scope"] === "external" ? String(current[key] ?? "") : ""); field.querySelector("input")!.maxLength = limit; external.append(field);
   }
   form.append(scope, planning, campaign, external);
@@ -75,8 +76,8 @@ export function appendTargetFields(document: Document, form: HTMLFormElement, cu
   scope.addEventListener("change", refresh); return refresh;
 }
 
-export function targetLink(document: Document, target: Target, items: readonly PlanningItem[], core: CoreReferences, addonId: string): HTMLElement {
-  const label = targetLabel(target, items, core);
+export function targetLink(document: Document, target: Target, items: readonly PlanningItem[], core: CoreReferences, addonId: string, t: PlannerTranslator = plannerTranslator()): HTMLElement {
+  const label = targetLabel(target, items, core, t);
   const href = target["scope"] === "planning" && items.some(item => item.id === target["itemId"])
     ? `#/addons/${encodeURIComponent(addonId)}/planner?item=${encodeURIComponent(String(target["itemId"]))}`
     : target["scope"] === "core" ? core.records.find(record => record.collection === target["collection"] && record.id === target["id"])?.href : undefined;

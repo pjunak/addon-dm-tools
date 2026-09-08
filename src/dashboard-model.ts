@@ -1,3 +1,4 @@
+import { PlannerError } from "./planner-catalogs.js";
 import type { PlanningDataset, PlanningItem } from "./planning-model.js";
 import type { ServiceHandle } from "./sdk.js";
 import { en, cs } from "./dashboard-catalogs.js";
@@ -22,17 +23,17 @@ export function plannerLink(addonId: string, itemId?: string): string {
 export function plannerTarget(host: unknown): string | undefined {
   if (typeof host !== "object" || host === null || !("contractVersion" in host) || host.contractVersion !== "addon-route-context.v1") return undefined;
   const query = "query" in host ? host.query : undefined;
-  if (!Array.isArray(query) || query.length > 1) throw new Error("Invalid planner link.");
+  if (!Array.isArray(query) || query.length > 1) throw new PlannerError("Invalid planner link.");
   if (query.length === 0) return undefined;
   const pair: unknown = query[0];
   if (!Array.isArray(pair) || pair.length !== 2 || pair[0] !== "item" || typeof pair[1] !== "string" ||
-      !/^[a-z0-9][a-z0-9._-]{0,119}$/u.test(pair[1]) || ["__proto__", "prototype", "constructor"].includes(pair[1])) throw new Error("Invalid planner link.");
+      !/^[a-z0-9][a-z0-9._-]{0,119}$/u.test(pair[1]) || ["__proto__", "prototype", "constructor"].includes(pair[1])) throw new PlannerError("Invalid planner link.");
   return pair[1];
 }
 export function plannerSelection(items: readonly PlanningItem[], id: string | undefined) {
   if (id === undefined) return { scopeId: null, selectedId: undefined };
   const item = items.find(item => item.id === id);
-  if (!item) throw new Error("This planning item no longer exists.");
+  if (!item) throw new PlannerError("This planning item no longer exists.");
   return item.kind === "plotline" || item.kind === "quest" ? { scopeId: item.id, selectedId: undefined } : { scopeId: item.parentId, selectedId: item.id };
 }
 export async function planningImportStatus(adapters: ServiceHandle, signal: AbortSignal): Promise<"ready" | "missing" | "error"> {

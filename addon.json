@@ -29,11 +29,11 @@
   },
   "permissions": [{ "id": "core.data.read", "resources": ["characters", "factions", "locations", "mysteries", "artifacts", "events"], "reason": "Choose visible campaign records for planning references and consequence targets." }],
   "contributions": [
-    { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard" } },
-    { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner" } },
-    { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route" } },
-    { "id": "imports.route", "surface": "route", "label": "Import Center", "roles": ["dm"], "config": { "path": "imports" } },
-    { "id": "imports.sidebar", "surface": "sidebar", "label": "Import Center", "roles": ["dm"], "order": 210, "config": { "route": "imports.route" } }
+    { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard", "labels": { "cs": "Plánování kampaně" } } },
+    { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner", "labels": { "cs": "Plánovač příběhu" } } },
+    { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route", "labels": { "cs": "Plánovač příběhu" } } },
+    { "id": "imports.route", "surface": "route", "label": "Import Center", "roles": ["dm"], "config": { "path": "imports", "labels": { "cs": "Centrum importu" } } },
+    { "id": "imports.sidebar", "surface": "sidebar", "label": "Import Center", "roles": ["dm"], "order": 210, "config": { "route": "imports.route", "labels": { "cs": "Centrum importu" } } }
   ],
   "collections": [
     { "id": "planning_items", "keyed": true, "visibility": "dm", "schema": "contracts/planning-item.schema.json", "schemaVersion": "3.0.0", "indexes": [{ "path": "/parentId" }, { "path": "/kind" }] },

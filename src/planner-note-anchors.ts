@@ -1,17 +1,18 @@
+import { PlannerError, type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
 import type { PlanningItem } from "./planning-model.js";
 
 export function noteAnchors(value: string, items: readonly PlanningItem[]): readonly string[] {
   let ids: unknown;
-  try { ids = JSON.parse(value); } catch { throw new Error("Choose valid planning items for this note."); }
-  if (!Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length || ids.some(id => typeof id !== "string" || !items.some(item => item.id === id))) throw new Error("Choose up to 100 existing planning items for this note.");
+  try { ids = JSON.parse(value); } catch { throw new PlannerError("Choose valid planning items for this note."); }
+  if (!Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length || ids.some(id => typeof id !== "string" || !items.some(item => item.id === id))) throw new PlannerError("Choose up to 100 existing planning items for this note.");
   return ids as string[];
 }
 
 /** One hidden value lets the regular draft/revision guard cover the whole anchor set. */
-export function appendNoteAnchors(document: Document, form: HTMLFormElement, ids: readonly string[], items: readonly PlanningItem[]): () => void {
+export function appendNoteAnchors(document: Document, form: HTMLFormElement, ids: readonly string[], items: readonly PlanningItem[], t: PlannerTranslator = plannerTranslator()): () => void {
   const value = document.createElement("input"); value.type = "hidden"; value.name = "anchorIds"; value.value = JSON.stringify(ids);
   const group = document.createElement("fieldset"); group.className = "dm-planner-note-anchors";
-  const legend = document.createElement("legend"); legend.textContent = "Linked planning items"; group.append(legend);
+  const legend = document.createElement("legend"); legend.textContent = t("Linked planning items"); group.append(legend);
   const choices = document.createElement("div"); group.append(choices); form.append(value, group);
   const refresh = (): void => {
     const selected = JSON.parse(value.value) as string[];
@@ -19,7 +20,7 @@ export function appendNoteAnchors(document: Document, form: HTMLFormElement, ids
     for (const id of [...new Set([...items.map(item => item.id), ...selected])]) {
       const label = document.createElement("label"), checkbox = document.createElement("input");
       checkbox.type = "checkbox"; checkbox.value = id; checkbox.checked = selected.includes(id);
-      label.append(checkbox, document.createTextNode(items.find(item => item.id === id)?.title ?? `Unavailable: ${id}`)); choices.append(label);
+      label.append(checkbox, document.createTextNode(items.find(item => item.id === id)?.title ?? t("Unavailable: {0}", { "0": id }))); choices.append(label);
       checkbox.addEventListener("change", () => {
         value.value = JSON.stringify(Array.from(choices.querySelectorAll<HTMLInputElement>("input:checked"), input => input.value));
         value.dispatchEvent(new Event("input", { bubbles: true }));

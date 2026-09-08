@@ -1,3 +1,4 @@
+import { PlannerError } from "./planner-catalogs.js";
 import { en, cs } from "./dashboard-catalogs.js";
 export function dashboardLocale(host) {
     return typeof host === "object" && host !== null && "locale" in host && host.locale === "cs" ? "cs" : "en";
@@ -19,13 +20,13 @@ export function plannerTarget(host) {
         return undefined;
     const query = "query" in host ? host.query : undefined;
     if (!Array.isArray(query) || query.length > 1)
-        throw new Error("Invalid planner link.");
+        throw new PlannerError("Invalid planner link.");
     if (query.length === 0)
         return undefined;
     const pair = query[0];
     if (!Array.isArray(pair) || pair.length !== 2 || pair[0] !== "item" || typeof pair[1] !== "string" ||
         !/^[a-z0-9][a-z0-9._-]{0,119}$/u.test(pair[1]) || ["__proto__", "prototype", "constructor"].includes(pair[1]))
-        throw new Error("Invalid planner link.");
+        throw new PlannerError("Invalid planner link.");
     return pair[1];
 }
 export function plannerSelection(items, id) {
@@ -33,7 +34,7 @@ export function plannerSelection(items, id) {
         return { scopeId: null, selectedId: undefined };
     const item = items.find(item => item.id === id);
     if (!item)
-        throw new Error("This planning item no longer exists.");
+        throw new PlannerError("This planning item no longer exists.");
     return item.kind === "plotline" || item.kind === "quest" ? { scopeId: item.id, selectedId: undefined } : { scopeId: item.parentId, selectedId: item.id };
 }
 export async function planningImportStatus(adapters, signal) {

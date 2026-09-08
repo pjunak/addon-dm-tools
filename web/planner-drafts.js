@@ -1,10 +1,11 @@
+import { plannerTranslator } from "./planner-catalogs.js";
 /** View-local edits keep the revision at which editing began, even after refresh. */
 export class PlannerDrafts {
     #changed;
     #drafts = new Map();
     #forms = new WeakMap();
     constructor(changed = () => undefined) { this.#changed = changed; }
-    bind(form, key, revision) {
+    bind(form, key, revision, t = plannerTranslator()) {
         const existing = this.#drafts.get(key);
         const baseline = existing?.baseline ?? valuesOf(form);
         const openingRevision = existing ? existing.revision : revision;
@@ -17,7 +18,7 @@ export class PlannerDrafts {
                 if (control.tagName === "SELECT" && !Array.from(control.options).some(option => option.value === value)) {
                     const missing = form.ownerDocument.createElement("option");
                     missing.value = value;
-                    missing.textContent = `Unavailable: ${value}`;
+                    missing.textContent = t("Unavailable: {0}", { "0": value });
                     control.append(missing);
                 }
                 control.value = value;

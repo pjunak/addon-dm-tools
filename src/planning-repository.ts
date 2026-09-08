@@ -1,3 +1,4 @@
+import { PlannerError } from "./planner-catalogs.js";
 import type { AddonContext, AddonDocument, CollectionHandle, CommitReceipt, DataMutation, DataSetRevision } from "./sdk.js";
 import { scopeViewId, subtreeIds, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningReference, type PlanningView } from "./planning-model.js";
 
@@ -32,7 +33,7 @@ export class PlanningRepository {
       references: (pages[2] ?? []).map((document) => document.value as PlanningReference), consequences: (pages[3] ?? []).map((document) => document.value as PlanningConsequence),
       notes: (pages[4] ?? []).map((document) => document.value as DmNote), views: (pages[5] ?? []).map((document) => document.value as PlanningView), revisions, dataRevisions,
     };
-    const issues = validatePlanning(snapshot); if (issues.length > 0) throw new Error(`Stored planning data is inconsistent: ${issues.slice(0, 3).join(" ")}`);
+    const issues = validatePlanning(snapshot); if (issues.length > 0) throw new PlannerError(t => t("Stored planning data is inconsistent: {0}", { "0": validatePlanning(snapshot, t).slice(0, 3).join(" ") }));
     return snapshot;
   }
   async put(snapshot: PlanningSnapshot, collection: CollectionId, value: Stored, revision: number): Promise<void> {
@@ -40,18 +41,18 @@ export class PlanningRepository {
   }
   async createItem(snapshot: PlanningSnapshot, item: PlanningItem): Promise<void> {
     const issues = validatePlanning({ ...snapshot, items: [...snapshot.items, item] });
-    if (issues.length) throw new Error(issues[0]);
+    if (issues.length) throw new PlannerError(t => validatePlanning({ ...snapshot, items: [...snapshot.items, item] }, t)[0]!);
     await this.put(snapshot, "planning_items", item, 0);
   }
   async saveItem(snapshot: PlanningSnapshot, item: PlanningItem, revision: number): Promise<void> {
     const issues = validateItemEdit(snapshot, item);
-    if (issues.length) throw new Error(issues[0]);
+    if (issues.length) throw new PlannerError(t => validateItemEdit(snapshot, item, t)[0]!);
     await this.put(snapshot, "planning_items", item, revision);
   }
   async transact(snapshot: PlanningSnapshot, mutations: readonly DataMutation[]): Promise<CommitReceipt> {
     const guards = snapshot.dataRevisions;
     if (!Array.isArray(guards) || guards.length !== collections.length || collections.some(id => !guards.some(guard => guard.kind === "collection" && guard.dataId === id && Number.isSafeInteger(guard.revision) && guard.revision >= 0))) {
-      throw new Error("Collection revisions are missing. Reload the planner before saving.");
+      throw new PlannerError("Collection revisions are missing. Reload the planner before saving.");
     }
     return this.#context.data.transact(mutations, { signal: this.#context.signal, expectedDataSets: guards });
   }
@@ -64,10 +65,10 @@ export class PlanningRepository {
   async deleteSelection(snapshot: PlanningSnapshot, selectedItems: readonly string[], selectedFlows: readonly string[]): Promise<DeletionUndo | undefined> {
     const ids = new Set<string>(), flowIds = new Set(selectedFlows);
     for (const id of selectedItems) {
-      if (!snapshot.items.some(item => item.id === id)) throw new Error("This planning item no longer exists. Reload the planner.");
+      if (!snapshot.items.some(item => item.id === id)) throw new PlannerError("This planning item no longer exists. Reload the planner.");
       for (const child of subtreeIds(snapshot.items, id)) ids.add(child);
     }
-    for (const id of flowIds) if (!snapshot.flows.some(flow => flow.id === id)) throw new Error("This flow no longer exists. Reload the planner.");
+    for (const id of flowIds) if (!snapshot.flows.some(flow => flow.id === id)) throw new PlannerError("This flow no longer exists. Reload the planner.");
     for (const flow of snapshot.flows) if (ids.has(flow.sourceId) || ids.has(flow.targetId)) flowIds.add(flow.id);
     if (!ids.size && !flowIds.size) return;
     const mutations = deletionMutations(snapshot, ids, flowIds), receipt = await this.transact(snapshot, mutations);
@@ -76,29 +77,30 @@ export class PlanningRepository {
     // or borrow newer revisions from a subsequently edited record.
     return { mutations: mutations.map(mutation => {
       const results = receipt.results.filter(result => result.dataId === mutation.dataId && result.key === mutation.key), result = results[0];
-      if (results.length !== 1 || !result || !Number.isSafeInteger(result.afterRevision) || result.afterRevision <= mutation.expectedRevision || result.deleted !== (mutation.operation === "delete")) throw new Error("Deletion was saved, but its undo receipt is incomplete. Reload the planner.");
+      if (results.length !== 1 || !result || !Number.isSafeInteger(result.afterRevision) || result.afterRevision <= mutation.expectedRevision || result.deleted !== (mutation.operation === "delete")) throw new PlannerError("Deletion was saved, but its undo receipt is incomplete. Reload the planner.");
       const value = original.get(`${mutation.dataId}:${mutation.key}`)!;
       return { operation: "put", kind: "collection", dataId: mutation.dataId, key: mutation.key, expectedRevision: result.afterRevision, value: structuredClone(value) };
     }) };
   }
   async undoDeletion(snapshot: PlanningSnapshot, undo: DeletionUndo): Promise<void> {
-    if (!undo.mutations.length || undo.mutations.length > 256) throw new Error("This deletion cannot be restored in one transaction.");
+    if (!undo.mutations.length || undo.mutations.length > 256) throw new PlannerError("This deletion cannot be restored in one transaction.");
     const records = recordsByCollection(snapshot), now = Date.now();
     const mutations = undo.mutations.map(mutation => {
       const key = `${mutation.dataId}:${mutation.key}`, current = snapshot.revisions.get(key);
-      if (current !== undefined && current !== mutation.expectedRevision) throw new Error("An affected record changed after deletion. Undo cannot overwrite those changes.");
+      if (current !== undefined && current !== mutation.expectedRevision) throw new PlannerError("An affected record changed after deletion. Undo cannot overwrite those changes.");
       const value = { ...(mutation.value as Stored), updatedAt: Math.max(now, (mutation.value as Stored).updatedAt + 1) };
       records.set(key, value); return { ...mutation, value };
     });
     const restored = <K extends keyof PlanningDataset>(key: K): PlanningDataset[K] => [...records].filter(([id]) => id.startsWith(`${collectionKeys[key]}:`)).map(([, value]) => value) as PlanningDataset[K];
-    const issues = validatePlanning({ items: restored("items"), flows: restored("flows"), references: restored("references"), consequences: restored("consequences"), notes: restored("notes"), views: restored("views") });
-    if (issues.length) throw new Error(`Cannot undo deletion: ${issues[0]}`);
+    const restoredDataset = { items: restored("items"), flows: restored("flows"), references: restored("references"), consequences: restored("consequences"), notes: restored("notes"), views: restored("views") };
+    const issues = validatePlanning(restoredDataset);
+    if (issues.length) throw new PlannerError(t => t("Cannot undo deletion: {0}", { "0": validatePlanning(restoredDataset, t)[0] }));
     await this.transact(snapshot, mutations);
   }
   async resetLayout(snapshot: PlanningSnapshot, scopeId: string | null): Promise<void> {
     const view = snapshot.views.find(value => value.scopeId === scopeId); if (!view) return;
     const revision = snapshot.revisions.get(`planning_views:${view.id}`);
-    if (revision === undefined) throw new Error("The layout revision is missing. Reload the planner.");
+    if (revision === undefined) throw new PlannerError("The layout revision is missing. Reload the planner.");
     // Keep the revision-bearing view so a later drag does not recreate a tombstone.
     await this.put(snapshot, "planning_views", { ...view, positions: {}, updatedAt: Date.now() }, revision);
   }
@@ -108,8 +110,8 @@ export class PlanningRepository {
   async savePositions(snapshot: PlanningSnapshot, scopeId: string | null, positions: Readonly<Record<string, { x: number; y: number }>>): Promise<void> {
     if (!Object.keys(positions).length) return;
     for (const [itemId, point] of Object.entries(positions)) {
-      if (!snapshot.items.some(item => item.id === itemId && item.parentId === scopeId)) throw new Error("Only items on this canvas can be moved. Reload the planner.");
-      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error("Canvas positions must be finite numbers.");
+      if (!snapshot.items.some(item => item.id === itemId && item.parentId === scopeId)) throw new PlannerError("Only items on this canvas can be moved. Reload the planner.");
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new PlannerError("Canvas positions must be finite numbers.");
     }
     const id = scopeViewId(scopeId); const current = snapshot.views.find((view) => view.id === id);
     const next: PlanningView = { id, schemaVersion: 3, scopeId, positions: { ...(current?.positions ?? {}), ...positions }, updatedAt: Date.now() };
@@ -122,7 +124,7 @@ export class PlanningRepository {
       const page = await this.#handles[id].query({ ...(cursor === undefined ? {} : { cursor }), limit: 200, signal, includeDataRevision: true, ...(revision === undefined ? {} : { expectedDataRevision: revision }) });
       signal.throwIfAborted();
       if (page.dataRevision === undefined || !Number.isSafeInteger(page.dataRevision) || page.dataRevision < 0 || (revision !== undefined && page.dataRevision !== revision)) {
-        throw new Error("Planning data changed while loading, or the host lacks collection revisions. Reload after updating the host.");
+        throw new PlannerError("Planning data changed while loading, or the host lacks collection revisions. Reload after updating the host.");
       }
       revision = page.dataRevision; documents.push(...page.documents); cursor = page.nextCursor;
     } while (cursor !== undefined);
@@ -140,7 +142,7 @@ function deletionMutations(snapshot: PlanningSnapshot, itemIds: ReadonlySet<stri
   const mutations: DataMutation[] = []; const now = Date.now();
   const revision = (collection: CollectionId, id: string): number => {
     const value = snapshot.revisions.get(`${collection}:${id}`);
-    if (value === undefined) throw new Error("A record revision is missing. Reload the planner before deleting.");
+    if (value === undefined) throw new PlannerError("A record revision is missing. Reload the planner before deleting.");
     return value;
   };
   const remove = (collection: CollectionId, id: string): void => { mutations.push({ operation: "delete", kind: "collection", dataId: collection, key: id, expectedRevision: revision(collection, id) }); };
@@ -165,6 +167,6 @@ function deletionMutations(snapshot: PlanningSnapshot, itemIds: ReadonlySet<stri
     const positions = Object.fromEntries(Object.entries(view.positions).filter(([id]) => !itemIds.has(id)));
     if (Object.keys(positions).length !== Object.keys(view.positions).length) update("planning_views", { ...view, positions, updatedAt: now });
   }
-  if (mutations.length > 256) throw new Error("This deletion affects more than 256 records. Delete smaller subtrees first.");
+  if (mutations.length > 256) throw new PlannerError("This deletion affects more than 256 records. Delete smaller subtrees first.");
   return mutations;
 }

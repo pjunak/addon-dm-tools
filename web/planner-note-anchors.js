@@ -1,17 +1,18 @@
+import { PlannerError, plannerTranslator } from "./planner-catalogs.js";
 export function noteAnchors(value, items) {
     let ids;
     try {
         ids = JSON.parse(value);
     }
     catch {
-        throw new Error("Choose valid planning items for this note.");
+        throw new PlannerError("Choose valid planning items for this note.");
     }
     if (!Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length || ids.some(id => typeof id !== "string" || !items.some(item => item.id === id)))
-        throw new Error("Choose up to 100 existing planning items for this note.");
+        throw new PlannerError("Choose up to 100 existing planning items for this note.");
     return ids;
 }
 /** One hidden value lets the regular draft/revision guard cover the whole anchor set. */
-export function appendNoteAnchors(document, form, ids, items) {
+export function appendNoteAnchors(document, form, ids, items, t = plannerTranslator()) {
     const value = document.createElement("input");
     value.type = "hidden";
     value.name = "anchorIds";
@@ -19,7 +20,7 @@ export function appendNoteAnchors(document, form, ids, items) {
     const group = document.createElement("fieldset");
     group.className = "dm-planner-note-anchors";
     const legend = document.createElement("legend");
-    legend.textContent = "Linked planning items";
+    legend.textContent = t("Linked planning items");
     group.append(legend);
     const choices = document.createElement("div");
     group.append(choices);
@@ -32,7 +33,7 @@ export function appendNoteAnchors(document, form, ids, items) {
             checkbox.type = "checkbox";
             checkbox.value = id;
             checkbox.checked = selected.includes(id);
-            label.append(checkbox, document.createTextNode(items.find(item => item.id === id)?.title ?? `Unavailable: ${id}`));
+            label.append(checkbox, document.createTextNode(items.find(item => item.id === id)?.title ?? t("Unavailable: {0}", { "0": id })));
             choices.append(label);
             checkbox.addEventListener("change", () => {
                 value.value = JSON.stringify(Array.from(choices.querySelectorAll("input:checked"), input => input.value));
