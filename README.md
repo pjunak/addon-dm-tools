@@ -23,6 +23,12 @@ cover planning preview, cancellation, single-use commit, concurrent-edit conflic
 and generation replacement. Broader presentation and workflow parity remain in
 the suite [backlog](../ttrpg-codex/docs/BACKLOG.md).
 
+The Import Center restores the file chooser and document/provider review layout.
+Choose or drop one JSON file, review its changes and warnings, then commit the
+exact plan. English/Czech controls include cancellation and provider discovery
+retry. Independent import providers share the chooser through their declared
+formats; ambiguous formats stay blocked. See [reviewed imports](docs/IMPORTING.md).
+
 Ownership is a tree. Plotlines and quests can contain planning items; events
 and branches are leaves. Every open scope is its own local directed acyclic
 flow graph:

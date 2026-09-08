@@ -8,6 +8,22 @@ string `format`. Exactly one discovered adapter must claim that format. The
 complete document then crosses the broker to that provider for authoritative
 validation.
 
+The chooser, supported-format rows, document/provider strip, and review ledger
+follow the preserved pre-rewrite Import Center. One file picker also accepts a
+dropped JSON file. Filename, selected format, provider, mode, create/update/
+unchanged/delete counts, warnings, and expandable record identities remain
+visible before submission. The Import Center's controls and status/error text
+use English/Czech catalogs; provider-authored labels, descriptions, warnings
+and imported content remain the provider's text.
+
+Discovery requests run independently. Failed providers are named without hiding
+healthy ones; **Refresh available formats** retries discovery, including an
+empty or failed result. Duplicate format claims block only that format, and
+the UI never chooses a provider by its add-on ID. Invalid JSON, missing/unknown
+formats, oversized files and invalid reviews cannot enable Commit. The browser
+checks that the review matches the selected format and that listed operations
+agree with its summary, in addition to the broker's schema validation.
+
 The browser opts into its own declared worker with `includeOwn: true` while
 keeping other adapters selected through their advertised formats. This does not
 add a worker self-dependency. Every worker import method requires a host-issued
@@ -15,13 +31,24 @@ DM actor, including read-only preview and description.
 
 Leaving the Import Center aborts its outstanding discovery/preview/request and
 discards the visible review. Late responses cannot repopulate a detached or
-replaced page. **Cancel preview** discards an unsubmitted review without writing;
+replaced page. **Cancel preview** also cancels a pending read-only preview and
+discards an unsubmitted review without writing;
 server-held unused tokens remain bounded by their expiry and plan limit.
 
 Submission removes the visible single-use token immediately. A conflict requires
 a fresh reviewed preview. If the response is lost or otherwise uncertain, inspect
 planning data before previewing again: cancelling a request cannot undo an
 already completed transaction. An unchanged host context does not reset a review.
+Language-only context changes also preserve the exact review. While Commit is
+pending, the contribution reports a save to the host's navigation/unload guard;
+the page cannot offer another submission. Forced generation/authority teardown
+still cancels the local request. **Choose another document** clears the displayed
+outcome without claiming that a completed or uncertain commit was cancelled.
+
+Installed host checks use both the real planning package and an independent
+native provider. They cover provider-owned writes, duplicate claims, partial
+and complete discovery failure/retry, malformed reviews, cancellation, pending
+commit navigation, content escaping, and desktop/phone English/Czech rendering.
 
 ## Planning workflow
 

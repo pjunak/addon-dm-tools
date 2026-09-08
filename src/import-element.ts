@@ -1,111 +1,190 @@
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
-import type { ContributionContext, ServiceProvider } from "./sdk.js";
+import type { ContributionContext } from "./sdk.js";
+import { dashboardLocale } from "./dashboard-model.js";
+import { ImportProblem, importText, isRecord, parseAdapterDescription, parseImportPreview, parseImportSource, selectAdapter, type Adapter, type ImportPreview, type ImportMessage, type ImportParams } from "./import-model.js";
 
 export const importElementTag = "dm-tools-import-center";
-interface AdapterDescription { readonly contractVersion: "import-adapter-description.v1"; readonly id: string; readonly label: string; readonly description: string; readonly formats: readonly string[] }
-interface Adapter { readonly provider: ServiceProvider; readonly description: AdapterDescription }
-interface ImportPreview {
-  readonly contractVersion: "import-preview-result.v1"; readonly token: string; readonly format: string; readonly mode: "merge" | "replace";
-  readonly summary: { readonly creates: number; readonly updates: number; readonly skips: number; readonly deletes: number };
-  readonly warnings: readonly string[]; readonly changes: readonly { readonly collection: string; readonly id: string; readonly operation: "create" | "update" | "delete"; readonly label: string }[];
-}
+type Phase = "idle" | "discovering" | "previewing" | "committing";
 
 export function defineImportElement(generation?: string): string {
   const tag = generation ? `${importElementTag}-${generation}` : importElementTag;
-  if (customElements.get(tag) !== undefined) return tag;
+  if (customElements.get(tag)) return tag;
   class ImportCenterElement extends HTMLElement {
-    #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #adapters: readonly Adapter[] = []; #selected: Adapter | undefined; #preview: ImportPreview | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
+    #contribution: ContributionContext | undefined;
+    #runtime: DmToolsRuntime | undefined;
+    #adapters: readonly Adapter[] = [];
+    #failedProviders: readonly string[] = [];
+    #selected: Adapter | undefined;
+    #preview: ImportPreview | undefined;
+    #fileName = "";
+    #format = "";
+    #phase: Phase = "idle";
+    #message: ImportMessage | undefined;
+    #params: ImportParams = {};
+    #messageKind: "status" | "alert" = "status";
     #request: AbortController | undefined;
-    set codexContribution(value: ContributionContext) { const previous = this.#contribution; this.#contribution = value; if (this.isConnected && previous?.addon.generation !== value.addon.generation) void this.#connect(); }
-    connectedCallback(): void { this.classList.add("dm-tools-import"); void this.#connect(); }
-    disconnectedCallback(): void { this.#request?.abort(); this.#request = undefined; this.#runtime = undefined; this.#preview = undefined; this.#selected = undefined; }
 
+    set codexContribution(value: ContributionContext) {
+      const previous = this.#contribution; this.#contribution = value;
+      if (!this.isConnected) return;
+      if (previous?.addon.generation !== value.addon.generation) void this.#connect();
+      else if (dashboardLocale(previous.host) !== dashboardLocale(value.host)) this.#render();
+    }
+    connectedCallback(): void { this.classList.add("dm-tools-import"); void this.#connect(); }
+    disconnectedCallback(): void {
+      this.#request?.abort(); this.#request = undefined; this.#runtime = undefined;
+      this.#preview = undefined; this.#selected = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false });
+    }
+    #t(key: ImportMessage, params: ImportParams = {}): string { return importText(dashboardLocale(this.#contribution?.host), key, params); }
     #startRequest(): AbortController { this.#request?.abort(); const request = new AbortController(); this.#request = request; return request; }
-    #current(runtime: DmToolsRuntime, request: AbortController): boolean { return this.isConnected && this.#runtime === runtime && this.#request === request && !request.signal.aborted && !runtime.signal.aborted; }
+    #signal(runtime: DmToolsRuntime, request: AbortController): AbortSignal { return AbortSignal.any([request.signal, runtime.signal, this.#contribution!.signal]); }
+    #current(runtime: DmToolsRuntime, request: AbortController): boolean { return this.isConnected && this.#runtime === runtime && this.#request === request && !this.#signal(runtime, request).aborted; }
+    #notice(key: ImportMessage | undefined, kind: "status" | "alert" = "status", params: ImportParams = {}): void { this.#message = key; this.#messageKind = kind; this.#params = params; }
+    #setPhase(phase: Phase): void { this.#phase = phase; this.#contribution?.edits?.set({ dirty: false, saving: phase === "committing" }); }
 
     async #connect(): Promise<void> {
-      const contribution = this.#contribution; if (contribution === undefined) { this.#unavailable("The host did not provide an import generation."); return; }
-      const runtime = runtimeFor(contribution.addon.generation); if (runtime === undefined || runtime.signal.aborted) { this.#unavailable("This Import Center generation is no longer active."); return; }
-      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
-      this.#runtime = runtime; this.#adapters = []; this.#preview = undefined; this.#selected = undefined;
-      this.#busy = true; this.#message = "Discovering import adapters…"; this.#messageKind = "status"; this.#render();
-      try {
-        const adapters: Adapter[] = [];
-        for (const provider of runtime.adapters.providers) {
-          signal.throwIfAborted();
-          try {
-            const description = await runtime.adapters.call<AdapterDescription>("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal });
-            if (description.contractVersion === "import-adapter-description.v1" && description.formats.length > 0) adapters.push({ provider, description });
-          } catch { /* A broken optional adapter must not hide healthy providers. */ }
-        }
-        if (this.#current(runtime, request)) { this.#adapters = adapters.sort((left, right) => left.description.label.localeCompare(right.description.label, "en")); this.#message = ""; }
-      } catch (error) { if (this.#current(runtime, request)) this.#fail(error, "Could not discover import adapters."); }
-      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
+      const contribution = this.#contribution, runtime = contribution && runtimeFor(contribution.addon.generation);
+      if (!runtime || runtime.signal.aborted) { this.#notice("missingGeneration", "alert"); this.#render(); return; }
+      const request = this.#startRequest(), signal = this.#signal(runtime, request);
+      this.#runtime = runtime; this.#adapters = []; this.#failedProviders = []; this.#preview = undefined; this.#selected = undefined; this.#fileName = "";
+      this.#setPhase("discovering"); this.#notice("discovering"); this.#render();
+      // Optional providers are independent; one timeout must not serialize all discovery.
+      const results = await Promise.allSettled(runtime.adapters.providers.map(async provider => ({ provider,
+        description: parseAdapterDescription(await runtime.adapters.call<unknown>("describe", {}, { providerAddonId: provider.addonId, deadlineMs: 3_000, signal })),
+      })));
+      if (!this.#current(runtime, request)) return;
+      const adapters: Adapter[] = [], failed: string[] = [];
+      results.forEach((result, index) => { if (result.status === "fulfilled") adapters.push(result.value); else failed.push(runtime.adapters.providers[index]!.addonId); });
+      this.#adapters = adapters; this.#failedProviders = failed;
+      this.#setPhase("idle"); this.#notice(undefined); this.#render();
     }
 
     #render(): void {
-      const document = this.ownerDocument; const root = document.createElement("section"); root.className = "dm-import-shell";
-      const title = document.createElement("h1"); title.textContent = "Import Center"; const intro = document.createElement("p"); intro.textContent = "Choose a JSON file. Its top-level format selects one owning adapter; preview is read-only until you explicitly commit it."; root.append(title, intro);
-      if (this.#message !== "") root.append(messageBlock(document, this.#message, this.#messageKind));
-      const adapters = document.createElement("div"); adapters.className = "dm-import-adapters"; const heading = document.createElement("h2"); heading.textContent = "Available formats"; adapters.append(heading);
-      if (this.#adapters.length === 0 && !this.#busy) adapters.append(messageBlock(document, "No compatible import adapters are active.", "status"));
-      for (const adapter of this.#adapters) { const card = document.createElement("article"); const name = document.createElement("h3"); name.textContent = adapter.description.label; const description = document.createElement("p"); description.textContent = adapter.description.description; const formats = document.createElement("code"); formats.textContent = adapter.description.formats.join(", "); card.append(name, description, formats); adapters.append(card); }
-      root.append(adapters);
-      const chooser = document.createElement("section"); chooser.className = "dm-import-chooser"; const chooserTitle = document.createElement("h2"); chooserTitle.textContent = "Preview file"; const input = document.createElement("input"); input.type = "file"; input.accept = "application/json,.json"; input.disabled = this.#busy || this.#adapters.length === 0; input.addEventListener("change", () => { const file = input.files?.[0]; if (file !== undefined) void this.#open(file); }); chooser.append(chooserTitle, input); root.append(chooser);
-      if (this.#preview !== undefined && this.#selected !== undefined) root.append(this.#renderPreview(document, this.#preview, this.#selected));
+      const document = this.ownerDocument, root = node(document, "section", "dm-import-shell");
+      root.setAttribute("aria-busy", String(this.#phase !== "idle"));
+      const heading = node(document, "header", "dm-import-heading");
+      heading.append(node(document, "p", "dm-import-meta", this.#t("center.kicker")), node(document, "h1", "", this.#t("center.title")), node(document, "p", "dm-import-hint", this.#t("center.intro"))); root.append(heading);
+      if (this.#message) root.append(messageBlock(document, this.#t(this.#message, this.#params), this.#messageKind));
+      if (this.#selected && this.#fileName) {
+        const routing = node(document, "section", "dm-import-routing"); routing.setAttribute("aria-label", this.#t("center.routeTitle"));
+        const file = node(document), owner = node(document);
+        file.append(node(document, "span", "dm-import-meta", this.#t("center.document")), node(document, "strong", "", this.#fileName), node(document, "code", "dm-import-badge", this.#format));
+        owner.append(node(document, "span", "dm-import-meta", this.#t("center.handledBy")), node(document, "strong", "", this.#selected.description.label));
+        const arrow = node(document, "span", "", "→"); arrow.setAttribute("aria-hidden", "true");
+        const another = actionButton(document, this.#t("center.chooseAnother"), () => this.#cancel()); another.disabled = this.#phase === "committing";
+        routing.append(file, arrow, owner, another); root.append(routing);
+      }
+      const chooser = this.#chooser(document); chooser.hidden = this.#selected !== undefined; root.append(chooser);
+      if (this.#phase === "previewing") root.append(actionButton(document, this.#t("cancel"), () => this.#cancel()));
+      if (this.#preview && this.#selected) root.append(this.#renderPreview(document, this.#preview, this.#selected));
       this.replaceChildren(root);
     }
 
-    #renderPreview(document: Document, preview: ImportPreview, adapter: Adapter): HTMLElement {
-      const section = document.createElement("section"); section.className = "dm-import-preview"; const title = document.createElement("h2"); title.textContent = `${adapter.description.label} preview`;
-      const summary = document.createElement("p"); summary.className = "dm-import-summary"; summary.textContent = `${preview.summary.creates} create · ${preview.summary.updates} update · ${preview.summary.skips} unchanged · ${preview.summary.deletes} delete`;
-      section.append(title, summary);
-      for (const warning of preview.warnings) section.append(messageBlock(document, warning, "alert"));
-      const list = document.createElement("ul"); for (const change of preview.changes) { const item = document.createElement("li"); item.textContent = `${change.operation}: ${change.label} (${change.collection}/${change.id})`; list.append(item); } section.append(list);
-      const destructive = preview.summary.deletes > 0; const button = actionButton(document, destructive ? `Commit replacement with ${preview.summary.deletes} deletions` : "Commit reviewed import", () => void this.#commit(), destructive ? "danger" : "primary"); button.disabled = this.#busy;
-      const cancel = actionButton(document, "Cancel preview", () => { this.#preview = undefined; this.#selected = undefined; this.#message = "Preview cancelled. No campaign data has changed."; this.#messageKind = "status"; this.#render(); }); cancel.disabled = this.#busy;
-      section.append(button, cancel); return section;
+    #chooser(document: Document): HTMLElement {
+      const chooser = node(document, "div", "dm-import-chooser"), dropzone = node(document, "section", "dm-import-dropzone");
+      const icon = node(document, "div", "dm-import-drop-icon", "⌁"); icon.setAttribute("aria-hidden", "true");
+      dropzone.append(icon, node(document, "h2", "", this.#t("center.chooseTitle")), node(document, "p", "dm-import-hint", this.#t("center.chooseBody")), node(document, "p", "dm-import-hint", this.#t("dropHint")));
+      const input = document.createElement("input"); input.type = "file"; input.accept = "application/json,.json"; input.setAttribute("aria-label", this.#t("center.chooseFile"));
+      input.disabled = this.#phase !== "idle" || !this.#adapters.length;
+      input.addEventListener("change", () => { const file = input.files?.[0]; if (file) void this.#open(file); });
+      const label = node(document, "label", "dm-import-file-button", this.#t("center.chooseFile")); label.append(input); dropzone.append(label);
+      dropzone.addEventListener("dragover", event => { event.preventDefault(); if (!input.disabled) dropzone.classList.add("is-dragging"); });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("is-dragging"));
+      dropzone.addEventListener("drop", event => {
+        event.preventDefault(); dropzone.classList.remove("is-dragging"); if (input.disabled) return;
+        const files = event.dataTransfer?.files;
+        if (files?.length !== 1) { this.#notice("oneFile", "alert"); this.#render(); return; }
+        void this.#open(files[0]!);
+      }); chooser.append(dropzone);
+      const supported = node(document, "section", "dm-import-adapters"), head = node(document, "div", "dm-import-section-head");
+      head.append(node(document, "h2", "", this.#t("center.supportedTitle")));
+      const retry = actionButton(document, this.#t("refresh"), () => void this.#connect()); retry.disabled = this.#phase !== "idle";
+      head.append(retry); supported.append(head, node(document, "p", "dm-import-hint", this.#t("center.supportedBody")));
+      if (this.#failedProviders.length) supported.append(messageBlock(document, this.#t("failedProviders", { providers: this.#failedProviders.join(", ") }), "alert"));
+      if (!this.#adapters.length && this.#phase === "idle") {
+        const empty = node(document, "div", "dm-import-empty"); empty.append(node(document, "h3", "", this.#t("center.noneTitle")), node(document, "p", "dm-import-hint", this.#t("center.noneBody"))); supported.append(empty);
+      }
+      for (const adapter of [...this.#adapters].sort((a, b) => a.description.label.localeCompare(b.description.label, dashboardLocale(this.#contribution?.host)))) {
+        const card = node(document, "article", "dm-import-adapter"), description = node(document), formats = node(document, "div", "dm-import-formats");
+        description.append(node(document, "h3", "", adapter.description.label), node(document, "p", "dm-import-hint", adapter.description.description));
+        for (const format of adapter.description.formats) formats.append(node(document, "code", "dm-import-badge", format));
+        card.append(description, formats); supported.append(card);
+      }
+      chooser.append(supported); return chooser;
     }
 
+    #renderPreview(document: Document, preview: ImportPreview, adapter: Adapter): HTMLElement {
+      const section = node(document, "section", "dm-import-preview"), head = node(document, "header", "dm-import-section-head");
+      const title = node(document, "h2", "", this.#t("previewTitle", { label: adapter.description.label })); title.tabIndex = -1;
+      head.append(title, node(document, "span", "dm-import-badge", this.#t(preview.mode))); section.append(head);
+      const metrics = node(document, "div", "dm-import-summary");
+      for (const key of ["creates", "updates", "skips", "deletes"] as const) {
+        const metric = node(document); metric.append(node(document, "strong", "", new Intl.NumberFormat(dashboardLocale(this.#contribution?.host)).format(preview.summary[key])), node(document, "span", "", this.#t(key))); metrics.append(metric);
+      } section.append(metrics);
+      if (preview.warnings.length) {
+        const warnings = node(document, "section", "dm-import-review-section"); warnings.append(node(document, "h3", "", this.#t("warnings")));
+        for (const warning of preview.warnings) warnings.append(messageBlock(document, warning, "alert")); section.append(warnings);
+      }
+      const changes = node(document, "section", "dm-import-review-section"); changes.append(node(document, "h3", "", this.#t("changes")));
+      const list = document.createElement("ul");
+      for (const change of preview.changes) {
+        const item = node(document, "li", "dm-import-change"), details = document.createElement("details"), summary = document.createElement("summary");
+        const operation = { create: "creates", update: "updates", delete: "deletes" } as const;
+        summary.append(node(document, "span", "dm-import-badge", this.#t(operation[change.operation])), node(document, "strong", "", change.label));
+        details.append(summary, node(document, "p", "dm-import-hint", `${this.#t("collection")}: ${change.collection} · ${this.#t("record")}: ${change.id}`)); item.append(details); list.append(item);
+      }
+      changes.append(preview.changes.length ? list : node(document, "p", "dm-import-hint", this.#t("noChanges"))); section.append(changes);
+      const actions = node(document, "footer", "dm-import-actions"), destructive = preview.summary.deletes > 0;
+      const commit = actionButton(document, this.#t(destructive ? "commitDelete" : "commit", { count: preview.summary.deletes }), () => void this.#commit(), destructive ? "danger" : "primary");
+      const cancel = actionButton(document, this.#t("cancel"), () => this.#cancel()); commit.disabled = cancel.disabled = this.#phase !== "idle";
+      actions.append(commit, cancel); section.append(actions); return section;
+    }
+
+    #cancel(): void {
+      if (this.#phase === "committing") return;
+      const cancelledPreview = this.#phase === "previewing" || this.#preview !== undefined;
+      this.#request?.abort(); this.#request = undefined; this.#preview = undefined; this.#selected = undefined; this.#fileName = ""; this.#format = "";
+      this.#setPhase("idle"); this.#notice(cancelledPreview ? "cancelled" : undefined); this.#render(); this.querySelector<HTMLInputElement>('input[type="file"]')?.focus();
+    }
     async #open(file: File): Promise<void> {
-      const runtime = this.#runtime; if (runtime === undefined || this.#busy) return; this.#busy = true; this.#preview = undefined; this.#selected = undefined; this.#message = "Reading and previewing file…"; this.#messageKind = "status"; this.#render();
-      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
+      const runtime = this.#runtime; if (!runtime || this.#phase !== "idle") return;
+      const request = this.#startRequest(), signal = this.#signal(runtime, request);
+      this.#preview = undefined; this.#selected = undefined; this.#fileName = file.name; this.#format = "";
+      this.#setPhase("previewing"); this.#notice("reading"); this.#render();
       try {
-        if (file.size > 2 * 1024 * 1024) throw new Error("Import files are limited to 2 MiB.");
+        if (file.size > 2 * 1024 * 1024) throw new ImportProblem("tooLarge");
         const source = await file.text(); signal.throwIfAborted();
-        const document = JSON.parse(source) as unknown; if (!isRecord(document) || typeof document["format"] !== "string") throw new Error("The JSON root must contain a string format field.");
-        const matches = this.#adapters.filter((adapter) => adapter.description.formats.includes(document["format"] as string));
-        if (matches.length === 0) throw new Error(`No adapter owns format ${document["format"]}.`); if (matches.length > 1) throw new Error(`More than one adapter claims format ${document["format"]}; resolve the installation conflict before importing.`);
-        const selected = matches[0] as Adapter;
-        const preview = await runtime.adapters.call<ImportPreview>("preview", { contractVersion: "import-preview.v1", format: document["format"], document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal });
+        const { document, format } = parseImportSource(source), selected = selectAdapter(this.#adapters, format);
+        this.#selected = selected; this.#format = format; this.#render();
+        const response = await runtime.adapters.call<unknown>("preview", { contractVersion: "import-preview.v1", format, document }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, signal });
         if (!this.#current(runtime, request)) return;
-        this.#selected = selected; this.#preview = preview; this.#message = "Preview ready. No campaign data has changed.";
-      } catch (error) { if (this.#current(runtime, request)) this.#fail(error, "Could not preview this import."); }
-      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
+        this.#preview = parseImportPreview(response, format); this.#notice("ready");
+      } catch (error) {
+        if (this.#current(runtime, request)) { this.#selected = undefined; this.#notice(error instanceof ImportProblem ? error.key : "previewFailed", "alert", error instanceof ImportProblem ? error.params : {}); }
+      } finally {
+        if (this.#current(runtime, request)) { this.#setPhase("idle"); this.#render(); this.querySelector<HTMLElement>(".dm-import-preview h2")?.focus({ preventScroll: true }); }
+      }
     }
 
     async #commit(): Promise<void> {
-      const runtime = this.#runtime; const preview = this.#preview; const selected = this.#selected; if (runtime === undefined || preview === undefined || selected === undefined || this.#busy) return;
-      const request = this.#startRequest(), signal = AbortSignal.any([request.signal, runtime.signal]);
+      const runtime = this.#runtime, preview = this.#preview, selected = this.#selected;
+      if (!runtime || !preview || !selected || this.#phase !== "idle") return;
+      const request = this.#startRequest(), signal = this.#signal(runtime, request);
       // A submitted token is single-use, including conflicts and lost replies.
-      this.#preview = undefined; this.#selected = undefined;
-      this.#busy = true; this.#message = "Committing the exact reviewed plan…"; this.#messageKind = "status"; this.#render();
+      this.#preview = undefined; this.#setPhase("committing"); this.#notice("committing"); this.#render();
       try {
-        const result = await runtime.adapters.call<{ readonly committed: true; readonly writes: number; readonly deletes: number }>("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal });
+        const result = await runtime.adapters.call<unknown>("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal });
         if (!this.#current(runtime, request)) return;
-        this.#preview = undefined; this.#selected = undefined; this.#message = `Import committed: ${result.writes} writes and ${result.deletes} deletions.`;
-      } catch (error) { if (this.#current(runtime, request)) { this.#message = isRecord(error) && error["code"] === "CONFLICT"
-        ? "Planning data changed. Choose the file again to review a new preview."
-        : "Could not confirm the import. Check planning data before choosing the file again for a new preview."; this.#messageKind = "alert"; } }
-      finally { if (this.#current(runtime, request)) { this.#busy = false; this.#render(); } }
+        if (!isRecord(result) || result["contractVersion"] !== "import-commit-result.v1" || result["committed"] !== true ||
+          !Number.isSafeInteger(result["writes"]) || Number(result["writes"]) < 0 || !Number.isSafeInteger(result["deletes"]) || Number(result["deletes"]) < 0) throw new Error("Invalid commit receipt");
+        this.#notice("committed", "status", { writes: Number(result["writes"]), deletes: Number(result["deletes"]) });
+      } catch (error) { if (this.#current(runtime, request)) this.#notice(isRecord(error) && error["code"] === "CONFLICT" ? "conflict" : "uncertain", "alert"); }
+      finally { if (this.#current(runtime, request)) { this.#setPhase("idle"); this.#render(); } }
     }
-
-    #fail(error: unknown, fallback: string): void { this.#message = error instanceof Error && error.message !== "" ? error.message : fallback; this.#messageKind = "alert"; }
-    #unavailable(message: string): void { this.replaceChildren(messageBlock(this.ownerDocument, message, "alert")); }
   }
   customElements.define(tag, ImportCenterElement); return tag;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-function actionButton(document: Document, label: string, action: () => void, style?: string): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined) button.className = style; button.addEventListener("click", action); return button; }
-function messageBlock(document: Document, message: string, role: "status" | "alert"): HTMLElement { const block = document.createElement("div"); block.className = `dm-tools-message ${role}`; block.setAttribute("role", role); block.textContent = message; return block; }
+function node(document: Document, tag = "div", className = "", text?: string): HTMLElement { const element = document.createElement(tag); element.className = className; if (text !== undefined) element.textContent = text; return element; }
+function actionButton(document: Document, label: string, action: () => void, style = ""): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; button.className = style; button.addEventListener("click", action); return button; }
+function messageBlock(document: Document, message: string, role: "status" | "alert"): HTMLElement { const block = node(document, "div", `dm-tools-message ${role}`, message); block.setAttribute("role", role); return block; }
