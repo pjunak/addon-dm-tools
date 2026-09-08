@@ -58,6 +58,10 @@ all visible cards. Drag selected cards together, or move them with arrow keys
 (Shift moves four grid steps). Group movement preserves spacing in one saved
 layout revision. Delete/Backspace and **Delete selection** review one combined
 deletion, including selected subtrees, flows, and affected annotations.
+**Undo last deletion** or Ctrl/Command+Z restores that deletion during the current
+planner session, including its notes and layouts. It refuses to overwrite an
+affected record edited afterward. **Reset layout** clears only the current
+canvas's saved positions after confirmation.
 
 Double-click a card or choose **Edit selected** to open the original centered
 editor, presented as a bottom sheet on phones. Its **Details**, **Links**, and
@@ -66,6 +70,20 @@ and returns focus to the selected card; reopening keeps the opening revisions.
 The header's **Save item** remains available while reading long forms.
 **Connect selected** prepares a reviewed flow between two selected cards, and
 **Edit selected flow** opens a selected flow's existing editor.
+Enter also edits the selected item; Shift+Enter opens a selected plotline or
+quest. **Keyboard shortcuts** or ? shows the canvas controls in a dialog.
+
+Atlas creation opens an unsaved item. **Save item** creates it; **Cancel creation**
+or Escape discards it without a placeholder record. Links and notes become
+available after saving. Scope navigation retains the draft under **Resume new
+item**. A failed creation requires Reload; a lost response reconciles the same
+item ID rather than creating a duplicate.
+
+Click a card's gold connection port, then another card, or drag between them.
+With a card selected, C starts the same connection and Enter on a focused target
+completes it. A branch creates an option flow; other cards create a continuing
+flow. Self-links, cycles and canceled gestures cannot create a link. Escape
+cancels a pending connection, and live refresh waits until it finishes.
 
 Canvas controls restore the fixed 35–200% zoom ladder with a native 100% stop,
 **Fit**, **Focus selected**, and browser fullscreen. Middle-drag or Alt-drag pans;

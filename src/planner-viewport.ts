@@ -1,3 +1,5 @@
+import type { PlanningItem, PlanningView } from "./planning-model.js";
+
 /** The preserved planner's fixed ladder always includes a native 100% stop. */
 export const zoomLevels = [0.35, 0.45, 0.55, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
 export function stepZoom(current: number, direction: number): number {
@@ -10,6 +12,19 @@ export function fittedZoom(width: number, height: number, viewportWidth: number,
 }
 export interface CanvasView { zoom: number; x: number; y: number }
 export interface CanvasPoint { x: number; y: number }
+export function positionsFor(views: readonly PlanningView[], scopeId: string | null, items: readonly Pick<PlanningItem, "id">[]): Map<string, CanvasPoint> {
+  const view = views.find(candidate => candidate.scopeId === scopeId), positions = new Map<string, CanvasPoint>();
+  for (const item of items) { const saved = view?.positions[item.id]; if (saved) positions.set(item.id, saved); }
+  let slot = 0;
+  for (const item of items) {
+    if (positions.has(item.id)) continue;
+    let point: CanvasPoint;
+    do { point = { x: 72 + (slot % 3) * 300, y: 72 + Math.floor(slot / 3) * 190 }; slot++; }
+    while ([...positions.values()].some(other => Math.abs(other.x - point.x) < 264 && Math.abs(other.y - point.y) < 156));
+    positions.set(item.id, point);
+  }
+  return positions;
+}
 export function canvasBounds(positions: Iterable<CanvasPoint>) {
   const points = [...positions];
   const left = Math.min(0, ...points.map(point => point.x - 24)), top = Math.min(0, ...points.map(point => point.y - 24));

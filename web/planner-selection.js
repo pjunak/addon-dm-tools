@@ -50,7 +50,7 @@ export function mountCanvasSelection(options) {
             event.stopPropagation();
             return;
         }
-        if (!options.available())
+        if (event.defaultPrevented || !options.available())
             return;
         const target = event.target, edge = target.closest("[data-select-flow]");
         if (edge) {
@@ -64,18 +64,32 @@ export function mountCanvasSelection(options) {
     });
     viewport.addEventListener("dblclick", event => {
         const card = event.target.closest("[data-item-id]");
-        if (card && options.available()) {
+        if (card && !event.defaultPrevented && !event.target.closest("button") && options.available()) {
             event.preventDefault();
             options.edit(card.dataset["itemId"]);
         }
     });
     viewport.addEventListener("keydown", event => {
-        if (!options.available() || event.target.closest("input,textarea,select,button,a"))
+        if (event.defaultPrevented || !options.available() || event.target.closest("input,textarea,select,button,a"))
             return;
         const modifier = event.ctrlKey || event.metaKey;
         if (modifier && event.key.toLowerCase() === "a") {
             event.preventDefault();
             change(new Set(cards.keys()));
+        }
+        else if (modifier && !event.shiftKey && event.key.toLowerCase() === "z") {
+            event.preventDefault();
+            options.undo();
+        }
+        else if (modifier || event.altKey)
+            return;
+        else if (event.key === "?") {
+            event.preventDefault();
+            options.help();
+        }
+        else if (event.key.toLowerCase() === "c" && selection.items.size === 1 && !selection.flows.size) {
+            event.preventDefault();
+            options.connect([...selection.items][0]);
         }
         else if (event.key === "Escape") {
             event.preventDefault();
@@ -92,7 +106,7 @@ export function mountCanvasSelection(options) {
         else if ((event.key === "Enter" || event.key.toLowerCase() === "e") && selection.items.size === 1 && !selection.flows.size) {
             event.preventDefault();
             const id = [...selection.items][0];
-            if (event.key === "Enter" && !event.shiftKey)
+            if (event.key === "Enter" && event.shiftKey)
                 options.open(id);
             else
                 options.edit(id);
@@ -112,7 +126,7 @@ export function mountCanvasSelection(options) {
         }
     });
     viewport.addEventListener("pointerdown", event => {
-        if (!options.available() || (event.button !== 0 && event.button !== 1))
+        if (event.defaultPrevented || !options.available() || (event.button !== 0 && event.button !== 1))
             return;
         const target = event.target, card = target.closest("[data-item-id]");
         if (target.closest("button,input,textarea,select,a"))

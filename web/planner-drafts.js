@@ -38,6 +38,11 @@ export class PlannerDrafts {
     revision(form) { return this.#forms.get(form)?.revision; }
     has(key) { return this.#drafts.has(key); }
     entries() { return this.#drafts.entries(); }
+    rekey(from, to) { const draft = this.#drafts.get(from); if (draft) {
+        this.#drafts.delete(from);
+        this.#drafts.set(to, draft);
+        this.#changed();
+    } }
     clear(key) { if (this.#drafts.delete(key))
         this.#changed(); }
     clearAll() { this.#drafts.clear(); this.#changed(); }

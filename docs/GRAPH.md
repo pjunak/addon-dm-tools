@@ -87,6 +87,32 @@ Group deletion unions overlapping subtrees and explicitly selected flows before
 building the existing cross-collection cleanup; missing targets, missing
 revisions and oversized deletion plans reject before any write.
 
+New items remain provisional in the mounted planner until their Details form
+passes validation and commits at revision zero. Cancel and Escape clear only
+that draft. Links and notes are unavailable before creation. A known successful
+write followed by a failed read cannot be submitted again; an unknown outcome
+that reload finds by ID becomes an existing draft retaining its opening revision.
+Scope navigation retains the provisional item without changing its parent.
+
+Deletion undo captures the original affected records and exact post-transaction
+revisions from the host receipt, including tombstones. The last deletion can be
+restored in one guarded transaction during the mounted planner session. Undo
+validates the combined current/restored dataset and refuses later edits to any
+affected record; unrelated edits are retained. It never guesses a tombstone's
+revision or silently merges shared-note content. A confirmed undo clears its
+action before the confirming read, preventing a duplicate write after read failure.
+Resetting a layout writes an empty positions map for the current scope and keeps
+its revision-bearing view, so the next drag can update it normally.
+Automatic grid positions for new or unpositioned cards avoid saved card bounds;
+authored positions, including deliberately overlapping cards, are unchanged.
+
+`planner-connections.ts` owns click, drag and keyboard connection gestures. Its
+preview is view-local SVG geometry at the current native zoom. Completion uses
+the same sibling/cycle validation and guarded repository write as the flow
+form. Pending connections defer live refresh; Escape, pointer cancellation,
+capture loss and teardown discard the preview without writing. Dialogs share
+focus containment and backdrop/Escape handling through `planner-dialog.ts`.
+
 `planner-viewport.ts` owns the preserved fixed zoom ladder, fit calculation,
 content bounds and device-pixel rounding. Zoom changes native dimensions and
 text sizes, never a transform of the rendered canvas. SVG uses matching logical

@@ -8,6 +8,26 @@ export function fittedZoom(width, height, viewportWidth, viewportHeight) {
     const limit = Math.min(1, Math.max(1, viewportWidth - 48) / Math.max(1, width), Math.max(1, viewportHeight - 48) / Math.max(1, height));
     return [...zoomLevels].reverse().find(level => level <= limit) ?? zoomLevels[0];
 }
+export function positionsFor(views, scopeId, items) {
+    const view = views.find(candidate => candidate.scopeId === scopeId), positions = new Map();
+    for (const item of items) {
+        const saved = view?.positions[item.id];
+        if (saved)
+            positions.set(item.id, saved);
+    }
+    let slot = 0;
+    for (const item of items) {
+        if (positions.has(item.id))
+            continue;
+        let point;
+        do {
+            point = { x: 72 + (slot % 3) * 300, y: 72 + Math.floor(slot / 3) * 190 };
+            slot++;
+        } while ([...positions.values()].some(other => Math.abs(other.x - point.x) < 264 && Math.abs(other.y - point.y) < 156));
+        positions.set(item.id, point);
+    }
+    return positions;
+}
 export function canvasBounds(positions) {
     const points = [...positions];
     const left = Math.min(0, ...points.map(point => point.x - 24)), top = Math.min(0, ...points.map(point => point.y - 24));

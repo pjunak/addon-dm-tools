@@ -7,6 +7,7 @@ interface CanvasOptions {
   selection: CanvasSelection; available: () => boolean;
   change: (selection: CanvasSelection) => void; move: (positions: Record<string, Point>) => void;
   edit: (id: string) => void; open: (id: string) => void; remove: () => void;
+  connect: (id: string) => void; undo: () => void; help: () => void;
 }
 
 // Selection is view-local. A completed gesture publishes all positions in one write.
@@ -39,7 +40,7 @@ export function mountCanvasSelection(options: CanvasOptions): void {
   };
   viewport.addEventListener("click", event => {
     if (suppressClick) { suppressClick = false; event.preventDefault(); event.stopPropagation(); return; }
-    if (!options.available()) return;
+    if (event.defaultPrevented || !options.available()) return;
     const target = event.target as Element, edge = target.closest("[data-select-flow]");
     if (edge) { toggle(edge.getAttribute("data-select-flow")!, "flows", event.shiftKey); viewport.focus({ preventScroll: true }); }
     // Keyboard and assistive-technology clicks have no preceding pointer gesture.
@@ -48,12 +49,16 @@ export function mountCanvasSelection(options: CanvasOptions): void {
   });
   viewport.addEventListener("dblclick", event => {
     const card = (event.target as Element).closest<HTMLElement>("[data-item-id]");
-    if (card && options.available()) { event.preventDefault(); options.edit(card.dataset["itemId"]!); }
+    if (card && !event.defaultPrevented && !(event.target as Element).closest("button") && options.available()) { event.preventDefault(); options.edit(card.dataset["itemId"]!); }
   });
   viewport.addEventListener("keydown", event => {
-    if (!options.available() || (event.target as Element).closest("input,textarea,select,button,a")) return;
+    if (event.defaultPrevented || !options.available() || (event.target as Element).closest("input,textarea,select,button,a")) return;
     const modifier = event.ctrlKey || event.metaKey;
     if (modifier && event.key.toLowerCase() === "a") { event.preventDefault(); change(new Set(cards.keys())); }
+    else if (modifier && !event.shiftKey && event.key.toLowerCase() === "z") { event.preventDefault(); options.undo(); }
+    else if (modifier || event.altKey) return;
+    else if (event.key === "?") { event.preventDefault(); options.help(); }
+    else if (event.key.toLowerCase() === "c" && selection.items.size === 1 && !selection.flows.size) { event.preventDefault(); options.connect([...selection.items][0]!); }
     else if (event.key === "Escape") { event.preventDefault(); change(new Set()); }
     else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); options.remove(); }
     else if ((event.key === " " || event.key === "Enter") && (event.target as Element).hasAttribute("data-select-flow")) {
@@ -61,7 +66,7 @@ export function mountCanvasSelection(options: CanvasOptions): void {
     }
     else if ((event.key === "Enter" || event.key.toLowerCase() === "e") && selection.items.size === 1 && !selection.flows.size) {
       event.preventDefault(); const id = [...selection.items][0]!;
-      if (event.key === "Enter" && !event.shiftKey) options.open(id); else options.edit(id);
+      if (event.key === "Enter" && event.shiftKey) options.open(id); else options.edit(id);
     } else if (event.key === " ") {
       const card = (event.target as Element).closest<HTMLElement>("[data-item-id]");
       if (card) { event.preventDefault(); toggle(card.dataset["itemId"]!, "items", event.shiftKey); }
@@ -72,7 +77,7 @@ export function mountCanvasSelection(options: CanvasOptions): void {
     }
   });
   viewport.addEventListener("pointerdown", event => {
-    if (!options.available() || (event.button !== 0 && event.button !== 1)) return;
+    if (event.defaultPrevented || !options.available() || (event.button !== 0 && event.button !== 1)) return;
     const target = event.target as Element, card = target.closest<HTMLElement>("[data-item-id]");
     if (target.closest("button,input,textarea,select,a")) return;
     if (event.button === 0 && target.closest("[data-select-flow]")) { event.preventDefault(); return; }

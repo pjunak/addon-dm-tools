@@ -1,15 +1,17 @@
-import { stepZoom, fittedZoom, canvasBounds, nativePixel, canvasLabels, type CanvasView } from "./planner-viewport.js";
+import { stepZoom, fittedZoom, canvasBounds, nativePixel, canvasLabels, positionsFor, type CanvasView } from "./planner-viewport.js";
 import { appendTargetFields, coreReferences, targetFromForm, targetLabel, targetLink } from "./planner-targets.js";
 import { appendNoteAnchors, noteAnchors } from "./planner-note-anchors.js";
 import { option, textField, textArea, selectField, messageBlock } from "./planner-fields.js";
-import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningKind, type PlanningReference, type PlanningView } from "./planning-model.js";
-import type { PlanningSnapshot } from "./planning-repository.js";
+import { availableParents, directChildren, localFlows, newItem, scopeTrail, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningKind, type PlanningReference } from "./planning-model.js";
+import type { DeletionUndo, PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext, DataMutation } from "./sdk.js";
 import { dashboardLocale, plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
 import { LiveRefresh } from "./live-refresh.js";
 import { PlannerDrafts } from "./planner-drafts.js";
 import { mountCanvasSelection, type CanvasSelection } from "./planner-selection.js";
+import { mountCanvasConnections } from "./planner-connections.js";
+import { configurePlannerDialog, plannerShortcuts } from "./planner-dialog.js";
 
 export const plannerElementTag = "dm-tools-planner-page";
 const cardWidth = 240; const cardHeight = 132;
@@ -32,18 +34,21 @@ export function definePlannerElement(generation?: string): string {
     #selection: CanvasSelection = { items: new Set(), flows: new Set(), primary: undefined };
     #editorId: string | undefined;
     #dialogTab = "details";
+    #newItem: PlanningItem | undefined;
+    #undoDelete: DeletionUndo | undefined;
+    #helpOpen = false; #connecting = false; #disposeConnection: (() => void) | undefined;
     #wakeLive = (): void => { this.#live?.wake(); };
     #pointerStart = (event: PointerEvent): void => { this.#pointers.add(event.pointerId); };
     #pointerEnd = (event: PointerEvent): void => { this.#pointers.delete(event.pointerId); this.#live?.wake(); };
 
     #liveSafe(): boolean {
       const focused = this.ownerDocument.activeElement;
-      return !this.#needsReload && !this.#pointers.size && ![...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)) &&
+      return !this.#needsReload && !this.#newItem && !this.#helpOpen && !this.#connecting && !this.#pointers.size && ![...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)) &&
         !(focused && this.contains(focused) && focused.matches("input,textarea,select"));
     }
     #liveNotice(): void {
       // Keep the canvas geometry fixed until an active pointer gesture finishes.
-      if (this.#pointers.size) return;
+      if (this.#pointers.size || this.#connecting) return;
       let notice = this.querySelector<HTMLElement>("[data-live-refresh]");
       if (!this.#live?.pending) { notice?.remove(); return; }
       if (!notice) {
@@ -72,6 +77,7 @@ export function definePlannerElement(generation?: string): string {
       this.classList.add("dm-tools-planner"); void this.#connect();
     }
     disconnectedCallback(): void {
+      this.#disposeConnection?.(); this.#disposeConnection = undefined;
       this.removeEventListener("fullscreenchange", this.#fullscreenChanged); this.removeEventListener("focusout", this.#wakeLive);
       this.removeEventListener("pointerdown", this.#pointerStart, true);
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) this.ownerDocument.removeEventListener(type, this.#pointerEnd, true);
@@ -85,7 +91,7 @@ export function definePlannerElement(generation?: string): string {
       try { this.#targetId = plannerTarget(contribution.host); }
       catch (error) { this.#invalidLink(error); return; }
       this.#readRequest?.abort(); this.#busy = false; this.#writing = false; this.#invalidTarget = false; this.#snapshot = undefined; this.#targetPending = true;
-      this.#drafts.clearAll(); this.#committedDrafts.clear(); this.#needsReload = false; this.#editorId = undefined;
+      this.#newItem = undefined; this.#undoDelete = undefined; this.#helpOpen = false; this.#drafts.clearAll(); this.#committedDrafts.clear(); this.#needsReload = false; this.#editorId = undefined;
       this.#unsubscribe?.(); this.#live?.dispose(); this.#runtime = runtime;
       this.#live = new LiveRefresh(() => { this.#liveNotice(); return !this.#busy && this.#liveSafe(); }, () => void this.#reload(undefined, true), () => this.#liveNotice());
       this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), contribution.signal);
@@ -103,6 +109,11 @@ export function definePlannerElement(generation?: string): string {
         // An edit or drag can start while the automatic HTTP read is in flight.
         if (live && !this.#liveSafe()) { this.#live?.invalidate(); return; }
         render = true; this.#snapshot = snapshot;
+        if (this.#newItem && snapshot.items.some(item => item.id === this.#newItem!.id) && !this.#committedDrafts.has(`new-item:${this.#newItem.id}`)) {
+          // A lost creation response is reconciled as a stale edit of the saved
+          // record, never retried as another new item or rebased silently.
+          this.#drafts.rekey(`new-item:${this.#newItem.id}`, `planning_items:${this.#newItem.id}`); this.#newItem = undefined;
+        }
         this.#acceptCommittedDrafts(); this.#needsReload = false;
         if (this.#scopeId !== null && !this.#snapshot.items.some((item) => item.id === this.#scopeId)) this.#scopeId = null;
         if (this.#selectedId !== undefined && !this.#snapshot.items.some((item) => item.id === this.#selectedId)) this.#selectedId = undefined;
@@ -144,9 +155,16 @@ export function definePlannerElement(generation?: string): string {
       if (this.#busy) return; this.#editorId = undefined; this.#render();
       (this.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(this.#selectedId ?? "")}"]`) ?? this.querySelector<HTMLElement>(".dm-planner-viewport"))?.focus({ preventScroll: true });
     }
+    #cancelCreation(): void {
+      if (this.#busy || !this.#newItem) return;
+      const key = `new-item:${this.#newItem.id}`; this.#newItem = undefined; this.#drafts.clear(key); this.#syncEdits(); this.#closeEditor();
+    }
+    #showHelp(): void { if (this.#busy) return; this.#helpOpen = true; this.#render(); }
+    #closeHelp(): void { this.#helpOpen = false; this.#render(); this.querySelector<HTMLElement>("[data-planner-shortcuts]")?.focus(); this.#live?.wake(); }
 
     #render(captureViewport = true): void {
       if (captureViewport) this.#captureViewport();
+      this.#disposeConnection?.(); this.#disposeConnection = undefined;
       const oldDialog = this.querySelector<HTMLDialogElement>("dialog"), oldBody = oldDialog?.querySelector<HTMLElement>(".dm-planner-dialog-body");
       const dialogScroll = oldBody?.scrollTop ?? 0;
       const focused = this.ownerDocument.activeElement as HTMLInputElement | null;
@@ -163,7 +181,7 @@ export function definePlannerElement(generation?: string): string {
       this.#selection.flows = new Set([...this.#selection.flows].filter(id => visibleFlows.has(id)));
       if (!this.#selection.items.has(this.#selectedId ?? "")) this.#selectedId = [...this.#selection.items][0];
       this.#selection.primary = this.#selectedId;
-      if (!snapshot.items.some(item => item.id === this.#editorId)) this.#editorId = undefined;
+      if (!snapshot.items.some(item => item.id === this.#editorId) && this.#newItem?.id !== this.#editorId) this.#editorId = undefined;
 
       const header = document.createElement("header"); const heading = document.createElement("div"); const title = document.createElement("h1"); title.textContent = "Story Planner"; const subtitle = document.createElement("p"); subtitle.textContent = "An editable tree of local story-flow canvases."; heading.append(title, subtitle); header.append(heading, this.#breadcrumbs(document, snapshot)); root.append(header);
       if (this.#message !== "" && !this.#editorId) root.append(messageBlock(document, this.#message, this.#messageKind));
@@ -172,7 +190,7 @@ export function definePlannerElement(generation?: string): string {
       if (!this.#editorId) this.#removedDrafts(document, root, snapshot);
       const workspace = document.createElement("div"); workspace.className = "dm-planner-workspace";
       workspace.append(this.#atlas(document), this.#canvas(document, snapshot)); root.append(workspace);
-      const dialog = this.#editorId ? this.#editor(document, snapshot) : undefined; if (dialog) root.append(dialog);
+      const dialog = this.#helpOpen ? plannerShortcuts(document, () => this.#closeHelp()) : this.#editorId ? this.#editor(document, snapshot) : undefined; if (dialog) root.append(dialog);
       if (dialog) for (const child of root.children) if (child !== dialog) { child.setAttribute("inert", ""); child.setAttribute("aria-hidden", "true"); }
       oldDialog?.close(); this.replaceChildren(root);
       this.#liveNotice();
@@ -182,7 +200,7 @@ export function definePlannerElement(generation?: string): string {
         control.disabled = this.#busy || (this.#needsReload && control.tagName === "SELECT");
         if (control.tagName !== "SELECT") (control as HTMLInputElement | HTMLTextAreaElement).readOnly = this.#needsReload;
       }
-      for (const button of root.querySelectorAll("button")) button.disabled = this.#busy || (this.#needsReload && !button.hasAttribute("data-view-action"));
+      for (const button of root.querySelectorAll("button")) button.disabled = this.#busy || button.hasAttribute("data-unavailable") || (this.#needsReload && !button.hasAttribute("data-view-action"));
       if (dialog) {
         dialog.showModal(); const body = dialog.querySelector<HTMLElement>(".dm-planner-dialog-body")!; body.scrollTop = dialogScroll;
         const control = focusName ? dialog.querySelector<HTMLElement>(`[name="${CSS.escape(focusName)}"]`) : undefined;
@@ -201,7 +219,8 @@ export function definePlannerElement(generation?: string): string {
     #atlas(document: Document): HTMLElement {
       const aside = document.createElement("aside"); aside.className = "dm-planner-atlas"; const title = document.createElement("h2"); title.textContent = "Atlas"; aside.append(title);
       for (const [kind, label] of [["plotline", "Plotline"], ["quest", "Quest"], ["event", "Event"], ["branch", "Branch"]] as const) aside.append(actionButton(document, `+ ${label}`, () => void this.#create(kind), kind));
-      const help = document.createElement("p"); help.textContent = "Click to select; Shift-click adds to the selection. Drag empty canvas to select a group. Double-click to edit. Enter opens a plotline or quest. Middle-drag or Alt-drag pans."; aside.append(help); return aside;
+      if (this.#newItem) aside.append(actionButton(document, "Resume new item", () => this.#create(this.#newItem!.kind)));
+      const help = document.createElement("p"); help.textContent = "Click to select; Shift-click adds to the selection. Drag empty canvas to select a group. Double-click or Enter to edit. Shift+Enter opens a plotline or quest. Middle-drag or Alt-drag pans."; aside.append(help); return aside;
     }
 
     #canvas(document: Document, snapshot: PlanningSnapshot): HTMLElement {
@@ -231,7 +250,8 @@ export function definePlannerElement(generation?: string): string {
         card.style.width = `${nativePixel(cardWidth * zoom)}px`; card.style.minHeight = `${nativePixel(cardHeight * zoom)}px`; card.style.padding = `${nativePixel(12.8 * zoom)}px`; card.style.gap = `${nativePixel(7.2 * zoom)}px`; card.tabIndex = 0;
         const kind = document.createElement("span"); kind.className = "kind"; kind.textContent = subtype(item); const title = document.createElement("h3"); title.textContent = item.title; const summary = document.createElement("p"); summary.textContent = item.summary || "Needs details";
         title.style.fontSize = `${nativePixel(Math.max(9, 16 * zoom))}px`; summary.style.fontSize = `${nativePixel(Math.max(8, 13.6 * zoom))}px`; kind.style.fontSize = `${nativePixel(Math.max(8, 12 * zoom))}px`; kind.hidden = zoom < .6; summary.hidden = zoom < .8;
-        card.append(kind, title, summary); stage.append(card);
+        const port = document.createElement("button"); port.type = "button"; port.className = "dm-flow-port"; port.dataset["flowPort"] = item.id; port.setAttribute("aria-label", `Connect from ${item.title}`); port.title = "Click or drag to connect to another card";
+        card.append(kind, title, summary, port); stage.append(card);
       }
       if (children.length === 0) { const empty = messageBlock(document, "This canvas is empty. Add a planning item from the Atlas.", "status"); empty.classList.add("empty"); stage.append(empty); }
       const toolbar = document.createElement("div"); toolbar.className = "dm-planner-canvas-toolbar"; toolbar.setAttribute("role", "group"); toolbar.setAttribute("aria-label", labels.controls); toolbar.title = labels.help;
@@ -251,14 +271,21 @@ export function definePlannerElement(generation?: string): string {
       const buttons = toolbar.querySelectorAll("button"); buttons[0]!.setAttribute("aria-label", labels.out); buttons[1]!.setAttribute("aria-label", labels.reset); buttons[2]!.setAttribute("aria-label", labels.in);
       const expand = actionButton(document, this.#fullscreen ? labels.exit : labels.fullscreen, () => { if (!this.#busy) void (this.#fullscreen ? document.exitFullscreen() : this.requestFullscreen()).catch(error => this.#invalid(error instanceof Error ? error.message : "Fullscreen is unavailable.")); }); expand.dataset["expandPlanner"] = ""; expand.setAttribute("aria-pressed", String(this.#fullscreen)); toolbar.append(expand);
       for (const button of toolbar.querySelectorAll("button")) button.dataset["viewAction"] = "";
-      mountCanvasSelection({ viewport, stage, positions, zoom, selection: this.#selection, available: () => !this.#busy && !this.#needsReload,
+      const help = actionButton(document, "Keyboard shortcuts", () => this.#showHelp()); help.dataset["viewAction"] = ""; help.dataset["plannerShortcuts"] = ""; toolbar.append(help);
+      const reset = actionButton(document, "Reset layout", () => void this.#resetLayout()); toolbar.append(reset);
+      if (this.#undoDelete) toolbar.append(actionButton(document, "Undo last deletion", () => void this.#undoDeletion()));
+      const connection = mountCanvasConnections({ viewport, stage, svg, zoom, available: () => !this.#busy && !this.#needsReload,
+        active: value => { this.#connecting = value; if (!value) this.#live?.wake(); }, connect: (source, target) => void this.#connectBetween(source, target),
+      }); this.#disposeConnection = connection.dispose;
+      mountCanvasSelection({ viewport, stage, positions, zoom, selection: this.#selection, available: () => !this.#busy && !this.#needsReload && !this.#connecting,
         change: selection => { this.#selection = selection; this.#selectedId = selection.primary; this.querySelector(".dm-planner-selection")?.replaceWith(this.#selectionToolbar(document, snapshot)); },
         move: values => void this.#savePositions(values), edit: id => this.#edit(id), remove: () => void this.#deleteSelection(),
+        connect: connection.start, undo: () => void this.#undoDeletion(), help: () => this.#showHelp(),
         open: id => { const item = snapshot.items.find(value => value.id === id); if (item?.kind === "plotline" || item?.kind === "quest") this.#openCanvas(id); else this.#edit(id); },
       });
       viewport.addEventListener("wheel", event => { if (!event.ctrlKey && !event.metaKey) return; event.preventDefault(); const rect = viewport.getBoundingClientRect(); zoomTo(stepZoom(view.zoom, -Math.sign(event.deltaY)), event.clientX - rect.left, event.clientY - rect.top); }, { passive: false });
       viewport.addEventListener("keydown", event => {
-        if (event.defaultPrevented || event.target !== viewport || this.#busy) return;
+        if (event.defaultPrevented || event.target !== viewport || this.#busy || this.#connecting || event.altKey || ((event.ctrlKey || event.metaKey) && !event.key.startsWith("Arrow"))) return;
         if (["+", "=", "-", "0", "f"].includes(event.key)) { event.preventDefault(); if (event.key === "f") fit(); else zoomTo(event.key === "0" ? 1 : stepZoom(view.zoom, event.key === "-" ? -1 : 1)); this.querySelector<HTMLElement>(".dm-planner-viewport")?.focus({ preventScroll: true }); }
         else if (event.key.startsWith("Arrow")) { event.preventDefault(); const distance = event.shiftKey ? 160 : 48; viewport.scrollLeft += event.key === "ArrowRight" ? distance : event.key === "ArrowLeft" ? -distance : 0; viewport.scrollTop += event.key === "ArrowDown" ? distance : event.key === "ArrowUp" ? -distance : 0; }
       });
@@ -297,25 +324,15 @@ export function definePlannerElement(generation?: string): string {
 
     #editor(document: Document, snapshot: PlanningSnapshot): HTMLDialogElement {
       const dialog = document.createElement("dialog"); dialog.className = "dm-planner-dialog dm-planner-inspector"; dialog.setAttribute("aria-label", "Edit planning item");
-      const selected = snapshot.items.find((item) => item.id === this.#editorId)!;
+      const isNew = this.#newItem?.id === this.#editorId;
+      const selected = isNew ? this.#newItem! : snapshot.items.find((item) => item.id === this.#editorId)!;
       const header = document.createElement("header"), title = document.createElement("h2"); title.textContent = selected.title;
-      const close = actionButton(document, "Close editor", () => this.#closeEditor()); close.dataset["viewAction"] = "";
+      const closeEditor = (): void => { if (isNew) this.#cancelCreation(); else this.#closeEditor(); };
+      const close = actionButton(document, isNew ? "Cancel creation" : "Close editor", closeEditor); close.dataset["viewAction"] = "";
       const reload = actionButton(document, "Reload planner", () => void this.#reload()); reload.dataset["viewAction"] = "";
       const saveItem = actionButton(document, "Save item", () => undefined, "primary"); saveItem.type = "submit"; saveItem.setAttribute("form", `${this.#flowMarkerId}-details`);
       header.append(title, saveItem, close); dialog.append(header);
-      dialog.addEventListener("cancel", event => { event.preventDefault(); this.#closeEditor(); });
-      dialog.addEventListener("keydown", event => {
-        if (event.key !== "Tab") return;
-        const controls = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]')].filter(control => control.tabIndex >= 0 && control.getClientRects().length > 0);
-        const index = controls.indexOf(document.activeElement as HTMLElement);
-        if (!controls.length) { event.preventDefault(); dialog.focus(); }
-        else if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1)!.focus(); }
-        else if (!event.shiftKey && (index === -1 || index === controls.length - 1)) { event.preventDefault(); controls[0]!.focus(); }
-      });
-      dialog.addEventListener("click", event => {
-        if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect();
-        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) this.#closeEditor();
-      });
+      configurePlannerDialog(dialog, closeEditor);
       const tabs = document.createElement("div"); tabs.className = "dm-dialog-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Item sections"); dialog.append(tabs);
       const body = document.createElement("div"); body.className = "dm-planner-dialog-body"; dialog.append(body); body.append(reload);
       if (this.#message) body.append(messageBlock(document, this.#message, this.#messageKind));
@@ -323,6 +340,7 @@ export function definePlannerElement(generation?: string): string {
       this.#removedDrafts(document, body, snapshot);
       const panels = new Map<string, HTMLElement>();
       const activate = (id: string): void => {
+        if (isNew && id !== "details") return;
         if (this.#dialogTab !== id) body.scrollTop = 0;
         this.#dialogTab = id;
         for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) { const active = button.dataset["tab"] === id; button.setAttribute("aria-selected", String(active)); button.tabIndex = active ? 0 : -1; }
@@ -331,10 +349,11 @@ export function definePlannerElement(generation?: string): string {
       for (const [id, label] of [["details", "Details"], ["links", "Links"], ["notes", "Notes"]] as const) {
         const panel = document.createElement("section"); panel.setAttribute("role", "tabpanel"); panel.id = `${this.#flowMarkerId}-${id}-panel`; panels.set(id, panel); body.append(panel);
         const button = actionButton(document, label, () => activate(id)); button.setAttribute("role", "tab"); button.dataset["tab"] = id; button.id = `${this.#flowMarkerId}-${id}-tab`; button.setAttribute("aria-controls", panel.id); panel.setAttribute("aria-labelledby", button.id); tabs.append(button);
+        if (isNew && id !== "details") { button.dataset["unavailable"] = ""; button.disabled = true; }
       }
       tabs.addEventListener("keydown", event => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        event.preventDefault(); const buttons = [...tabs.querySelectorAll("button")], index = buttons.indexOf(event.target as HTMLButtonElement);
+        event.preventDefault(); const buttons = [...tabs.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")], index = buttons.indexOf(event.target as HTMLButtonElement); if (!buttons.length) return;
         const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
         buttons[next]!.click(); buttons[next]!.focus();
       });
@@ -345,13 +364,17 @@ export function definePlannerElement(generation?: string): string {
       const refreshStructure = appendItemStructure(document, form, selected, snapshot.items);
       form.append(textField(document, "Title", "title", selected.title), textArea(document, "Summary", "summary", selected.summary, 3), textArea(document, "Objective", "objective", selected.objective, 3), textArea(document, "Body", "body", selected.body, 7), textArea(document, "Setup", "setup", selected.setup, 5), textArea(document, "Resolution", "resolution", selected.resolution, 5), textField(document, "Tags", "tags", selected.tags.join(", ")));
       for (const [name, limit] of Object.entries({ title: 160, summary: 2000, objective: 10000, body: 80000, setup: 30000, resolution: 30000, tags: 2440 })) form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.maxLength = limit;
-      this.#bindDraft(form, `planning_items:${selected.id}`, snapshot.revisions.get(`planning_items:${selected.id}`));
+      this.#bindDraft(form, isNew ? `new-item:${selected.id}` : `planning_items:${selected.id}`, isNew ? 0 : snapshot.revisions.get(`planning_items:${selected.id}`));
       refreshStructure();
       const save = actionButton(document, "Save details", () => undefined, "primary"); save.type = "submit"; form.append(save); aside.append(form);
-      if (selected.kind === "plotline" || selected.kind === "quest") aside.append(actionButton(document, "Enter this canvas", () => this.#openCanvas(selected.id)));
-      panels.get("links")!.append(this.#flowEditor(document, snapshot, selected), this.#annotations(document, snapshot, selected));
-      panels.get("notes")!.append(this.#notes(document, snapshot, selected));
-      aside.append(actionButton(document, "Delete item and subtree", () => void this.#delete(selected), "danger")); activate(this.#dialogTab); return dialog;
+      if (isNew) aside.prepend(messageBlock(document, "This item is not saved yet. Save it before adding links or notes; Cancel creation leaves the campaign unchanged.", "status"));
+      else {
+        if (selected.kind === "plotline" || selected.kind === "quest") aside.append(actionButton(document, "Enter this canvas", () => this.#openCanvas(selected.id)));
+        panels.get("links")!.append(this.#flowEditor(document, snapshot, selected), this.#annotations(document, snapshot, selected));
+        panels.get("notes")!.append(this.#notes(document, snapshot, selected));
+        aside.append(actionButton(document, "Delete item and subtree", () => void this.#delete(selected), "danger"));
+      }
+      activate(this.#dialogTab); return dialog;
     }
 
     #flowEditor(document: Document, snapshot: PlanningSnapshot, selected: PlanningItem): HTMLElement {
@@ -431,7 +454,10 @@ export function definePlannerElement(generation?: string): string {
       return section;
     }
 
-    async #create(kind: PlanningKind): Promise<void> { const item = newItem(kind, this.#scopeId); if (await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_items", item, 0), `Created ${item.title}.`, item.id)) this.#edit(item.id); }
+    #create(kind: PlanningKind): void {
+      if (this.#busy || this.#needsReload) return;
+      this.#newItem ??= newItem(kind, this.#scopeId); this.#editorId = this.#newItem.id; this.#dialogTab = "details"; this.#message = ""; this.#syncEdits(); this.#render(); this.querySelector<HTMLInputElement>('dialog input[name="title"]')?.focus();
+    }
     async #saveItem(item: PlanningItem, form: HTMLFormElement): Promise<void> {
       const snapshot = this.#snapshot; if (!snapshot) return;
       const data = new FormData(form); const text = (name: string): string => String(data.get(name) ?? "").trim();
@@ -443,11 +469,12 @@ export function definePlannerElement(generation?: string): string {
         ...(kind === "event" ? { eventType: (text("eventType") || eventType || "story") as NonNullable<PlanningItem["eventType"]> } : {}),
         ...(kind === "branch" ? { branchType: (text("branchType") || branchType || "decision") as NonNullable<PlanningItem["branchType"]> } : {}) };
       if (next.title === "") { this.#message = "A title is required."; this.#messageKind = "alert"; this.#render(); return; }
-      const issues = validateItemEdit(snapshot, next); if (issues.length) { this.#invalid(issues[0]!); return; }
+      const isNew = item.id === this.#newItem?.id;
+      const issues = isNew ? validatePlanning({ ...snapshot, items: [...snapshot.items, next] }) : validateItemEdit(snapshot, next); if (issues.length) { this.#invalid(issues[0]!); return; }
       const revision = this.#drafts.revision(form); if (revision === undefined) return;
-      const saved = await this.#mutate(async (runtime, snapshot) => runtime.repository.saveItem(snapshot, next, revision), "Details saved.", item.id, `planning_items:${item.id}`);
+      const saved = await this.#mutate(async (runtime, snapshot) => isNew ? runtime.repository.createItem(snapshot, next) : runtime.repository.saveItem(snapshot, next, revision), "Details saved.", item.id, isNew ? `new-item:${item.id}` : `planning_items:${item.id}`);
       const current = saved ? this.#snapshot?.items.find(value => value.id === item.id) : undefined;
-      if (current && (item.parentId !== current.parentId || item.kind !== current.kind)) this.#revealItem(current);
+      if (current && (isNew || item.parentId !== current.parentId || item.kind !== current.kind)) this.#revealItem(current);
     }
 
     #revealItem(item: PlanningItem): void {
@@ -464,6 +491,12 @@ export function definePlannerElement(generation?: string): string {
       const candidate: PlanningDataset = { ...snapshot, flows: [...snapshot.flows, flow] }; const issues = validatePlanning(candidate); if (issues.length > 0) { this.#message = issues[0] as string; this.#messageKind = "alert"; this.#render(); return; }
       await this.#mutate(async (runtime, snapshot) => runtime.repository.put(snapshot, "planning_flow_links", flow, 0), "Flow created.", source.id, `new-flow:${source.id}`);
     }
+    async #connectBetween(sourceId: string, targetId: string): Promise<void> {
+      const snapshot = this.#snapshot, source = snapshot?.items.find(item => item.id === sourceId); if (!snapshot || !source) return;
+      const flow: PlanningFlow = { id: `flow-${crypto.randomUUID()}`, schemaVersion: 3, sourceId, targetId, kind: source.kind === "branch" ? "option" : "continues", label: "", updatedAt: Date.now() };
+      const issues = validatePlanning({ ...snapshot, flows: [...snapshot.flows, flow] }); if (issues.length) { this.#invalid(issues[0]!); return; }
+      await this.#mutate((runtime, current) => runtime.repository.put(current, "planning_flow_links", flow, 0), "Flow created.", sourceId);
+    }
     async #saveFlow(flow: PlanningFlow, form: HTMLFormElement, selectedId: string): Promise<void> {
       const snapshot = this.#snapshot; const revision = this.#drafts.revision(form); if (!snapshot || revision === undefined) return;
       const data = new FormData(form); const next: PlanningFlow = { ...flow, kind: String(data.get("kind")) as PlanningFlow["kind"], label: String(data.get("label") ?? "").trim(), updatedAt: Date.now() };
@@ -475,16 +508,24 @@ export function definePlannerElement(generation?: string): string {
       const snapshot = this.#snapshot; if (!snapshot) return;
       const consequences = snapshot.consequences.filter(entry => entry.anchor["scope"] === "flow" && entry.anchor["flowId"] === flow.id);
       if (consequences.length && !confirm(`Remove this flow and its ${consequences.length} attached consequences?`)) return;
-      await this.#mutate(runtime => runtime.repository.deleteFlow(snapshot, flow.id), "Flow removed.", selectedId, `planning_flow_links:${flow.id}`);
+      await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteFlow(snapshot, flow.id); }, "Flow removed.", selectedId, `planning_flow_links:${flow.id}`);
     }
     async #savePositions(positions: Record<string, { x: number; y: number }>): Promise<void> { const snapshot = this.#snapshot; if (snapshot === undefined) return; await this.#mutate(runtime => runtime.repository.savePositions(snapshot, this.#scopeId, positions), "Position saved.", this.#selectedId); this.querySelector<HTMLElement>(".dm-planner-viewport")?.focus({ preventScroll: true }); }
     async #deleteSelection(): Promise<void> {
       const snapshot = this.#snapshot, items = [...this.#selection.items], flows = [...this.#selection.flows];
       if (!snapshot || this.#busy || this.#needsReload || (!items.length && !flows.length)) return;
       if (!confirm(`Delete ${items.length} selected items and ${flows.length} selected flows, including subtrees and attached annotations? Shared notes keep their other links.`)) return;
-      await this.#mutate(runtime => runtime.repository.deleteSelection(snapshot, items, flows), "Selection deleted.");
+      await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteSelection(snapshot, items, flows); }, "Selection deleted.");
     }
-    async #delete(item: PlanningItem): Promise<void> { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(`Delete ${item.title} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links.`)) return; await this.#mutate(async (runtime) => runtime.repository.deleteSubtree(snapshot, item.id), "Planning subtree deleted."); }
+    async #delete(item: PlanningItem): Promise<void> { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(`Delete ${item.title} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links.`)) return; await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteSubtree(snapshot, item.id); }, "Planning subtree deleted."); }
+    async #undoDeletion(): Promise<void> {
+      const undo = this.#undoDelete; if (!undo) return;
+      await this.#mutate(async (runtime, snapshot) => { await runtime.repository.undoDeletion(snapshot, undo); this.#undoDelete = undefined; }, "Deletion undone.");
+    }
+    async #resetLayout(): Promise<void> {
+      if (this.#busy || this.#needsReload || !confirm("Reset the positions on this canvas? Items, links and other canvases will stay unchanged.")) return;
+      await this.#mutate((runtime, snapshot) => runtime.repository.resetLayout(snapshot, this.#scopeId), "Layout reset.", this.#selectedId);
+    }
     async #addReference(item: PlanningItem, form: HTMLFormElement): Promise<void> {
       const snapshot = this.#snapshot; if (!snapshot) return;
       const data = new FormData(form); const core = coreReferences(this.#contribution?.host);
@@ -543,7 +584,7 @@ export function definePlannerElement(generation?: string): string {
 
     #removedDrafts(document: Document, root: HTMLElement, snapshot: PlanningSnapshot): void {
       for (const [key, draft] of this.#drafts.entries()) {
-        if (key.startsWith("new-flow:") || key.startsWith("new-reference:") || snapshot.revisions.has(key)) continue;
+        if (key.startsWith("new-item:") || key.startsWith("new-flow:") || key.startsWith("new-reference:") || snapshot.revisions.has(key)) continue;
         const details = document.createElement("details"); const title = document.createElement("summary");
         title.textContent = `Unsaved edits to a removed record: ${draft.values["title"] || draft.values["name"] || "Planning record"}`;
         const content = document.createElement("pre"); content.textContent = Object.entries(draft.values).map(([field, value]) => `${field}: ${value}`).join("\n\n");
@@ -552,10 +593,10 @@ export function definePlannerElement(generation?: string): string {
       }
     }
 
-    #acceptCommittedDrafts(): void { for (const key of this.#committedDrafts) this.#drafts.clear(key); this.#committedDrafts.clear(); }
+    #acceptCommittedDrafts(): void { for (const key of this.#committedDrafts) { if (key === `new-item:${this.#newItem?.id}`) this.#newItem = undefined; this.#drafts.clear(key); } this.#committedDrafts.clear(); this.#syncEdits(); }
 
     #syncEdits(): void {
-      const dirty = [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
+      const dirty = (!!this.#newItem && !this.#committedDrafts.has(`new-item:${this.#newItem.id}`)) || [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
       this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
       this.#live?.wake();
     }
@@ -598,7 +639,6 @@ function appendItemStructure(document: Document, form: HTMLFormElement, item: Pl
   return refresh;
 }
 
-function positionsFor(views: readonly PlanningView[], scopeId: string | null, items: readonly PlanningItem[]): Map<string, { x: number; y: number }> { const view = views.find((candidate) => candidate.scopeId === scopeId); return new Map(items.map((item, index) => [item.id, view?.positions[item.id] ?? { x: 72 + (index % 3) * 300, y: 72 + Math.floor(index / 3) * 190 }])); }
 function orthogonalPath(sourceX: number, sourceY: number, targetX: number, targetY: number): string { const middle = sourceX + (targetX - sourceX) / 2; return `M ${sourceX} ${sourceY} H ${middle} V ${targetY} H ${targetX}`; }
 function subtype(item: PlanningItem): string { return item.kind === "event" ? item.eventType ?? "event" : item.kind === "branch" ? item.branchType ?? "branch" : item.kind; }
 function flowKindOptions(source: PlanningItem): readonly (readonly [string, string])[] { return source.kind === "branch" ? [["continues", "Continues"], ["option", "Option"]] : [["continues", "Continues"]]; }

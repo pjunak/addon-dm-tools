@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { PlanningRepository } from "../web/planning-repository.js";
 const collectionIds = ["planning_items", "planning_flow_links", "planning_references", "planning_consequences", "dm_notes", "planning_views"];
 const dataRevisions = collectionIds.map(dataId => ({ kind: "collection", dataId, revision: 0 }));
+const receipt = mutations => ({ results: mutations.map(mutation => ({ dataId: mutation.dataId, key: mutation.key, afterRevision: mutation.expectedRevision + 1, deleted: mutation.operation === 'delete' })) });
 import { validatePlanning } from "../web/planning-model.js";
 
 test("moving a container changes only its record and retains the draft revision and collection guards", async () => {
@@ -50,7 +51,7 @@ test("subtree deletion publishes one explicit cross-collection transaction", asy
     signal: new AbortController().signal,
     data: {
       collection: id => handles.get(id) ?? { query: async () => ({ documents: [] }), put: async () => {}, delete: async () => {} },
-      transact: async value => { mutations = value; },
+      transact: async value => { mutations = value; return receipt(value); },
     },
   };
   const repository = new PlanningRepository(context);
@@ -79,9 +80,80 @@ function deletionFixture() {
   const collections = { items: "planning_items", flows: "planning_flow_links", references: "planning_references", consequences: "planning_consequences", notes: "dm_notes", views: "planning_views" };
   for (const [key, collection] of Object.entries(collections)) for (const record of dataset[key]) dataset.revisions.set(`${collection}:${record.id}`, dataset.revisions.size + 1);
   const writes = [];
-  const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: () => ({}), transact: async mutations => { writes.push(mutations); } } });
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: () => ({}), transact: async mutations => { writes.push(mutations); return receipt(mutations); } } });
   return { dataset, repository, writes, collections };
 }
+
+function applyWrites(snapshot, mutations, collections) {
+  const next = structuredClone(snapshot);
+  for (const mutation of mutations) {
+    const field = Object.keys(collections).find(key => collections[key] === mutation.dataId), key = `${mutation.dataId}:${mutation.key}`;
+    next[field] = next[field].filter(value => value.id !== mutation.key);
+    if (mutation.operation === 'put') { next[field].push(structuredClone(mutation.value)); next.revisions.set(key, mutation.expectedRevision + 1); }
+    else next.revisions.delete(key);
+  }
+  return next;
+}
+
+test('undo restores the complete deletion using receipt revisions and retains unrelated later edits', async () => {
+  const { dataset, repository, writes, collections } = deletionFixture();
+  for (const key of Object.keys(collections)) for (const value of dataset[key]) value.updatedAt = 1;
+  const before = structuredClone(dataset), undo = await repository.deleteSubtree(dataset, 'quest-a');
+  const after = applyWrites(dataset, writes[0], collections);
+  after.items.find(item => item.id === 'quest-b').title = 'Unrelated newer title'; after.revisions.set('planning_items:quest-b', 55);
+  await repository.undoDeletion(after, undo);
+  assert.equal(writes.length, 2); assert.equal(writes[1].length, writes[0].length);
+  for (const inverse of writes[1]) {
+    const deleted = writes[0].find(value => value.dataId === inverse.dataId && value.key === inverse.key);
+    assert.equal(inverse.operation, 'put'); assert.equal(inverse.expectedRevision, deleted.expectedRevision + 1);
+    assert.ok(inverse.value.updatedAt > 1);
+  }
+  const restored = applyWrites(after, writes[1], collections);
+  assert.equal(restored.items.find(item => item.id === 'quest-b').title, 'Unrelated newer title');
+  for (const field of ['flows', 'references', 'consequences', 'notes', 'views']) {
+    const content = values => values.map(({ updatedAt, ...value }) => value).sort((a, b) => a.id.localeCompare(b.id));
+    assert.deepEqual(content(restored[field]), content(before[field]));
+  }
+  assert.deepEqual(validatePlanning(restored), []); assert.deepEqual(dataset, before);
+});
+
+test('undo refuses changed shared records and invalid restored ownership before publishing', async () => {
+  for (const conflict of ['note', 'parent']) {
+    const { dataset, repository, writes, collections } = deletionFixture();
+    const undo = await repository.deleteSubtree(dataset, 'event-a'), after = applyWrites(dataset, writes[0], collections);
+    if (conflict === 'note') after.revisions.set('dm_notes:shared-note', 100);
+    else after.items = after.items.filter(item => item.id !== 'quest-a');
+    await assert.rejects(repository.undoDeletion(after, undo), conflict === 'note' ? /changed after deletion/ : /missing parent/);
+    assert.equal(writes.length, 1);
+  }
+});
+
+test('an incomplete deletion receipt never invents undo revisions', async () => {
+  const { dataset } = deletionFixture();
+  let calls = 0;
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: () => ({}), transact: async () => { calls++; return { results: [] }; } } });
+  await assert.rejects(repository.deleteSubtree(dataset, 'quest-a'), /undo receipt is incomplete/); assert.equal(calls, 1);
+});
+
+test('reset clears only the active layout and retains its revision for the next drag', async () => {
+  const { dataset, repository, writes, collections } = deletionFixture(), before = structuredClone(dataset);
+  await repository.resetLayout(dataset, null);
+  assert.equal(writes[0].length, 1); assert.equal(writes[0][0].key, 'scope-root'); assert.deepEqual(writes[0][0].value.positions, {});
+  const after = applyWrites(dataset, writes[0], collections); await repository.savePosition(after, null, 'quest-a', 48, 72);
+  assert.equal(writes[1][0].expectedRevision, writes[0][0].expectedRevision + 1);
+  assert.deepEqual(writes[1][0].value.positions, { 'quest-a': { x: 48, y: 72 } });
+  assert.deepEqual(after.views.find(view => view.scopeId === 'quest-a'), before.views.find(view => view.scopeId === 'quest-a'));
+  assert.deepEqual(dataset, before);
+});
+
+test('creation validates ownership and duplicate IDs before a revision-zero write', async () => {
+  const { dataset, repository, writes } = deletionFixture();
+  await assert.rejects(repository.createItem(dataset, validQuest()), /Duplicate/);
+  await assert.rejects(repository.createItem(dataset, { ...validQuest(), id: 'new', parentId: 'absent' }), /missing parent/);
+  assert.equal(writes.length, 0);
+  await repository.createItem(dataset, { ...validQuest(), id: 'new', parentId: 'quest-a' });
+  assert.equal(writes[0].length, 1); assert.equal(writes[0][0].expectedRevision, 0);
+});
 
 test("deleting a flow atomically removes its consequences without deleting endpoint annotations", async () => {
   const { dataset, repository, writes } = deletionFixture();

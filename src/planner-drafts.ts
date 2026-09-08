@@ -41,6 +41,7 @@ export class PlannerDrafts {
   revision(form: HTMLFormElement): number | undefined { return this.#forms.get(form)?.revision; }
   has(key: string): boolean { return this.#drafts.has(key); }
   entries(): IterableIterator<[string, Draft]> { return this.#drafts.entries(); }
+  rekey(from: string, to: string): void { const draft = this.#drafts.get(from); if (draft) { this.#drafts.delete(from); this.#drafts.set(to, draft); this.#changed(); } }
   clear(key: string): void { if (this.#drafts.delete(key)) this.#changed(); }
   clearAll(): void { this.#drafts.clear(); this.#changed(); }
 }

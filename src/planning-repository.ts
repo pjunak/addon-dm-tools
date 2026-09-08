@@ -1,9 +1,10 @@
-import type { AddonContext, AddonDocument, CollectionHandle, DataMutation, DataSetRevision } from "./sdk.js";
+import type { AddonContext, AddonDocument, CollectionHandle, CommitReceipt, DataMutation, DataSetRevision } from "./sdk.js";
 import { scopeViewId, subtreeIds, validateItemEdit, validatePlanning, type DmNote, type PlanningConsequence, type PlanningDataset, type PlanningFlow, type PlanningItem, type PlanningReference, type PlanningView } from "./planning-model.js";
 
 type CollectionId = "planning_items" | "planning_flow_links" | "planning_references" | "planning_consequences" | "dm_notes" | "planning_views";
 type Stored = PlanningItem | PlanningFlow | PlanningReference | PlanningConsequence | DmNote | PlanningView;
 export interface PlanningSnapshot extends PlanningDataset { readonly revisions: ReadonlyMap<string, number>; readonly dataRevisions: readonly DataSetRevision[] }
+export interface DeletionUndo { readonly mutations: readonly Extract<DataMutation, { operation: "put" }>[] }
 
 export class PlanningRepository {
   readonly #context: AddonContext;
@@ -34,28 +35,33 @@ export class PlanningRepository {
     const issues = validatePlanning(snapshot); if (issues.length > 0) throw new Error(`Stored planning data is inconsistent: ${issues.slice(0, 3).join(" ")}`);
     return snapshot;
   }
-  put(snapshot: PlanningSnapshot, collection: CollectionId, value: Stored, revision: number): Promise<void> {
-    return this.transact(snapshot, [{ operation: "put", kind: "collection", dataId: collection, key: value.id, expectedRevision: revision, value }]);
+  async put(snapshot: PlanningSnapshot, collection: CollectionId, value: Stored, revision: number): Promise<void> {
+    await this.transact(snapshot, [{ operation: "put", kind: "collection", dataId: collection, key: value.id, expectedRevision: revision, value }]);
+  }
+  async createItem(snapshot: PlanningSnapshot, item: PlanningItem): Promise<void> {
+    const issues = validatePlanning({ ...snapshot, items: [...snapshot.items, item] });
+    if (issues.length) throw new Error(issues[0]);
+    await this.put(snapshot, "planning_items", item, 0);
   }
   async saveItem(snapshot: PlanningSnapshot, item: PlanningItem, revision: number): Promise<void> {
     const issues = validateItemEdit(snapshot, item);
     if (issues.length) throw new Error(issues[0]);
     await this.put(snapshot, "planning_items", item, revision);
   }
-  async transact(snapshot: PlanningSnapshot, mutations: readonly DataMutation[]): Promise<void> {
+  async transact(snapshot: PlanningSnapshot, mutations: readonly DataMutation[]): Promise<CommitReceipt> {
     const guards = snapshot.dataRevisions;
     if (!Array.isArray(guards) || guards.length !== collections.length || collections.some(id => !guards.some(guard => guard.kind === "collection" && guard.dataId === id && Number.isSafeInteger(guard.revision) && guard.revision >= 0))) {
       throw new Error("Collection revisions are missing. Reload the planner before saving.");
     }
-    await this.#context.data.transact(mutations, { signal: this.#context.signal, expectedDataSets: guards });
+    return this.#context.data.transact(mutations, { signal: this.#context.signal, expectedDataSets: guards });
   }
-  async deleteSubtree(snapshot: PlanningSnapshot, rootId: string): Promise<void> {
-    await this.deleteSelection(snapshot, [rootId], []);
+  async deleteSubtree(snapshot: PlanningSnapshot, rootId: string): Promise<DeletionUndo | undefined> {
+    return this.deleteSelection(snapshot, [rootId], []);
   }
-  async deleteFlow(snapshot: PlanningSnapshot, flowId: string): Promise<void> {
-    await this.deleteSelection(snapshot, [], [flowId]);
+  async deleteFlow(snapshot: PlanningSnapshot, flowId: string): Promise<DeletionUndo | undefined> {
+    return this.deleteSelection(snapshot, [], [flowId]);
   }
-  async deleteSelection(snapshot: PlanningSnapshot, selectedItems: readonly string[], selectedFlows: readonly string[]): Promise<void> {
+  async deleteSelection(snapshot: PlanningSnapshot, selectedItems: readonly string[], selectedFlows: readonly string[]): Promise<DeletionUndo | undefined> {
     const ids = new Set<string>(), flowIds = new Set(selectedFlows);
     for (const id of selectedItems) {
       if (!snapshot.items.some(item => item.id === id)) throw new Error("This planning item no longer exists. Reload the planner.");
@@ -64,7 +70,37 @@ export class PlanningRepository {
     for (const id of flowIds) if (!snapshot.flows.some(flow => flow.id === id)) throw new Error("This flow no longer exists. Reload the planner.");
     for (const flow of snapshot.flows) if (ids.has(flow.sourceId) || ids.has(flow.targetId)) flowIds.add(flow.id);
     if (!ids.size && !flowIds.size) return;
-    await this.transact(snapshot, deletionMutations(snapshot, ids, flowIds));
+    const mutations = deletionMutations(snapshot, ids, flowIds), receipt = await this.transact(snapshot, mutations);
+    const original = recordsByCollection(snapshot);
+    // Deleted keys retain tombstone revisions. Undo must never recreate at zero
+    // or borrow newer revisions from a subsequently edited record.
+    return { mutations: mutations.map(mutation => {
+      const results = receipt.results.filter(result => result.dataId === mutation.dataId && result.key === mutation.key), result = results[0];
+      if (results.length !== 1 || !result || !Number.isSafeInteger(result.afterRevision) || result.afterRevision <= mutation.expectedRevision || result.deleted !== (mutation.operation === "delete")) throw new Error("Deletion was saved, but its undo receipt is incomplete. Reload the planner.");
+      const value = original.get(`${mutation.dataId}:${mutation.key}`)!;
+      return { operation: "put", kind: "collection", dataId: mutation.dataId, key: mutation.key, expectedRevision: result.afterRevision, value: structuredClone(value) };
+    }) };
+  }
+  async undoDeletion(snapshot: PlanningSnapshot, undo: DeletionUndo): Promise<void> {
+    if (!undo.mutations.length || undo.mutations.length > 256) throw new Error("This deletion cannot be restored in one transaction.");
+    const records = recordsByCollection(snapshot), now = Date.now();
+    const mutations = undo.mutations.map(mutation => {
+      const key = `${mutation.dataId}:${mutation.key}`, current = snapshot.revisions.get(key);
+      if (current !== undefined && current !== mutation.expectedRevision) throw new Error("An affected record changed after deletion. Undo cannot overwrite those changes.");
+      const value = { ...(mutation.value as Stored), updatedAt: Math.max(now, (mutation.value as Stored).updatedAt + 1) };
+      records.set(key, value); return { ...mutation, value };
+    });
+    const restored = <K extends keyof PlanningDataset>(key: K): PlanningDataset[K] => [...records].filter(([id]) => id.startsWith(`${collectionKeys[key]}:`)).map(([, value]) => value) as PlanningDataset[K];
+    const issues = validatePlanning({ items: restored("items"), flows: restored("flows"), references: restored("references"), consequences: restored("consequences"), notes: restored("notes"), views: restored("views") });
+    if (issues.length) throw new Error(`Cannot undo deletion: ${issues[0]}`);
+    await this.transact(snapshot, mutations);
+  }
+  async resetLayout(snapshot: PlanningSnapshot, scopeId: string | null): Promise<void> {
+    const view = snapshot.views.find(value => value.scopeId === scopeId); if (!view) return;
+    const revision = snapshot.revisions.get(`planning_views:${view.id}`);
+    if (revision === undefined) throw new Error("The layout revision is missing. Reload the planner.");
+    // Keep the revision-bearing view so a later drag does not recreate a tombstone.
+    await this.put(snapshot, "planning_views", { ...view, positions: {}, updatedAt: Date.now() }, revision);
   }
   async savePosition(snapshot: PlanningSnapshot, scopeId: string | null, itemId: string, x: number, y: number): Promise<void> {
     await this.savePositions(snapshot, scopeId, { [itemId]: { x, y } });
@@ -95,6 +131,10 @@ export class PlanningRepository {
 }
 
 const collections = ["planning_items", "planning_flow_links", "planning_references", "planning_consequences", "dm_notes", "planning_views"] as const;
+const collectionKeys = { items: "planning_items", flows: "planning_flow_links", references: "planning_references", consequences: "planning_consequences", notes: "dm_notes", views: "planning_views" } as const;
+function recordsByCollection(snapshot: PlanningDataset): Map<string, Stored> {
+  return new Map(Object.entries(collectionKeys).flatMap(([key, collection]) => snapshot[key as keyof typeof collectionKeys].map(value => [`${collection}:${value.id}`, value] as const)));
+}
 
 function deletionMutations(snapshot: PlanningSnapshot, itemIds: ReadonlySet<string>, flowIds: ReadonlySet<string>): readonly DataMutation[] {
   const mutations: DataMutation[] = []; const now = Date.now();
