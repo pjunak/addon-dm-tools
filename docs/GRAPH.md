@@ -72,6 +72,21 @@ teardown never waits for a save or persists drafts.
 Pointer cancellation or capture loss restores the card's original coordinates;
 only a completed pointer release persists a moved position.
 
+`planner-selection.ts` owns pointer/keyboard selection and gesture-local geometry.
+Item and flow selections are scoped to the visible canvas and pruned after reload.
+Clicking selects without opening a form; the editor is a separate modal with
+Details, Links and Notes panels. Closing or switching panels preserves named
+drafts and their opening revisions. The dialog bounds keyboard focus and makes
+background planner controls inert until closed.
+
+A group drag snaps its displacement, preserving the cards' relative positions,
+including negative coordinates. Completed group drags and keyboard moves update
+one `planning_views` document through the repository with all six collection
+guards. Canceled gestures restore both geometry and the preceding selection.
+Group deletion unions overlapping subtrees and explicitly selected flows before
+building the existing cross-collection cleanup; missing targets, missing
+revisions and oversized deletion plans reject before any write.
+
 `planner-viewport.ts` owns the preserved fixed zoom ladder, fit calculation,
 content bounds and device-pixel rounding. Zoom changes native dimensions and
 text sizes, never a transform of the rendered canvas. SVG uses matching logical

@@ -126,3 +126,34 @@
   .dm-import-routing > button { margin-left: 0; }
   .dm-import-actions { align-items: stretch; flex-direction: column; }
 }
+
+/* The original editor is a centered dialog, with a bottom sheet on phones. */
+.dm-planner-workspace { grid-template-columns: 11rem minmax(0, 1fr); }
+.dm-planner-selection { align-items: center; min-height: 2.7rem; }
+.dm-planner-selection > span { flex: 1; padding: .3rem; color: var(--text-muted, #9a8660); font-size: .82rem; }
+.dm-selection-hull, .dm-selection-marquee { position: absolute; pointer-events: none; border: 1px dashed var(--accent-gold, #c8a040); border-radius: .4rem; }
+.dm-selection-marquee { background: rgba(var(--accent-gold-rgb, 200, 160, 64), .15); border-style: solid; z-index: 3; }
+.dm-selection-hull[hidden], .dm-selection-marquee[hidden] { display: none; }
+.dm-planner-flows path.dm-flow-hit { pointer-events: stroke; cursor: pointer; stroke: transparent; stroke-width: 16; }
+.dm-planner-flows path.selected { stroke: var(--text-parchment, #f5edd8); stroke-width: 3; }
+.dm-planner-dialog { margin: auto; width: min(58rem, calc(100% - 2rem)); max-width: none; max-height: min(52rem, calc(100dvh - 2rem)); padding: 0; color: var(--text-light, #d4c49a); border: 1px solid var(--accent-gold-dim, #8b6914); border-radius: var(--radius-lg, 12px); background: var(--bg-surface, #1c1509); box-shadow: 0 20px 70px #0009; overflow: hidden; }
+.dm-planner-dialog:not([open]) { display: none; }
+.dm-planner-dialog[open] { display: flex; gap: 0; }
+.dm-planner-dialog::backdrop { background: #000b; }
+.dm-planner-dialog > header { display: flex; align-items: center; gap: .5rem; padding: 1rem; border-bottom: 1px solid var(--border-subtle, #ffffff12); }
+.dm-planner-dialog > header h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-parchment, #f5edd8); }
+.dm-dialog-tabs { display: flex; gap: .25rem; padding-inline: 1rem; border-bottom: 1px solid var(--border-subtle, #ffffff12); }
+.dm-dialog-tabs button { min-height: 3rem; padding-inline: .75rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--text-muted, #9a8660); }
+.dm-dialog-tabs button[aria-selected="true"] { color: var(--accent-gold, #c8a040); border-bottom-color: var(--accent-gold, #c8a040); }
+.dm-planner-dialog-body { min-height: 0; overflow: auto; padding: 1rem; overscroll-behavior: contain; }
+.dm-planner-dialog [role="tabpanel"][hidden] { display: none; }
+.dm-planner-dialog [role="tabpanel"] { border: 0; padding-top: 0; }
+.dm-planner-dialog [role="tabpanel"] > form:first-child { border: 0; padding-top: 0; }
+@media (max-width: 980px) { .dm-planner-workspace { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .dm-planner-dialog { margin: auto 0 0; width: 100%; max-height: 92dvh; border-radius: .75rem .75rem 0 0; }
+  .dm-planner-dialog > header { flex-wrap: wrap; padding: .75rem; }
+  .dm-planner-dialog > header h2 { flex-basis: 100%; }
+  .dm-planner-dialog > header button { flex: 1; }
+  .dm-planner-dialog-body { padding: .75rem; }
+}

@@ -49,21 +49,44 @@ export class PlanningRepository {
         await this.#context.data.transact(mutations, { signal: this.#context.signal, expectedDataSets: guards });
     }
     async deleteSubtree(snapshot, rootId) {
-        if (!snapshot.items.some(item => item.id === rootId))
-            throw new Error("This planning item no longer exists. Reload the planner.");
-        const ids = subtreeIds(snapshot.items, rootId);
-        const flowIds = new Set(snapshot.flows.filter((flow) => ids.has(flow.sourceId) || ids.has(flow.targetId)).map((flow) => flow.id));
-        await this.transact(snapshot, deletionMutations(snapshot, ids, flowIds));
+        await this.deleteSelection(snapshot, [rootId], []);
     }
     async deleteFlow(snapshot, flowId) {
-        if (!snapshot.flows.some(flow => flow.id === flowId))
-            throw new Error("This flow no longer exists. Reload the planner.");
-        await this.transact(snapshot, deletionMutations(snapshot, new Set(), new Set([flowId])));
+        await this.deleteSelection(snapshot, [], [flowId]);
+    }
+    async deleteSelection(snapshot, selectedItems, selectedFlows) {
+        const ids = new Set(), flowIds = new Set(selectedFlows);
+        for (const id of selectedItems) {
+            if (!snapshot.items.some(item => item.id === id))
+                throw new Error("This planning item no longer exists. Reload the planner.");
+            for (const child of subtreeIds(snapshot.items, id))
+                ids.add(child);
+        }
+        for (const id of flowIds)
+            if (!snapshot.flows.some(flow => flow.id === id))
+                throw new Error("This flow no longer exists. Reload the planner.");
+        for (const flow of snapshot.flows)
+            if (ids.has(flow.sourceId) || ids.has(flow.targetId))
+                flowIds.add(flow.id);
+        if (!ids.size && !flowIds.size)
+            return;
+        await this.transact(snapshot, deletionMutations(snapshot, ids, flowIds));
     }
     async savePosition(snapshot, scopeId, itemId, x, y) {
+        await this.savePositions(snapshot, scopeId, { [itemId]: { x, y } });
+    }
+    async savePositions(snapshot, scopeId, positions) {
+        if (!Object.keys(positions).length)
+            return;
+        for (const [itemId, point] of Object.entries(positions)) {
+            if (!snapshot.items.some(item => item.id === itemId && item.parentId === scopeId))
+                throw new Error("Only items on this canvas can be moved. Reload the planner.");
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y))
+                throw new Error("Canvas positions must be finite numbers.");
+        }
         const id = scopeViewId(scopeId);
         const current = snapshot.views.find((view) => view.id === id);
-        const next = { id, schemaVersion: 3, scopeId, positions: { ...(current?.positions ?? {}), [itemId]: { x, y } }, updatedAt: Date.now() };
+        const next = { id, schemaVersion: 3, scopeId, positions: { ...(current?.positions ?? {}), ...positions }, updatedAt: Date.now() };
         await this.put(snapshot, "planning_views", next, snapshot.revisions.get(`planning_views:${id}`) ?? 0);
     }
     async #all(id, signal) {

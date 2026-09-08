@@ -79,8 +79,8 @@
       const summaries = cards.map(card => card.querySelector("p")?.textContent);
       const path = planner.querySelector(".dm-planner-flows path");
 
-      check("planner renders three workspace regions", workspace?.children.length === 3, workspace?.children.length, 3);
-      check("planner keeps three desktop columns", getComputedStyle(workspace).gridTemplateColumns.split(" ").length === 3, getComputedStyle(workspace).gridTemplateColumns, "three resolved columns");
+      check("planner separates atlas and canvas from the edit dialog", workspace?.children.length === 2, workspace?.children.length, 2);
+      check("planner gives the canvas the remaining desktop width", getComputedStyle(workspace).gridTemplateColumns.split(" ").length === 2, getComputedStyle(workspace).gridTemplateColumns, "two resolved columns");
       check("planner renders both current records", JSON.stringify(titles) === JSON.stringify(["The silver road", "The sleeping dragon"]), titles, ["The silver road", "The sleeping dragon"]);
       check("planner preserves record summaries", JSON.stringify(summaries) === JSON.stringify(["Cross the valley before the sleeping dragon wakes.", "Reach the old gate without raising an alarm."]), summaries, "both source summaries");
       check("planner keeps deterministic default positions", cards[0]?.style.left === "72px" && cards[0]?.style.top === "72px" && cards[1]?.style.left === "372px" && cards[1]?.style.top === "72px", cards.map(card => ({ left: card.style.left, top: card.style.top })), [{ left: "72px", top: "72px" }, { left: "372px", top: "72px" }]);

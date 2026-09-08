@@ -47,14 +47,30 @@ Flow connects direct siblings only. It never changes ownership, crosses
 scopes, or records what happened during play. Named references, planned
 consequences, and DM notes are separate annotations and may cross scopes.
 
-The planner supports nested navigation, card creation and editing, drag-saved
+The planner supports nested navigation, card creation and editing, group-saved
 positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+Click a card or flow to select it; Shift-click adds or removes it from the
+selection. Drag empty canvas to select a rectangle, or Ctrl/Command+A to select
+all visible cards. Drag selected cards together, or move them with arrow keys
+(Shift moves four grid steps). Group movement preserves spacing in one saved
+layout revision. Delete/Backspace and **Delete selection** review one combined
+deletion, including selected subtrees, flows, and affected annotations.
+
+Double-click a card or choose **Edit selected** to open the original centered
+editor, presented as a bottom sheet on phones. Its **Details**, **Links**, and
+**Notes** tabs keep drafts when switched or closed. Escape closes the dialog
+and returns focus to the selected card; reopening keeps the opening revisions.
+The header's **Save item** remains available while reading long forms.
+**Connect selected** prepares a reviewed flow between two selected cards, and
+**Edit selected flow** opens a selected flow's existing editor.
+
 Canvas controls restore the fixed 35–200% zoom ladder with a native 100% stop,
-**Fit**, **Focus selected**, and browser fullscreen. Drag empty canvas to pan,
-or focus it and use arrow keys. Ctrl/Command + wheel and +/− zoom; 0 resets and
+**Fit**, **Focus selected**, and browser fullscreen. Middle-drag or Alt-drag pans;
+Ctrl/Command + arrow keys pan without moving selected cards. Touch scrolling on
+empty canvas remains native. Ctrl/Command + wheel and +/− zoom; 0 resets and
 F fits. Each canvas keeps its zoom and scroll position while the planner stays
 open, including selection, refresh, saved changes and navigation to another
 canvas. Zoom lays out native text and geometry directly. Card drags convert

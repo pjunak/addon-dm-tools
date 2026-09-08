@@ -157,9 +157,35 @@ test("all writes retain the validated snapshot including empty collections", asy
   } });
   const snapshot = await repository.load();
   await repository.put(snapshot, "planning_items", validQuest(), 7);
-  await repository.savePosition(snapshot, null, "quest-a", 20, 30);
+  await repository.savePosition({ ...snapshot, items: [validQuest()] }, null, "quest-a", 20, 30);
   for (const write of writes) assert.deepEqual(write.options.expectedDataSets, dataRevisions);
   assert.equal(writes[0].mutations[0].expectedRevision, 7);
   await assert.rejects(repository.put({ ...snapshot, dataRevisions: [] }, "planning_items", validQuest(), 0), /revisions are missing/);
   assert.equal(writes.length, 2);
+});
+
+test("group deletion unions overlapping subtrees and explicit flows without duplicate writes", async () => {
+  const { dataset, repository, writes } = deletionFixture();
+  await repository.deleteSelection(dataset, ['quest-a', 'event-a', 'quest-a'], ['flow-a']);
+  assert.equal(writes.length, 1);
+  const keys = writes[0].map(mutation => `${mutation.dataId}:${mutation.key}`);
+  assert.equal(keys.length, new Set(keys).size);
+  assert.deepEqual(writes[0].find(mutation => mutation.key === 'shared-note').value.anchorIds, ['quest-b']);
+  assert.ok(!keys.includes('planning_items:quest-b'));
+  await assert.rejects(repository.deleteSelection(dataset, ['missing'], []), /no longer exists/);
+  await assert.rejects(repository.deleteSelection(dataset, [], ['missing']), /no longer exists/);
+  assert.equal(writes.length, 1);
+});
+
+test("group moves preserve spacing and untouched positions in one guarded layout write", async () => {
+  const { dataset, repository, writes } = deletionFixture();
+  const original = structuredClone(dataset);
+  await repository.savePositions(dataset, null, { 'quest-a': { x: -24, y: 24 }, 'quest-b': { x: 252, y: 24 } });
+  assert.equal(writes.length, 1); assert.equal(writes[0].length, 1);
+  assert.deepEqual(writes[0][0].value.positions, { 'quest-a': { x: -24, y: 24 }, 'quest-b': { x: 252, y: 24 } });
+  assert.equal(writes[0][0].expectedRevision, dataset.revisions.get('planning_views:scope-root'));
+  assert.deepEqual(dataset, original);
+  await assert.rejects(repository.savePositions(dataset, null, { 'event-a': { x: 0, y: 0 } }), /Only items on this canvas/);
+  await assert.rejects(repository.savePositions(dataset, null, { 'quest-a': { x: Infinity, y: 0 } }), /finite/);
+  assert.equal(writes.length, 1);
 });
