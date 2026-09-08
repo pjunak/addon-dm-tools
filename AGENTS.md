@@ -4,15 +4,22 @@ DM Tools is an Add-on API v3 TypeScript/Go package for the sibling
 `ttrpg-codex` host. Its add-on ID and six collection IDs are permanent campaign
 data namespaces.
 
-## Read before editing
+## Read by task
 
-1. [`README.md`](README.md) for product behavior and commands.
-2. [`docs/GRAPH.md`](docs/GRAPH.md) for ownership and local-flow invariants.
+Sibling paths in this guide assume the named repositories are checked out
+next to this one. For an independent checkout, locate the compatible public
+host/consumer contracts only when needed; do not assume parent workspace
+instructions were loaded or read unrelated sibling implementations. Go builds
+use the sibling host replacement declared in go.mod; ensure that compatible
+checkout exists before building, without importing its unrelated instructions.
+
+1. [`README.md`](README.md) for setup, product behavior or commands.
+2. [`docs/GRAPH.md`](docs/GRAPH.md) for planning-model, graph, layout or flow changes.
 3. [`docs/IMPORTING.md`](docs/IMPORTING.md) before changing preview or commit.
 4. [`docs/AGENT_GENERATION.md`](docs/AGENT_GENERATION.md) before changing the
    planning JSON source format.
 5. [`../ttrpg-codex/examples/addons/API_V3.md`](../ttrpg-codex/examples/addons/API_V3.md)
-   for the host contract.
+   for changes to host integration, manifests, permissions or lifecycle.
 
 ## Ownership
 
@@ -49,8 +56,16 @@ data namespaces.
 
 ## Working loop
 
-Install the planner rendering browser once with
-`npx playwright install chromium`. The complete gate includes a real-browser
+For prose or agent-guidance-only changes, review the diff, check local links,
+and verify changed commands or contract claims. Runtime builds and operational
+acceptance are required only for the affected behavior below. Reuse successful
+checks on unchanged inputs; preserve complete CI and release gates.
+
+For documentation examples, exercise the real import parser/preview using
+synthetic data. For runtime/build changes, run the complete gate below.
+Install dependencies when missing/stale and the planner rendering browser with
+`npx playwright install chromium` when its installed version is missing/stale.
+The complete gate includes a real-browser
 contract for the current TypeScript planner; keep its fixture aligned with
 intentional card, flow, or layout changes.
 

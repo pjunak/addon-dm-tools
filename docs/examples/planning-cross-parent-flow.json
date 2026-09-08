@@ -1,0 +1,9 @@
+{
+  "operation": "create",
+  "id": "example-next-quest",
+  "schemaVersion": 3,
+  "sourceId": "example-find-courier",
+  "targetId": "example-plotline",
+  "kind": "continues",
+  "label": "Invalid: a child cannot flow to its parent"
+}
