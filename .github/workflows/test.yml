@@ -16,6 +16,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,7 +36,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: addon-dm-tools/go.mod
-          cache-dependency-path: addon-dm-tools/go.sum
+          cache-dependency-path: |
+            addon-dm-tools/go.sum
+            ttrpg-codex/go.sum
 
       - run: npm ci
         working-directory: addon-dm-tools
