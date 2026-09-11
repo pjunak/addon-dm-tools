@@ -1,3 +1,4 @@
+import { defineMapPlanningElement } from "./map-planning.js";
 import { defineImportElement } from "./import-element.js";
 import { defineDashboardElement } from "./dashboard-element.js";
 import { definePlannerElement } from "./planner-element.js";
@@ -6,11 +7,11 @@ import { registerRuntime } from "./runtime.js";
 import type { AddonContext, Disposable } from "./sdk.js";
 
 export async function activate(context: AddonContext): Promise<Disposable> {
-  context.capabilities.require("data.transactions"); context.capabilities.require("ui.contributions"); context.signal.throwIfAborted();
+  context.capabilities.require("data.transactions"); context.capabilities.require("ui.contributions"); context.capabilities.require("ui.markdown"); context.signal.throwIfAborted();
   const adapters = await context.services.connect("codex.import-adapter", { range: "^2.0.0", cardinality: "many", includeOwn: true, signal: context.signal });
   const unregister = registerRuntime(context.addon.generation, { repository: new PlanningRepository(context), adapters, signal: context.signal });
   const plannerElementTag = definePlannerElement(context.addon.generation), importElementTag = defineImportElement(context.addon.generation);
-  const bindings = [context.ui.bind("planner.route", { kind: "element", tag: plannerElementTag }), context.ui.bind("imports.route", { kind: "element", tag: importElementTag }),
+  const bindings = [context.ui.bind("map.planning", { kind: "element", tag: defineMapPlanningElement(context.addon.generation) }), context.ui.bind("planner.route", { kind: "element", tag: plannerElementTag }), context.ui.bind("imports.route", { kind: "element", tag: importElementTag }),
     context.ui.bind("dashboard.slot", { kind: "element", tag: defineDashboardElement(context.addon.generation) })];
   let disposed = false; return Object.freeze({ dispose(): void { if (disposed) return; disposed = true; for (const binding of bindings.reverse()) binding.dispose(); unregister(); } });
 }

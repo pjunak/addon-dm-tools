@@ -52,6 +52,13 @@ positions, explicit sibling flow, subtree deletion, and annotations. It uses
 plain DOM and SVG owned by the package; no host-private graph object crosses
 the add-on boundary.
 
+Event and branch links open a [shared planning reader](docs/GRAPH.md#reading-saved-planning-content)
+with formatted prose, references, consequences and notes. **Read selected**
+also opens any saved card. **Edit item** opens its editor; closing returns to
+saved content, and closing the reader preserves the canvas view. A read-only
+list on each map location links to related planning. This package requires
+the host's public `ui.markdown` capability and uses the existing planning data.
+
 Click a card or flow to select it; Shift-click adds or removes it from the
 selection. Drag empty canvas to select a rectangle, or Ctrl/Command+A to select
 all visible cards. Drag selected cards together, or move them with arrow keys

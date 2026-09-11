@@ -12,7 +12,7 @@
     "workerProtocol": "^1.0.0"
   },
   "capabilities": {
-    "required": ["data.transactions", "ui.contributions", "worker.native"],
+    "required": ["data.transactions", "ui.contributions", "ui.markdown", "worker.native"],
     "optional": []
   },
   "runtime": {
@@ -29,6 +29,7 @@
   },
   "permissions": [{ "id": "core.data.read", "resources": ["characters", "factions", "locations", "mysteries", "artifacts", "events"], "reason": "Choose visible campaign records for planning references and consequence targets." }],
   "contributions": [
+    { "id": "map.planning", "surface": "slot", "label": "Related planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "map:pin:panel", "labels": { "cs": "Související plánování" } } },
     { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard", "labels": { "cs": "Plánování kampaně" } } },
     { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner", "labels": { "cs": "Plánovač příběhu" } } },
     { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route", "labels": { "cs": "Plánovač příběhu" } } },

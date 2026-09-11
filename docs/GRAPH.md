@@ -27,6 +27,41 @@ The package owns its DOM and SVG. The host owns route mounting, lifecycle,
 authorization, schema validation, and persistence. No private graph library or
 host DOM selector is part of the contract.
 
+## Reading saved planning content
+
+Direct links to events and branches open a shared reader; plotline/quest links
+still open their canvas. Select any saved card and choose **Read selected** to
+read it, or use the existing editing action/shortcuts. The reader renders the
+stored summary, objective, body, setup and resolution with labels appropriate
+to encounters and puzzles. References, incident story flows, item/flow
+consequences and anchored shared notes use the same saved dataset. No separate
+reader records or combat state exist.
+
+**Edit item** opens the existing editor; closing it returns to the reader with
+saved content. Unsaved edits remain in the planner's draft store. Escape or
+**Close reader** returns focus to the selected card and preserves canvas scroll
+and zoom. **Expand reader** provides more room without browser fullscreen.
+Automatic refresh waits while reading; an update notice and **Reload planner**
+let the DM choose when to replace the saved snapshot. Explicit reload preserves
+editor drafts and detects deleted items.
+
+The reader follows [W3C's modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/):
+initial focus on the title for long prose, keyboard containment, an explicit
+close action and focus return. Native dialog presentation and existing mobile
+layout are shared with the editor.
+
+Require the host's `ui.markdown` capability. Prose is assigned to the public
+integrated `codex-addon-markdown.source` property; the package neither imports
+host internals nor inserts untrusted HTML. Raw HTML remains text and unsafe
+links are inert. Core references use the route's approved role-visible catalog.
+
+The DM-only `map.planning` slot uses `record-context.v1` at `map:pin:panel`.
+It lists planning items with a reference or item/incident-flow consequence
+targeting that location. Links open the reader for leaves and canvas for
+containers. This panel is read-only, subscribes to the existing repository and
+does not grant players access to private planning data. Empty, loading and
+retry states are explicit; leaving the panel aborts its work.
+
 Item kind/parent changes use the same full-dataset validation as other planner
 edits, followed by an exact-revision write guarded by all six collection
 revisions. The parent selector excludes self, descendants, and leaf items.

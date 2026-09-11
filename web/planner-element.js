@@ -10,6 +10,7 @@ import { LiveRefresh } from "./live-refresh.js";
 import { PlannerDrafts } from "./planner-drafts.js";
 import { mountCanvasSelection } from "./planner-selection.js";
 import { mountCanvasConnections } from "./planner-connections.js";
+import { planningReader } from "./planning-reader.js";
 import { configurePlannerDialog, plannerShortcuts } from "./planner-dialog.js";
 export const plannerElementTag = "dm-tools-planner-page";
 const cardWidth = 240;
@@ -44,6 +45,7 @@ export function definePlannerElement(generation) {
         #pointers = new Set();
         #selection = { items: new Set(), flows: new Set(), primary: undefined };
         #editorId;
+        #readerId;
         #dialogTab = "details";
         #newItem;
         #undoDelete;
@@ -55,7 +57,7 @@ export function definePlannerElement(generation) {
         #pointerEnd = (event) => { this.#pointers.delete(event.pointerId); this.#live?.wake(); };
         #liveSafe() {
             const focused = this.ownerDocument.activeElement;
-            return !this.#needsReload && !this.#newItem && !this.#helpOpen && !this.#connecting && !this.#pointers.size && ![...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)) &&
+            return !this.#needsReload && !this.#newItem && !(this.#readerId && !this.#editorId) && !this.#helpOpen && !this.#connecting && !this.#pointers.size && ![...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)) &&
                 !(focused && this.contains(focused) && focused.matches("input,textarea,select"));
         }
         #liveNotice() {
@@ -165,6 +167,7 @@ export function definePlannerElement(generation) {
             this.#committedDrafts.clear();
             this.#needsReload = false;
             this.#editorId = undefined;
+            this.#readerId = undefined;
             this.#unsubscribe?.();
             this.#live?.dispose();
             this.#runtime = runtime;
@@ -247,7 +250,8 @@ export function definePlannerElement(generation) {
                 const selection = plannerSelection(this.#snapshot.items, this.#targetId);
                 this.#scopeId = selection.scopeId;
                 this.#selectOnly(selection.selectedId);
-                this.#editorId = selection.selectedId;
+                this.#editorId = undefined;
+                this.#readerId = selection.selectedId;
                 this.#dialogTab = "details";
                 this.#message = "";
             }
@@ -273,12 +277,19 @@ export function definePlannerElement(generation) {
             if (!addonId)
                 return;
             this.#editorId = undefined;
+            this.#readerId = undefined;
             this.ownerDocument.defaultView.location.hash = plannerLink(addonId, id);
         }
         #selectOnly(id) { this.#selectedId = id; this.#selection = { items: new Set(id ? [id] : []), flows: new Set(), primary: id }; }
+        #read(id) { if (this.#busy)
+            return; this.#selectOnly(id); this.#editorId = undefined; this.#readerId = id; this.#render(); }
+        #closeReader() { if (this.#busy)
+            return; this.#readerId = undefined; this.#closeEditor(); this.#live?.wake(); }
         #edit(id, tab = "details") {
             if (this.#busy)
                 return;
+            if (this.#readerId !== id)
+                this.#readerId = undefined;
             this.#selectOnly(id);
             this.#editorId = id;
             this.#dialogTab = tab;
@@ -290,7 +301,7 @@ export function definePlannerElement(generation) {
                 return;
             this.#editorId = undefined;
             this.#render();
-            (this.querySelector(`[data-item-id="${CSS.escape(this.#selectedId ?? "")}"]`) ?? this.querySelector(".dm-planner-viewport"))?.focus({ preventScroll: true });
+            (this.querySelector(".dm-planning-reader h2") ?? this.querySelector(`[data-item-id="${CSS.escape(this.#selectedId ?? "")}"]`) ?? this.querySelector(".dm-planner-viewport"))?.focus({ preventScroll: true });
         }
         #cancelCreation() {
             if (this.#busy || !this.#newItem)
@@ -311,6 +322,8 @@ export function definePlannerElement(generation) {
             this.#disposeConnection = undefined;
             const oldDialog = this.querySelector("dialog"), oldBody = oldDialog?.querySelector(".dm-planner-dialog-body");
             const dialogScroll = oldBody?.scrollTop ?? 0;
+            const wasReader = oldDialog?.classList.contains("dm-planning-reader");
+            const readerExpanded = oldDialog?.classList.contains("dm-reader-expanded");
             const focused = this.ownerDocument.activeElement;
             const focusName = oldDialog?.contains(focused) ? focused?.getAttribute("name") : undefined;
             const snapshot = this.#snapshot;
@@ -329,6 +342,11 @@ export function definePlannerElement(generation) {
             if (!this.#selection.items.has(this.#selectedId ?? ""))
                 this.#selectedId = [...this.#selection.items][0];
             this.#selection.primary = this.#selectedId;
+            if (this.#readerId && !snapshot.items.some(item => item.id === this.#readerId)) {
+                this.#readerId = undefined;
+                this.#message = this.#t("This planning item no longer exists.");
+                this.#messageKind = "alert";
+            }
             if (!snapshot.items.some(item => item.id === this.#editorId) && this.#newItem?.id !== this.#editorId)
                 this.#editorId = undefined;
             const header = document.createElement("header");
@@ -354,9 +372,11 @@ export function definePlannerElement(generation) {
             workspace.className = "dm-planner-workspace";
             workspace.append(this.#atlas(document), this.#canvas(document, snapshot));
             root.append(workspace);
-            const dialog = this.#helpOpen ? plannerShortcuts(document, () => this.#closeHelp(), this.#t) : this.#editorId ? this.#editor(document, snapshot) : undefined;
+            const dialog = this.#helpOpen ? plannerShortcuts(document, () => this.#closeHelp(), this.#t) : this.#editorId ? this.#editor(document, snapshot) : this.#readerId ? planningReader(document, snapshot, snapshot.items.find(item => item.id === this.#readerId), this.#contribution?.host, this.#contribution.addon.id, this.#t, { drafted: [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key)), close: () => this.#closeReader(), edit: () => this.#edit(this.#readerId), reload: () => void this.#reload() }) : undefined;
             if (dialog)
                 root.append(dialog);
+            if (dialog?.classList.contains("dm-planning-reader") && this.#message)
+                dialog.querySelector(".dm-planner-dialog-body").prepend(messageBlock(document, this.#message, this.#messageKind));
             if (dialog)
                 for (const child of root.children)
                     if (child !== dialog) {
@@ -379,9 +399,11 @@ export function definePlannerElement(generation) {
             for (const button of root.querySelectorAll("button"))
                 button.disabled = this.#busy || button.hasAttribute("data-unavailable") || (this.#needsReload && !button.hasAttribute("data-view-action"));
             if (dialog) {
+                if (readerExpanded && dialog.classList.contains("dm-planning-reader"))
+                    dialog.querySelector('[aria-pressed="false"]')?.click();
                 dialog.showModal();
                 const body = dialog.querySelector(".dm-planner-dialog-body");
-                body.scrollTop = dialogScroll;
+                body.scrollTop = wasReader === dialog.classList.contains("dm-planning-reader") ? dialogScroll : 0;
                 const control = focusName ? dialog.querySelector(`[name="${CSS.escape(focusName)}"]`) : undefined;
                 control?.focus({ preventScroll: true });
             }
@@ -564,6 +586,17 @@ export function definePlannerElement(generation) {
             expand.dataset["expandPlanner"] = "";
             expand.setAttribute("aria-pressed", String(this.#fullscreen));
             toolbar.append(expand);
+            const read = actionButton(document, this.#t("Read selected"), () => { if (this.#selectedId)
+                this.#read(this.#selectedId); });
+            const updateRead = () => {
+                const available = this.#selection.items.size === 1 && !this.#selection.flows.size && snapshot.items.some(item => item.id === this.#selectedId);
+                read.toggleAttribute("data-unavailable", !available);
+                read.disabled = !available || this.#busy;
+            };
+            // Keep this action in the permanent toolbar so selection cannot move a
+            // card between the first and second clicks of a double-click.
+            updateRead();
+            toolbar.append(read);
             for (const button of toolbar.querySelectorAll("button"))
                 button.dataset["viewAction"] = "";
             const help = actionButton(document, this.#t("Keyboard shortcuts"), () => this.#showHelp());
@@ -580,7 +613,7 @@ export function definePlannerElement(generation) {
             });
             this.#disposeConnection = connection.dispose;
             mountCanvasSelection({ viewport, stage, positions, zoom, selection: this.#selection, available: () => !this.#busy && !this.#needsReload && !this.#connecting,
-                change: selection => { this.#selection = selection; this.#selectedId = selection.primary; this.querySelector(".dm-planner-selection")?.replaceWith(this.#selectionToolbar(document, snapshot)); },
+                change: selection => { this.#selection = selection; this.#selectedId = selection.primary; updateRead(); this.querySelector(".dm-planner-selection")?.replaceWith(this.#selectionToolbar(document, snapshot)); },
                 move: values => void this.#savePositions(values), edit: id => this.#edit(id), remove: () => void this.#deleteSelection(),
                 connect: connection.start, undo: () => void this.#undoDeletion(), help: () => this.#showHelp(),
                 open: id => { const item = snapshot.items.find(value => value.id === id); if (item?.kind === "plotline" || item?.kind === "quest")
@@ -932,6 +965,7 @@ export function definePlannerElement(generation) {
         #create(kind) {
             if (this.#busy || this.#needsReload)
                 return;
+            this.#readerId = undefined;
             this.#newItem ??= newItem(kind, this.#scopeId, undefined, this.#t);
             this.#editorId = this.#newItem.id;
             this.#dialogTab = "details";

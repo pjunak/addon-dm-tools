@@ -167,3 +167,16 @@
   .dm-planner-dialog > header button { flex: 1; }
   .dm-planner-dialog-body { padding: .75rem; }
 }
+
+.dm-planning-reader .dm-planner-dialog-body { line-height: 1.65; overflow-wrap: anywhere; }
+.dm-planning-reader section + section { margin-top: 1.5rem; }
+.dm-planning-reader article + article { margin-top: 1rem; }
+.dm-planning-reader codex-addon-markdown { display: block; }
+.dm-planning-reader pre, .dm-planning-reader table { display: block; overflow: auto; max-width: 100%; }
+.dm-planning-reader img { max-width: 100%; height: auto; }
+.dm-planning-reader.dm-reader-expanded { width: calc(100% - 2rem); height: calc(100dvh - 2rem); max-height: none; }
+.dm-reader-expanded .dm-planner-dialog-body { width: min(100%, 78ch); margin-inline: auto; }
+.dm-map-planning { display: block; overflow-wrap: anywhere; }
+.dm-map-planning ul { padding-inline-start: 1.25rem; }
+
+.dm-planning-reader a, .dm-map-planning a { color: var(--accent-gold, #c8a040); text-underline-offset: .2em; }
