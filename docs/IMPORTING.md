@@ -1,81 +1,144 @@
-# Reviewed planning imports
+# Using the Import Center
 
-DM Tools owns the visible provider-neutral Import Center and one
-`codex.import-adapter` v2 provider for `dm-tools-planning`.
+Use the Import Center to review a JSON document before it changes campaign
+data. DM Tools supplies the page and its planning importer; other installed
+providers can advertise their own formats.
 
-The browser reads at most 2 MiB, parses the root object, and examines only its
-string `format`. Exactly one discovered adapter must claim that format. The
-complete document then crosses the broker to that provider for authoritative
-validation.
+For creating a planning document, start with
+[Generating importable planning content](AGENT_GENERATION.md). For editing
+saved plans, see the [planner guide](PLANNER.md).
 
-The chooser, supported-format rows, document/provider strip, and review ledger
-follow the preserved pre-rewrite Import Center. One file picker also accepts a
-dropped JSON file. Filename, selected format, provider, mode, create/update/
-unchanged/delete counts, warnings, and expandable record identities remain
-visible before submission. The Import Center's controls and status/error text
-use English/Czech catalogs; provider-authored labels, descriptions, warnings
-and imported content remain the provider's text.
+## Import a planning document
 
-Discovery requests run independently. Failed providers are named without hiding
-healthy ones; **Refresh available formats** retries discovery, including an
-empty or failed result. Duplicate format claims block only that format, and
-the UI never chooses a provider by its add-on ID. Invalid JSON, missing/unknown
-formats, oversized files and invalid reviews cannot enable Commit. The browser
-checks that the review matches the selected format and that listed operations
-agree with its summary, in addition to the broker's schema validation.
+1. Sign in as DM and open **Import Center** from the DM overview.
+2. Check **Supported document types**. The planning provider advertises
+   `dm-tools-planning`. Use **Refresh available formats** if a newly enabled
+   provider is missing or discovery failed.
+3. Choose or drop one JSON file. The page reads its `format`, finds its provider
+   and requests a preview. Selecting a file does not write anything.
+4. Review the filename, provider, mode, create/update/unchanged/delete counts,
+   warnings and affected record identities.
+5. Choose **Commit reviewed import** to apply the plan, or **Cancel preview** to
+   leave the campaign unchanged. A preview with deletions instead names the
+   deletion count in **Commit replacement with … deletions**.
+6. After confirmed success, open the planner and inspect the affected items.
+   **Choose another document** clears the result and returns to the chooser.
 
-The browser opts into its own declared worker with `includeOwn: true` while
-keeping other adapters selected through their advertised formats. This does not
-add a worker self-dependency. Every worker import method requires a host-issued
-DM actor, including read-only preview and description.
+The ledger identifies records and operations; it does not display a field-by-field
+or prose diff. Read the proposed document and compare existing records before
+committing updates. An empty warning list does not establish narrative quality,
+correct campaign references or appropriate deletion scope.
 
-Leaving the Import Center aborts its outstanding discovery/preview/request and
-discards the visible review. Late responses cannot repopulate a detached or
-replaced page. **Cancel preview** also cancels a pending read-only preview and
-discards an unsubmitted review without writing;
-server-held unused tokens remain bounded by their expiry and plan limit.
+The chooser accepts one JSON file up to 2 MiB. Individual record and host
+transport limits also apply; a file below that size is not guaranteed to pass.
+There is no paste box in this page. Save generated JSON as a UTF-8 file without
+Markdown fences or surrounding commentary.
 
-Submission removes the visible single-use token immediately. A conflict requires
-a fresh reviewed preview. If the response is lost or otherwise uncertain, inspect
-planning data before previewing again: cancelling a request cannot undo an
-already completed transaction. An unchanged host context does not reset a review.
-Language-only context changes also preserve the exact review. While Commit is
-pending, the contribution reports a save to the host's navigation/unload guard;
-the page cannot offer another submission. Forced generation/authority teardown
-still cancels the local request. **Choose another document** clears the displayed
-outcome without claiming that a completed or uncertain commit was cancelled.
+## What planning imports can change
 
-Installed host checks use both the real planning package and an independent
-native provider. They cover provider-owned writes, duplicate claims, partial
-and complete discovery failure/retry, malformed reviews, cancellation, pending
-commit navigation, content escaping, and desktop/phone English/Czech rendering.
+A `dm-tools-planning` document creates or updates plotlines, quests, events,
+branches, story flow, references, planned consequences and DM notes. It does not
+create core characters, locations, factions or other campaign records, execute
+rewards, or change character-sheet mechanics.
 
-## Planning workflow
+References can point to existing campaign or external add-on records. Obtain
+their exact identities first. Preview validates their shape but does not check
+that core/external targets exist or remain accessible. Those references do not
+grant access to their targets.
 
-The Go worker:
+Only formats advertised by available providers are supported. A character
+transfer belongs in the character workspace; a full backup belongs in the host's
+[backup and recovery workflow](../../ttrpg-codex/docs/SELF_HOSTING.md#backups).
+Do not rename a document's `format` to make the planning importer accept it.
 
-1. strictly parses schema-v3 records and rejects unknown or missing fields;
-2. loads all six planning collections and pins each collection's paginated
-   reads to its initial host revision;
-3. reconciles create, update, identical skip, and replacement deletion;
-4. validates ownership, anchors, references, same-parent flow, and cycles over
-   the complete candidate;
-5. retains at most 256 exact mutations and all six collection revisions behind
-   a random 15-minute token.
+## Merge and replacement
 
-Preview never writes. Commit requires an idempotency key, consumes the token
-once, and submits the retained mutations and collection guards in one host
-transaction. Exact record revisions and the original collection revisions make
-a concurrent planner change fail as a conflict, even for records absent from
-the review. The worker does not rerun reconciliation, refresh accepted guards,
-or silently merge newer data. A host without collection revisions cannot preview
-an import. Read-only empty plans do not issue a transaction.
+| Behavior | `merge` — default | `replace` — complete planning snapshot |
+| --- | --- | --- |
+| Omitted planning records | Retained | Deleted |
+| Included records | Explicit `create` or `update` | All entries use `create`; existing IDs are reconciled |
+| Existing fields in an update | Replaced by the complete incoming record | Replaced by the complete incoming record |
+| Saved canvas layouts | Preserved | All cleared, even if semantic records are unchanged |
+| Deletion scope | No per-record delete operation | All omitted records in this add-on's five semantic collections |
 
-`merge` retains omitted records and never touches `planning_views`. `replace`
-requires every incoming record to use `create`, deletes omitted semantic
-records, and clears saved layouts. The preview lists those deletions and the UI
-uses an explicit destructive confirmation label.
+**Replacement can delete unrelated stories, notes and all saved layouts in the
+campaign's DM Tools dataset. It is not limited to the currently open plotline or
+canvas.** An empty replacement can remove everything in that scope. Use it only
+for an explicitly intended complete replacement, with a recovery copy.
 
-There is no permanent import path for older planning schemas. The supervised
-rewrite cutover uses a separate one-time campaign converter and the downloaded
-site backups as rollback evidence.
+Merge protects omitted records, not omitted text inside an included update.
+Sending an empty `body`, `notes` or `tags` field replaces its existing value.
+The generator must preserve every field outside the requested edit.
+
+Use the planner's reviewed deletion action for a targeted deletion. Its
+**Undo last deletion** applies to a planner deletion during the mounted session;
+it is not an undo button for an import. For import recovery, use an appropriate
+host recovery point or verified backup and review that restoration's scope.
+
+## Updates and timestamps
+
+Every entry has an `operation`. For merge:
+
+- **Create:** omit `expectedUpdatedAt`. A new ID is created; an existing ID
+  with equivalent content is unchanged; a different existing record conflicts.
+- **Update:** provide the exact stored `expectedUpdatedAt`, even if the content
+  is unchanged. A missing record or stale timestamp fails.
+- A changed update also needs a root `generatedAt` later than the stored
+  `updatedAt`. Equivalent content with a correct expected timestamp is unchanged.
+
+The root timestamp becomes `updatedAt` for changed records. It is epoch
+milliseconds, not an ISO date or seconds. It is separate from the host's
+optimistic record revision. Never substitute one for the other.
+
+An update is a complete record, not a patch. To prepare one, read the current
+record, retain its fields and ID, make the requested changes, and attach the
+observed timestamp. Example timestamps are fixtures, not values for a campaign.
+
+## Failed, expired or uncertain imports
+
+| Situation | Next step |
+| --- | --- |
+| Invalid JSON, unknown field or unsupported schema | Correct the document; do not remove `format` or guess another version |
+| Unsupported format | Enable the intended provider and refresh discovery |
+| More than one provider claims a format | Resolve the ambiguity; the page will not choose arbitrarily |
+| Some providers fail discovery | Healthy formats remain usable; refresh to retry the failed providers |
+| Stale record or collection conflict | Inspect current data, revise the candidate and request a fresh preview |
+| Preview expired or worker replaced | Request and review a new preview |
+| More than 256 planned writes/deletes | Use smaller coherent merge batches; every intermediate dataset must be valid |
+| Commit response lost or uncertain | Inspect saved planning data before another preview or submission |
+
+A preview lasts 15 minutes in its worker generation. Commit consumes its token,
+including when a write fails with a conflict. An idempotency key is required at
+the service boundary, but it does not make that consumed token replayable.
+
+Canceling an unsubmitted preview writes nothing. Canceling a network request
+after submission cannot undo a transaction that already completed. While a commit
+is pending, the page prevents another submission and asks the host to guard
+navigation. Forced package or authority teardown may still cancel the local
+request; resolve its outcome from saved data.
+
+## How the implementation protects a review
+
+The browser routes by the root `format`, never by a guessed provider ID.
+Each provider owns its validation and writes. DM Tools requires a host-issued
+DM actor for description, preview and commit.
+
+The planning worker reads all six collections with revision-pinned pagination,
+normalizes the incoming records and validates the complete candidate. It retains
+at most 256 exact mutations and all six opening collection revisions behind the
+preview token. Commit submits those retained mutations in one guarded host
+transaction; it does not rebuild the plan or refresh its guards.
+
+A change anywhere in the planning dataset, including a layout changed in another
+canvas, can invalidate the preview. This protects against unseen children and
+new references as well as edits to listed records. An empty plan issues no
+transaction. Invalid stored planning data must be repaired explicitly; importing
+does not silently discard it.
+
+Leaving the page cancels local work and discards its visible review. Unchanged
+host context and language-only changes preserve it. Controls use English/Czech
+catalogs; provider descriptions and authored content retain their own language.
+
+The [service schemas](../contracts/import-adapter.service.json),
+[worker](../internal/importer/handler.go) and
+[graph contract](GRAPH.md) define the technical boundaries.

@@ -29,8 +29,10 @@ The planning worker validates the complete candidate and applies its single-use
 review through one host transaction. Concurrent changes require another review;
 there is no silent merge.
 
-- [Import format and review behavior](docs/IMPORTING.md)
-- [Generating planning JSON](docs/AGENT_GENERATION.md)
+- [Import Center workflow, update rules and recovery](docs/IMPORTING.md)
+- [Prepare context and generate planning JSON](docs/AGENT_GENERATION.md)
+- [Complete annotated story example](docs/examples/planning-context.json) and
+  [a complete-record update](docs/examples/planning-update.json)
 
 ## Data and ownership
 

@@ -1,211 +1,248 @@
 # Story graph contract
 
-The planner is a tree of local directed acyclic graphs.
+This is the implementation reference for DM Tools planning. Use the
+[planner guide](PLANNER.md) for everyday tasks, the [Import Center guide](IMPORTING.md)
+for review and commit behavior, and [content generation](AGENT_GENERATION.md)
+for authoring JSON. Stored records use schema version 3 only.
 
-Ownership provides scope: campaign root, plotline, or quest. An open canvas
-shows exactly the items whose `parentId` equals that scope ID. Plotlines and
-quests may own children; events and branches are leaves.
+## Ownership and flow
 
-Flow is separate from ownership. Every stored link must satisfy:
+Ownership is a tree. Each item has a `parentId`: `null` for the campaign root,
+or a plotline/quest ID. Only plotlines and quests may contain children.
+An open canvas shows exactly the direct children of its scope.
 
-```text
+Flow is a separate directed acyclic graph within each canvas. Every link has
+existing endpoints and must satisfy:
+
+~~~text
 source.id != target.id
 source.parentId == target.parentId
-```
+~~~
 
-Both endpoints therefore appear together on exactly one canvas. `option` flow
-must start at a branch. The combined local flow remains acyclic. Cross-scope
-relationships use named references, not synthesized or retargeted edges.
+Both endpoints therefore appear together on one canvas. An `option` starts at
+a branch; `continues` describes other planned progression. Cross-scope
+associations use references. Never synthesize flow from ownership, references,
+consequences or notes, or retarget a link to make it fit.
 
-The TypeScript UI renders direct children as draggable cards and real local
-flow as SVG paths. `planning_views` stores only per-scope `{x,y}` positions;
-moving a card cannot change planning meaning. Deleting an item explicitly
-deletes its subtree and attached flow, annotations, notes, and nested layouts
-in one transaction.
+`planning_views` contains only positions for a scope. Moving a card cannot
+change its parent or story meaning. Zoom and scroll are view-local, not stored
+campaign data. Imports never carry layouts: merge preserves existing views;
+replace clears them all.
 
-The package owns its DOM and SVG. The host owns route mounting, lifecycle,
-authorization, schema validation, and persistence. No private graph library or
-host DOM selector is part of the contract.
+The add-on owns its DOM and SVG. The host owns routing, lifecycle, authorization,
+schema validation and persistence. Private host selectors, graph objects and
+internal imports are outside the contract.
 
-## Reading saved planning content
+## Code and schema ownership
 
-Direct links to events and branches open a shared reader; plotline/quest links
-still open their canvas. Select any saved card and choose **Read selected** to
-read it, or use the existing editing action/shortcuts. The reader renders the
-stored summary, objective, body, setup and resolution with labels appropriate
-to encounters and puzzles. References, incident story flows, item/flow
-consequences and anchored shared notes use the same saved dataset. No separate
-reader records or combat state exist.
+| Owner | Responsibility |
+| --- | --- |
+| [contracts/](../contracts/) | Closed stored-record and service schemas |
+| [internal/planning/](../internal/planning/) | Authoritative import normalization and complete-dataset validation |
+| [internal/importer/](../internal/importer/) | Retained preview plans and exact single-use commit |
+| [planning-model.ts](../src/planning-model.ts) | Browser projection and defensive graph validation |
+| [planning-repository.ts](../src/planning-repository.ts) | Browser persistence, full snapshots, guarded writes and cleanup |
+| [planner-element.ts](../src/planner-element.ts) | Planner composition, forms and DOM/SVG rendering |
+| [planning-reader.ts](../src/planning-reader.ts) | Reading saved prose and annotations |
+| [planner-drafts.ts](../src/planner-drafts.ts) | Named draft values and opening revisions |
+| [planner-selection.ts](../src/planner-selection.ts) | Canvas selection and group geometry |
+| [planner-connections.ts](../src/planner-connections.ts) | Click, drag and keyboard connection gestures |
+| [planner-dialog.ts](../src/planner-dialog.ts) | Shared modal focus and dismissal behavior |
+| [planner-viewport.ts](../src/planner-viewport.ts) | Zoom, bounds, fit and viewport restoration |
+| [planner-targets.ts](../src/planner-targets.ts) | Public target catalogs and form values |
+| [planner-note-anchors.ts](../src/planner-note-anchors.ts) | Shared-note anchor selection |
+| [live-refresh.ts](../src/live-refresh.ts) | Coalesced invalidations and deferred refresh |
+| [dashboard-model.ts](../src/dashboard-model.ts) and [dashboard-element.ts](../src/dashboard-element.ts) | Overview projection and rendering |
 
-**Edit item** opens the existing editor; closing it returns to the reader with
-saved content. Unsaved edits remain in the planner's draft store. Escape or
-**Close reader** returns focus to the selected card and preserves canvas scroll
-and zoom. **Expand reader** provides more room without browser fullscreen.
-Automatic refresh waits while reading; an update notice and **Reload planner**
-let the DM choose when to replace the saved snapshot. Explicit reload preserves
-editor drafts and detects deleted items.
+Use these existing boundaries when adding behavior. The consumer must not
+duplicate the import worker or move persistence into rendering helpers.
 
-The reader follows [W3C's modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/):
-initial focus on the title for long prose, keyboard containment, an explicit
-close action and focus return. Native dialog presentation and existing mobile
-layout are shared with the editor.
+## Snapshots, writes and conflicts
 
-Require the host's `ui.markdown` capability. Prose is assigned to the public
-integrated `codex-addon-markdown.source` property; the package neither imports
-host internals nor inserts untrusted HTML. Raw HTML remains text and unsafe
-links are inert. Core references use the route's approved role-visible catalog.
+Load all six collections with revision-pinned pagination. Every collection,
+including an empty one, carries a host revision; subsequent pages require the
+same revision. Validate stored data before allowing writes.
 
-The DM-only `map.planning` slot uses `record-context.v1` at `map:pin:panel`.
-It lists planning items with a reference or item/incident-flow consequence
-targeting that location. Links open the reader for leaves and canvas for
-containers. This panel is read-only, subscribes to the existing repository and
-does not grant players access to private planning data. Empty, loading and
-retry states are explicit; leaving the panel aborts its work.
+Every planner mutation checks all six observed collection revisions and exact
+document revisions in one host transaction. An unseen child, new annotation,
+incoming reference or layout edit therefore rejects the entire stale write.
+Missing revisions and more than 256 mutations reject before any write. A host
+that omits collection revisions cannot enable planner writes.
 
-Item kind/parent changes use the same full-dataset validation as other planner
-edits, followed by an exact-revision write guarded by all six collection
-revisions. The parent selector excludes self, descendants, and leaf items.
-A move updates only that item: child ownership, internal flows, annotations,
-and per-canvas positions retain their records. Positions in the old canvas
-remain available if the item returns. Cross-scope incident flows, an option
-flow losing its branch source, or a container with children becoming a leaf
-reject the edit before writing. The planner does not infer replacement links
-or delete annotations to make a move possible.
+These guards also conflict on unrelated edits in another canvas. Keep that
+behavior explicit in the UI; do not retry automatically with newer revisions.
+The guards cover add-on collections, not changes to referenced core records.
 
-Kind changes store only their relevant event/branch subtype. Hidden subtype
-choices survive view-local draft switches, while successful saves normalize
-the record to its chosen kind. Missing draft options remain explicit unavailable
-choices rather than falling back to the root. A successful move and a manual
-reload after a confirmed move both reveal the saved destination.
+For import-specific timestamps and retained review tokens, use the
+[import contract](IMPORTING.md#how-the-implementation-protects-a-review).
+Import commit submits the reviewed plan without reconstructing or rebasing it.
 
-`dashboard-model.ts` projects counts and recent-item links from a validated
-repository snapshot. `dashboard-element.ts` owns only its view request;
-disconnect cancels reads without aborting the activation generation. The
-planner uses the bounded public `addon-route-context.v1` query to choose a
-scope/selection, never to grant record access. Route targets are checked against
-the loaded item tree. Unchanged targets do not re-render an edited form, while
-scope changes update the URL so browser history and copied links remain useful.
-Element definitions include the package generation so replacement cannot reuse
-an older generation's browser implementation.
+## Moving and changing items
 
-`planner-drafts.ts` keeps view-local named form values and their opening record
-revisions. Only the confirmed submitted draft is cleared after a successful
-read; unrelated drafts survive. Failed writes or reads require an explicit
-refresh before another mutation. Refresh preserves opening revisions, exposes
-concurrent changes, and retains removed-record drafts for copying. This is
-local editor state, never campaign data or an automatic conflict merge.
+Kind and parent changes validate the full candidate dataset before an
+exact-revision write. Parent choices exclude self, descendants and leaves.
+Reject a change if it would create cross-scope flow, remove a branch source
+from an option, or turn a container with children into a leaf.
 
-The mounted contribution's public `edits.set` handle reports whether any
-uncommitted draft remains and whether a write (including its confirming read)
-is pending. The host owns navigation, sign-out, and browser-unload guards. The
-planner opts into retaining drafts across its route queries and keeps the open
-editor on invalid query targets. Confirmed writes whose read failed are not
-reported as unsaved, but unrelated drafts still are. A host without this handle
-cannot open the editor. Disposal clears its flags; forced generation/authority
-teardown never waits for a save or persists drafts.
+A move updates only the item. Child ownership, internal flow, annotations and
+per-canvas positions keep their records. Its old-canvas position remains
+available if the item returns. A successful move, including one discovered by
+manual reload after a confirmed write, reveals the saved destination.
 
-Pointer cancellation or capture loss restores the card's original coordinates;
-only a completed pointer release persists a moved position.
+Store only the subtype appropriate to the chosen kind. Hidden event/branch
+choices can survive draft switches, but successful saves normalize the record.
+A missing draft choice remains visibly unavailable; it must not fall back
+silently to the root or another target.
 
-`planner-selection.ts` owns pointer/keyboard selection and gesture-local geometry.
-Item and flow selections are scoped to the visible canvas and pruned after reload.
-Clicking selects without opening a form; the editor is a separate modal with
-Details, Links and Notes panels. Closing or switching panels preserves named
-drafts and their opening revisions. The dialog bounds keyboard focus and makes
-background planner controls inert until closed.
+## Annotations and target validation
 
-A group drag snaps its displacement, preserving the cards' relative positions,
-including negative coordinates. Completed group drags and keyboard moves update
-one `planning_views` document through the repository with all six collection
-guards. Canceled gestures restore both geometry and the preceding selection.
-Group deletion unions overlapping subtrees and explicitly selected flows before
-building the existing cross-collection cleanup; missing targets, missing
-revisions and oversized deletion plans reject before any write.
+References have a named relationship, a target, an integer quantity from
+1 to 1,000 and optional prose in the required `notes` field. A target is a
+planning item, one of the six allowed core collections, or an explicit external
+add-on/kind/record identity with a label.
 
-New items remain provisional in the mounted planner until their Details form
-passes validation and commits at revision zero. Cancel and Escape clear only
-that draft. Links and notes are unavailable before creation. A known successful
-write followed by a failed read cannot be submitted again; an unknown outcome
-that reload finds by ID becomes an existing draft retaining its opening revision.
-Scope navigation retains the provisional item without changing its parent.
+The public route catalog supplies approved, role-visible core names and links.
+New core/planning form targets must be selectable. Existing unavailable targets
+survive unrelated edits. External targets require explicit identities; never
+infer an external URL or query private host endpoints.
 
-Deletion undo captures the original affected records and exact post-transaction
-revisions from the host receipt, including tombstones. The last deletion can be
-restored in one guarded transaction during the mounted planner session. Undo
-validates the combined current/restored dataset and refuses later edits to any
-affected record; unrelated edits are retained. It never guesses a tombstone's
-revision or silently merges shared-note content. A confirmed undo clears its
-action before the confirming read, preventing a duplicate write after read failure.
-Resetting a layout writes an empty positions map for the current scope and keeps
-its revision-bearing view, so the next drag can update it normally.
-Automatic grid positions for new or unpositioned cards avoid saved card bounds;
-authored positions, including deliberately overlapping cards, are unchanged.
+Consequences attach to an item or flow and may have a target of the same shape.
+They are planned annotations, with no automatic world or rules effects. Flow
+consequences appear at both endpoints. Clearing an optional target omits it.
 
-`planner-connections.ts` owns click, drag and keyboard connection gestures. Its
-preview is view-local SVG geometry at the current native zoom. Completion uses
-the same sibling/cycle validation and guarded repository write as the flow
-form. Pending connections defer live refresh; Escape, pointer cancellation,
-capture loss and teardown discard the preview without writing. Dialogs share
-focus containment and backdrop/Escape handling through `planner-dialog.ts`.
+Notes have up to 100 distinct, existing item anchors. An empty anchor set is
+valid and remains available for relinking. Saving note links does not edit
+the linked items. Hidden target fields and note selections use the same named
+draft and opening-revision protections as other forms.
 
-`planner-viewport.ts` owns the preserved fixed zoom ladder, fit calculation,
-content bounds and device-pixel rounding. Zoom changes native dimensions and
-text sizes, never a transform of the rendered canvas. SVG uses matching logical
-bounds; pointer movement is divided by the current zoom before snapping and
-saving. Negative coordinates expand the view bounds without rewriting records.
-Zoom/scroll are view-local and separate for each scope; rendering captures the
-old viewport before replacement and restores the selected scope after mounting.
-Fullscreen uses the browser API on the stable planner element and disposes its
-listener with the element. Panning, fit, focus and zoom do not write campaign data.
+Dataset validation checks reference owners, planning-reference targets,
+item/flow consequence anchors and note anchors. Core/external target existence
+is not established by an import preview. A consequence's optional planning
+target also receives shape validation rather than the reference's existence
+check. Authors must verify those targets; do not claim preview validates every
+narrative link.
 
-Flow editing preserves endpoints and opening revisions. Available types follow
-the source item's kind, including when editing from the destination. Flow
-labels use native SVG text; paths show arrowheads for direction. Consequences
-can switch between the selected item and its attached flows. Existing flow
-consequences are visible from either endpoint.
+## Deletion, undo and layout reset
 
-The repository builds flow/subtree cleanup before issuing one transaction.
-Deleting a flow removes its anchored consequences. Subtree deletion additionally
-removes incoming planning references and deleted-item positions in surviving
-views, and trims shared-note anchors. Missing revisions and plans over the
-256-operation host limit fail before any write. Browser snapshot validation now
-checks reference ownership/targets and note/consequence anchors against the
-same rules as the Go dataset validator.
+Build the complete cleanup before submitting one transaction:
 
-Every loaded collection carries its host revision, including empty collections.
-Subsequent pages require the same revision. Every planner mutation checks all
-six observed collection revisions atomically, alongside the exact document
-revisions. An unseen child, annotation, reference, layout change, or simultaneous
-flow edit therefore rejects the entire stale write. The editor retains drafts
-and requires Reload; it does not automatically retry with newer revisions.
-This deliberately also conflicts on unrelated edits in another planner view.
-Hosts that omit collection revisions cannot enable planner writes. These guards
-cover add-on collections, not changes to core records referenced by the planner.
+| Operation | Affected data |
+| --- | --- |
+| Delete flow | The flow and its anchored consequences |
+| Delete item/subtree | Descendants, incident flows and consequences, owned/incoming planning references, affected notes and layouts |
+| Delete overlapping selection | Union of selected subtrees and explicitly selected flows, without duplicate mutations |
+| Reset layout | Empty positions map in the current scope's existing revision-bearing view |
 
-`planner-targets.ts` validates the public route reference catalog and target
-form values. The manifest requests read access only to the six core collections
-accepted by the planning target schema. The host supplies role-visible names
-and links; the package never queries host-private endpoints or DOM. Saved
-unavailable targets are retained on unrelated edits, while new core/planning
-targets must be selectable. External targets require explicit add-on, kind,
-record ID and label; no external URL is inferred. Consequences can clear their
-optional target. Reference quantity is an integer from 1 to 1,000.
+Subtree cleanup removes deleted-item positions from surviving views and deletes
+nested views. Shared notes retain their remaining anchors. Missing targets,
+missing revisions and oversized plans fail before any write.
 
-`planner-note-anchors.ts` exposes note anchors as a bounded checkbox list backed
-by one named draft value. Duplicate, missing or more than 100 anchors fail
-before writing. An empty anchor set is valid: those notes appear with an
-unanchored notice in the selected item's annotations and can be linked again.
-Saving links never changes the referenced items. Target switches retain hidden
-field drafts, and all annotation writes retain exact opening revisions and
-the six collection guards.
+Deletion undo retains original affected records and exact post-transaction
+revisions from the host receipt, including tombstones. It restores only the last
+planner deletion during the mounted session. Validate the combined current and
+restored dataset and refuse later edits to any affected record; retain unrelated
+edits. Never guess tombstone revisions or silently merge note content.
+A confirmed undo clears the action before its confirming read, preventing a
+duplicate write after read failure. Imports do not populate this undo action.
 
-The repository subscribes to the host's optional `data.subscribe` invalidations
-for all six planning collections and connection/recovery resets. Planner and
-dashboard coalesce bursts and dispose subscriptions/timers when unmounted.
-Older hosts retain manual reload. A clean planner reload preserves scope,
-selection, zoom and scroll position. Active fields, drafts and pointer gestures
-defer refresh with an English/Czech notice. A read that finishes after typing or
-a drag began is also deferred. Reload never replaces a draft's opening revision;
-stale saves still fail atomically. Failed reads expose the existing Reload path
-without starting an automatic retry loop. Confirmed writes consume notifications
-before their post-save read; events received during that read remain pending.
+Automatic grid positions avoid saved card bounds. Authored positions, including
+deliberate overlaps, remain unchanged.
+
+## Drafts and mutation outcomes
+
+Drafts are view-local editor state, never campaign records or an automatic merge.
+Keep each form's named values and opening revisions through selection, tab and
+scope changes, reload and other saves. Clear only the confirmed submitted draft;
+unrelated drafts survive. Preserve removed-record text for copying.
+
+New items stay provisional until valid Details commit at revision zero.
+Cancel and Escape discard that provisional item; links and notes require a saved
+record. Scope navigation retains the provisional parent. A confirmed successful
+write followed by a failed read cannot be submitted again. If the write outcome
+is unknown and reload finds its ID, reconcile it as an existing draft using
+its retained opening revision rather than creating a duplicate.
+
+Failed reads or writes require explicit reload before further mutation.
+Reload exposes current data without replacing draft baselines. The host's
+public `edits.set` handle reports uncommitted drafts and pending writes,
+including confirming reads. A host without it cannot open the editor.
+Confirmed writes with failed reads are no longer unsaved changes, but unrelated
+drafts still are.
+
+The host owns navigation, sign-out and unload guards. Planner route-query
+changes retain drafts; invalid targets keep an open editor. Disposal clears
+the edit flags. Accepted departure or forced generation/authority teardown
+discards view-local drafts and never waits indefinitely for a save.
+
+## Selection, connections and viewport
+
+Selection is scoped to the visible canvas and pruned after reload. Clicking
+selects without opening the editor. The editor and reader share modal focus
+containment, inert background controls, Escape/backdrop behavior and focus return.
+
+Group movement snaps one displacement and preserves relative spacing, including
+negative coordinates. A completed drag or keyboard move saves one view document
+with all six collection guards. Cancellation or capture loss restores geometry
+and the preceding selection without a write.
+
+Connection previews are temporary SVG geometry. Completion uses the same sibling,
+cycle and guarded-write checks as the flow form. Escape, cancellation, capture
+loss and teardown discard the preview. Editing an existing flow preserves
+endpoints and opening revisions; offered types follow the source kind even
+when opened from the destination.
+
+Zoom changes native text sizes and dimensions, rather than transforming a
+rendered canvas. SVG bounds match the layout. Convert pointer movement back
+through the current zoom before snapping and saving; negative coordinates
+expand bounds without rewriting records. Capture the old viewport before
+render replacement and restore the selected scope afterward.
+Panning, fit, focus, zoom and browser fullscreen do not write campaign data.
+Dispose fullscreen listeners with the stable planner element.
+
+## Reading, navigation and lifecycle
+
+The reader projects saved prose and annotations from the same validated dataset.
+There are no separate reader records or combat state. The public
+`codex-addon-markdown.source` property renders prose under the required
+`ui.markdown` capability. Do not insert untrusted HTML or import host internals;
+raw HTML remains text and unsafe links are inert.
+
+Use the [modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/):
+initial focus on a title for long prose, keyboard containment, explicit close
+and focus return. Editing from the reader uses existing draft state; closing
+the editor returns to saved content. Reader expansion is separate from browser
+fullscreen.
+
+The DM-only `map.planning` contribution uses `record-context.v1` at
+`map:pin:panel`. It lists items with references or item/incident-flow
+consequences targeting the location. It is read-only, has loading/empty/retry
+states and aborts its work when closed. It does not grant players planning access.
+
+Routes use bounded `addon-route-context.v1` queries and validate IDs against
+the loaded tree. Containers open canvases; leaves select their parent canvas
+and open the reader. Scope changes update browser history. Unchanged targets
+do not rebuild edited forms; invalid queries preserve an open view and its drafts.
+A missing saved target falls back to the campaign canvas with an explanation.
+
+Dashboard counts and recent links come from a validated snapshot. Each mounted
+view owns its request lifetime; disconnect cancels that view's reads without
+aborting the activation generation. Custom-element definitions include the
+package generation so replacement cannot reuse old browser implementations.
+Language changes preserve mounted drafts and record identities; authored prose
+and provider diagnostics are not translated by the package.
+
+## Live updates
+
+Subscribe to the host's optional `data.subscribe` invalidations for all six
+collections and connection/recovery resets. Without that capability, retain
+manual reload. Coalesce bursts and dispose subscriptions and timers on unmount.
+
+A clean planner reload preserves scope, selection, zoom and scroll. Readers,
+active fields, drafts and gestures defer refresh with an update notice. Also
+defer a read that finishes after typing or dragging begins; a late response
+must not replace active work. Explicit reload keeps editor draft baselines.
+
+Failed reads expose **Reload planner** without an automatic retry loop.
+Confirmed writes consume notifications before their confirming read; events
+arriving during that read remain pending. Test these boundaries when changing
+refresh or save behavior, alongside the public route and rendering contracts.

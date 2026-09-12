@@ -1,0 +1,27 @@
+{
+  "format": "dm-tools-planning",
+  "schemaVersion": 3,
+  "generatedAt": 1785024060000,
+  "mode": "merge",
+  "items": [
+    {
+      "operation": "update",
+      "id": "example-find-courier",
+      "schemaVersion": 3,
+      "kind": "quest",
+      "parentId": "example-plotline",
+      "title": "Find the courier",
+      "summary": "Follow the courier trail to the damaged bridge and look for a safe crossing.",
+      "body": "The route reaches a broken bridge. Ask the players how they investigate and cross; decide any checks from the campaign rules.",
+      "objective": "",
+      "setup": "",
+      "resolution": "",
+      "tags": [],
+      "expectedUpdatedAt": 1785024000000
+    }
+  ],
+  "flowLinks": [],
+  "references": [],
+  "consequences": [],
+  "notes": []
+}

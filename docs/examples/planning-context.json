@@ -1,0 +1,223 @@
+{
+  "format": "dm-tools-planning",
+  "schemaVersion": 3,
+  "generatedAt": 1785024000000,
+  "mode": "merge",
+  "items": [
+    {
+      "operation": "create",
+      "id": "example-plotline",
+      "schemaVersion": 3,
+      "kind": "plotline",
+      "parentId": null,
+      "title": "The missing courier",
+      "summary": "Find the courier and recover the message.",
+      "body": "A courier carrying a sealed warning has vanished near the river. This outline offers two ways across the damaged crossing; the DM can accept another approach without changing the ownership tree.",
+      "objective": "Find the courier and put the warning into the intended hands.",
+      "setup": "Decide who sent the warning and why the characters care before using this material in a campaign.",
+      "resolution": "Record what the characters actually do in DM notes. These planned paths do not record session outcomes.",
+      "tags": [
+        "courier",
+        "river"
+      ]
+    },
+    {
+      "operation": "create",
+      "id": "example-find-courier",
+      "schemaVersion": 3,
+      "kind": "quest",
+      "parentId": "example-plotline",
+      "title": "Find the courier",
+      "summary": "Follow the trail to the old bridge.",
+      "body": "The courier reached the old bridge before its central planks gave way. A ferry downstream and a possible repair offer different routes to the far bank.",
+      "objective": "Locate the courier on the far bank.",
+      "setup": "The courier is alive but unable to continue alone. Establish any campaign-specific injuries or checks with the installed rules.",
+      "resolution": "Finding the courier provides a lead into recovering the missing message. Other player solutions remain possible.",
+      "tags": [
+        "courier"
+      ]
+    },
+    {
+      "operation": "create",
+      "id": "example-recover-message",
+      "schemaVersion": 3,
+      "kind": "quest",
+      "parentId": "example-plotline",
+      "title": "Recover the message",
+      "summary": "Retrieve the courier's sealed letter.",
+      "body": "The courier hid the sealed letter near the far bank before taking shelter. Their account, or a clue discovered during the crossing, points toward it.",
+      "objective": "Recover the sealed letter and decide what to do with it.",
+      "setup": "Choose the sender, recipient and warning from established campaign context.",
+      "resolution": "Delivery, concealment or opening the letter may create different future stories. Do not mark one as already chosen.",
+      "tags": [
+        "courier",
+        "message"
+      ]
+    },
+    {
+      "operation": "create",
+      "id": "example-bridge-arrival",
+      "schemaVersion": 3,
+      "kind": "event",
+      "parentId": "example-find-courier",
+      "title": "At the broken bridge",
+      "summary": "The trail reaches a damaged crossing; fresh tracks continue on the far bank.",
+      "body": "## What the characters notice\nA strip of courier-blue cloth catches on a broken rail. A bell beside the downstream landing can summon the ferryman.\n\n## Useful clues\nFresh mud on the far bank suggests someone crossed before the collapse. The broken boards are weathered, with no established evidence of sabotage.",
+      "objective": "Understand the obstacle and identify ways to continue.",
+      "setup": "Describe the river conditions using the current campaign season.",
+      "resolution": "Let the players propose a crossing. The following branch records two prepared options, without excluding other solutions.",
+      "tags": [
+        "river"
+      ],
+      "eventType": "story"
+    },
+    {
+      "operation": "create",
+      "id": "example-river-route",
+      "schemaVersion": 3,
+      "kind": "branch",
+      "parentId": "example-find-courier",
+      "title": "How will they cross?",
+      "summary": "Ask for a ferry crossing or make the old bridge usable.",
+      "body": "Present the visible costs and practical difficulties of each option. The ferry offers local knowledge; repairing the bridge may help later travelers. Another workable approach can bypass both prepared scenes.",
+      "objective": "Make an informed choice about the crossing.",
+      "setup": "",
+      "resolution": "Follow the relevant planned option if chosen. Note the actual choice separately.",
+      "tags": [
+        "river"
+      ],
+      "branchType": "decision"
+    },
+    {
+      "operation": "create",
+      "id": "example-ferry-crossing",
+      "schemaVersion": 3,
+      "kind": "event",
+      "parentId": "example-find-courier",
+      "title": "Ask the ferryman",
+      "summary": "A conversation secures passage and may reveal where the courier took shelter.",
+      "body": "The ferryman saw someone sheltering on the far bank. Decide their name and concerns from campaign context; do not invent a core character ID for this planning scene.\n\n## Approaches\nThe party could bargain, offer help or establish a shared purpose. Set any mechanical checks through the campaign rules when needed.",
+      "objective": "Reach the far bank and learn what the ferryman saw.",
+      "setup": "Prepare a concern the ferryman can explain honestly.",
+      "resolution": "A helpful conversation reveals the shelter location. If no agreement is reached, keep other crossing approaches available.",
+      "tags": [
+        "river"
+      ],
+      "eventType": "story"
+    },
+    {
+      "operation": "create",
+      "id": "example-bridge-repair",
+      "schemaVersion": 3,
+      "kind": "event",
+      "parentId": "example-find-courier",
+      "title": "Make a safe crossing",
+      "summary": "Use the remaining supports and available materials to cross safely.",
+      "body": "## Situation\nThe central planks are missing, but the stone supports remain. Loose boards and rope may be available if that fits the established location.\n\n## Adjudication\nInvite a plan before choosing checks or costs. A temporary crossing and a lasting repair can have different consequences. Avoid making one unannounced tool or roll the only solution.",
+      "objective": "Create a workable route to the far bank.",
+      "setup": "Confirm available materials and river conditions; choose mechanics from the campaign rules.",
+      "resolution": "If the party crosses, they can follow the courier trail. If they restore the bridge for others, consider the attached planned consequence.",
+      "tags": [
+        "river"
+      ],
+      "eventType": "puzzle"
+    }
+  ],
+  "flowLinks": [
+    {
+      "operation": "create",
+      "id": "example-next-quest",
+      "schemaVersion": 3,
+      "sourceId": "example-find-courier",
+      "targetId": "example-recover-message",
+      "kind": "continues",
+      "label": "Once the courier is found"
+    },
+    {
+      "operation": "create",
+      "id": "example-choose-crossing",
+      "schemaVersion": 3,
+      "sourceId": "example-bridge-arrival",
+      "targetId": "example-river-route",
+      "kind": "continues",
+      "label": "Once the obstacle is understood"
+    },
+    {
+      "operation": "create",
+      "id": "example-take-ferry",
+      "schemaVersion": 3,
+      "sourceId": "example-river-route",
+      "targetId": "example-ferry-crossing",
+      "kind": "option",
+      "label": "Ask the ferryman"
+    },
+    {
+      "operation": "create",
+      "id": "example-repair-crossing",
+      "schemaVersion": 3,
+      "sourceId": "example-river-route",
+      "targetId": "example-bridge-repair",
+      "kind": "option",
+      "label": "Repair or improvise a crossing"
+    }
+  ],
+  "references": [
+    {
+      "operation": "create",
+      "id": "example-message-lead",
+      "schemaVersion": 3,
+      "itemId": "example-bridge-arrival",
+      "name": "The missing message",
+      "relation": "related",
+      "target": {
+        "scope": "planning",
+        "itemId": "example-recover-message"
+      },
+      "quantity": 1,
+      "notes": "Cross-scope context for the DM, not a flow link or proof that the later quest is complete."
+    }
+  ],
+  "consequences": [
+    {
+      "operation": "create",
+      "id": "example-restored-crossing",
+      "schemaVersion": 3,
+      "anchor": {
+        "scope": "item",
+        "itemId": "example-bridge-repair"
+      },
+      "kind": "world",
+      "title": "A usable bridge",
+      "body": "If the party makes a lasting repair, later travelers may benefit. Record an actual repair in campaign notes or the relevant location; this annotation performs no automatic update."
+    },
+    {
+      "operation": "create",
+      "id": "example-ferry-clue",
+      "schemaVersion": 3,
+      "anchor": {
+        "scope": "flow",
+        "flowId": "example-take-ferry"
+      },
+      "kind": "information",
+      "title": "A witness to the courier",
+      "body": "If the conversation succeeds, the ferryman can point toward the courier shelter and the missing letter. This is prepared information, not an automatic reward.",
+      "target": {
+        "scope": "planning",
+        "itemId": "example-recover-message"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "operation": "create",
+      "id": "example-crossing-continuity",
+      "schemaVersion": 3,
+      "title": "Keep both routes consistent",
+      "body": "Proposed fiction: the courier is alive on the far bank. Confirm this premise before use. Whichever approach the players choose, keep the weather, river conditions and courier timeline consistent. Record the actual crossing here after play.",
+      "anchorIds": [
+        "example-ferry-crossing",
+        "example-bridge-repair"
+      ]
+    }
+  ]
+}
