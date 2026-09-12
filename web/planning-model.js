@@ -1,5 +1,5 @@
 import { plannerTranslator } from "./planner-catalogs.js";
-export const planningKinds = ["plotline", "quest", "event", "branch"];
+const planningKinds = ["plotline", "quest", "event", "branch"];
 export function directChildren(items, scopeId) {
     return items.filter((item) => item.parentId === scopeId).sort((left, right) => left.title.localeCompare(right.title, "en"));
 }

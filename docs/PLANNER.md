@@ -1,0 +1,155 @@
+# Using the story planner
+
+The planner is available to the DM. This guide covers the controls and recovery
+behavior; the [graph contract](GRAPH.md) describes storage and validation.
+
+## Organize the story
+
+Ownership is a tree. Plotlines and quests can contain planning items; events
+and branches are leaves. Every open scope is its own local directed acyclic
+flow graph:
+
+```text
+Campaign
+├─ Plotline
+│  ├─ Quest
+│  │  ├─ Event
+│  │  └─ Branch
+│  └─ Quest
+└─ Event
+```
+
+Flow connects direct siblings only. It never changes ownership, crosses
+scopes, or records what happened during play. Named references, planned
+consequences, and DM notes are separate annotations and may cross scopes.
+
+The planner supports nested navigation, card creation and editing, group-saved
+positions, explicit sibling flow, subtree deletion, and annotations. It uses
+plain DOM and SVG owned by the package; no host-private graph object crosses
+the add-on boundary.
+
+## Reading and editing
+
+Event and branch links open a [shared planning reader](GRAPH.md#reading-saved-planning-content)
+with formatted prose, references, consequences and notes. **Read selected**
+also opens any saved card. **Edit item** opens its editor; closing returns to
+saved content, and closing the reader preserves the canvas view. A read-only
+list on each map location links to related planning. This package requires
+the host's public `ui.markdown` capability and uses the existing planning data.
+
+## Selection and keyboard controls
+
+Click a card or flow to select it; Shift-click adds or removes it from the
+selection. Drag empty canvas to select a rectangle, or Ctrl/Command+A to select
+all visible cards. Drag selected cards together, or move them with arrow keys
+(Shift moves four grid steps). Group movement preserves spacing in one saved
+layout revision. Delete/Backspace and **Delete selection** review one combined
+deletion, including selected subtrees, flows, and affected annotations.
+**Undo last deletion** or Ctrl/Command+Z restores that deletion during the current
+planner session, including its notes and layouts. It refuses to overwrite an
+affected record edited afterward. **Reset layout** clears only the current
+canvas's saved positions after confirmation.
+
+Double-click a card or choose **Edit selected** to open the centered
+editor, presented as a bottom sheet on phones. Its **Details**, **Links**, and
+**Notes** tabs keep drafts when switched or closed. Escape closes the dialog
+and returns focus to the selected card; reopening keeps the opening revisions.
+The header's **Save item** remains available while reading long forms.
+**Connect selected** prepares a reviewed flow between two selected cards, and
+**Edit selected flow** opens a selected flow's existing editor.
+Enter also edits the selected item; Shift+Enter opens a selected plotline or
+quest. **Keyboard shortcuts** or ? shows the canvas controls in a dialog.
+
+Creating a card opens an unsaved item. **Save item** creates it; **Cancel creation**
+or Escape discards it without a placeholder record. Links and notes become
+available after saving. Scope navigation retains the draft under **Resume new
+item**. A failed creation requires Reload; a lost response reconciles the same
+item ID rather than creating a duplicate.
+
+## Connecting flow
+
+Click a card's gold connection port, then another card, or drag between them.
+With a card selected, C starts the same connection and Enter on a focused target
+completes it. A branch creates an option flow; other cards create a continuing
+flow. Self-links, cycles and canceled gestures cannot create a link. Escape
+cancels a pending connection, and live refresh waits until it finishes.
+
+## Canvas navigation
+
+Canvas controls provide the fixed 35–200% zoom ladder with a native 100% stop,
+**Fit**, **Focus selected**, and browser fullscreen. Middle-drag or Alt-drag pans;
+Ctrl/Command + arrow keys pan without moving selected cards. Touch scrolling on
+empty canvas remains native. Ctrl/Command + wheel and +/− zoom; 0 resets and
+F fits. Each canvas keeps its zoom and scroll position while the planner stays
+open, including selection, refresh, saved changes and navigation to another
+canvas. Zoom lays out native text and geometry directly. Card drags convert
+screen movement back to saved coordinates, and distant or negative saved
+positions remain reachable. The planner follows the host's English/Czech language
+for navigation, creation and editing, annotations, flow actions, shortcuts,
+validation and recovery. Changing language preserves the mounted planner, its
+open draft, and saved record identities. Authored titles and notes remain in their
+original language. Package-owned errors choose their translation in the receiving
+view; provider diagnostics are not rewritten. `src/planner-catalogs.ts` owns these
+messages, while dashboard and Import Center messages remain in their own catalogs.
+
+The original **Kind** and **Parent** controls are available in item details.
+Move an item to the campaign root or another plotline/quest, or change its kind;
+the matching event/branch subtype field follows the selection. Parent choices
+exclude the item itself, its descendants, and leaf items. Moving a container
+keeps its children and their internal flow, references, consequences, notes,
+and saved canvas layouts. The editor follows the moved item to its destination.
+Existing flows that would cross canvases, option flows that would lose their
+branch source, and children of a proposed leaf prevent saving with an
+explanation. Review those relationships before changing the structure.
+
+## Flow and annotations
+
+Flow labels and direction are visible on the canvas. **Edit flow** changes the
+label and type from either endpoint; option flow is offered only for a branch
+source. Consequences may apply to the whole item or one of its flows, and
+flow consequences appear at both endpoints. Removing a flow with consequences
+asks for confirmation and deletes the flow and those consequences in one
+revision-checked transaction. Whole-item consequences and endpoint records stay
+intact. Subtree deletion also cleans incoming planning references and saved
+positions, while shared notes retain their remaining anchors.
+
+**Add reference** chooses a planning item, visible campaign record, or explicit
+external add-on record. Saved references expose their name, relation, quantity
+(1–1,000), target, and notes. Campaign choices use the host's approved read
+grants; unavailable saved targets remain visible and survive unrelated edits.
+Consequences optionally target the same kinds of records. **Linked planning
+items** shares a DM note across items or removes its links. Unanchored notes
+remain available in the annotations of any selected item so they can be linked
+again. New-reference choices and note links share the regular draft protections.
+
+## Drafts and concurrent changes
+
+Item details include objective, setup, resolution, tags, and
+event/branch type fields. Item, annotation, and new-flow drafts survive card
+selection, canvas navigation, other saves, validation errors, and explicit
+planner refresh while the planner stays open. Each edit keeps its opening
+revision; a refresh never silently rebases a draft over another saved change.
+**Discard edits** loads that record's latest fetched values. Drafts of removed
+records remain available to copy before discarding.
+If a draft's parent choice disappears during refresh, it remains visibly
+unavailable until you choose a valid parent or discard the edit.
+
+Writes lock the form until their outcome is known. After a write/read failure,
+**Reload planner** is required before further editing; retained text stays
+available to copy. A confirmed write followed by a failed refresh is not
+offered again. Canceled pointer drags restore the original position without a
+write. The planner uses the host's classic theme tokens and keeps card text at
+native scale. Leaving the planner or signing out asks before discarding drafts;
+browser reload/close uses the host's unsaved-edit warning. Saves in progress
+block navigation until their outcome is known. Canceling keeps the current
+view and all its drafts; confirming discards them. Drafts are not persisted
+across an accepted reload or forced package/authority teardown.
+
+## Links and browser navigation
+
+Planner canvas links use `#/addons/dm-tools/planner?item=<id>`. Containers open
+their own canvas; events and branches open their parent and select the linked
+item. Reload, a new tab and browser Back retain that target. Invalid parameters
+retain an already open planner and its drafts, or show a recovery link on first
+entry; a deleted target falls back to the campaign canvas with
+an explanation. An unchanged route-context refresh preserves editor input.

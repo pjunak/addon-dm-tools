@@ -1,5 +1,5 @@
 import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
-export const planningKinds = ["plotline", "quest", "event", "branch"] as const;
+const planningKinds = ["plotline", "quest", "event", "branch"] as const;
 export type PlanningKind = typeof planningKinds[number];
 export type EventType = "story" | "encounter" | "puzzle";
 export type BranchType = "decision" | "condition" | "random";
