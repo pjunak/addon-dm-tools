@@ -79,3 +79,23 @@ go run ./cmd/codex-addon-inspect ../addon-dm-tools/dist/dm-tools-3.0.0.zip
 Install through upload, inspection, permission review, approval and activation.
 Source changes do not update an installed generation. Future work is tracked
 only in the [suite backlog](../ttrpg-codex/docs/BACKLOG.md).
+
+
+## Install and update from tested commits
+
+Successful main builds publish the inspected ZIP to a permanent
+[commit release](https://github.com/pjunak/addon-dm-tools/releases). Each release identifies
+the source commit even when the package version is unchanged. CI uses GitHub's
+automatic repository token; it does not deploy to anyone's server.
+
+In your website, open **Settings → Add-ons → Add add-on → GitHub**, enter
+`pjunak/addon-dm-tools` and use **Latest published package**. For an installed ZIP, use
+**Update source** to link the same repository. **Check for updates** offers the
+latest tested package; **Download and review** leads to explicit permission and
+compatibility review before **Approve and activate**. Publishing never forces
+an update on an installation.
+
+Public release downloads do not require a GitHub token.
+
+Existing Actions-build sources remain supported, but their artifacts expire.
+Switch an existing source to **Latest published package** to use durable releases.
