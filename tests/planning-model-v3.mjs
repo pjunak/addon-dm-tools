@@ -60,3 +60,15 @@ test("annotation validation matches the Go ownership and anchor boundary", () =>
   assert.match(validatePlanning({ ...dataset, references: [{ ...dataset.references[0], itemId: "missing" }] }).join(" "), /missing item/);
   assert.match(validatePlanning({ ...dataset, consequences: [{ id: "bad", anchor: { scope: "item", itemId: "missing" } }] }).join(" "), /missing item anchor/);
 });
+
+test("consequence planning targets must exist while optional and foreign targets remain annotations", () => {
+  const dataset = { items: [item("owner", "quest"), item("destination", "quest")], flows: [], references: [], consequences: [], notes: [], views: [] };
+  const consequence = { id: "effect", anchor: { scope: "item", itemId: "owner" }, title: "Retain this", body: "Authored prose" };
+  for (const target of [undefined, { scope: "planning", itemId: "destination" }, { scope: "core", collection: "characters", id: "unavailable" }, { scope: "external", addonId: "rules", kind: "spell", id: "unavailable", label: "Spell" }]) {
+    assert.deepEqual(validatePlanning({ ...dataset, consequences: [{ ...consequence, ...(target ? { target } : {}) }] }), []);
+  }
+  const invalid = { ...dataset, consequences: [{ ...consequence, target: { scope: "planning", itemId: "missing" } }] };
+  const before = structuredClone(invalid);
+  assert.deepEqual(validatePlanning(invalid), ["Consequence effect has a missing planning target."]);
+  assert.deepEqual(invalid, before);
+});

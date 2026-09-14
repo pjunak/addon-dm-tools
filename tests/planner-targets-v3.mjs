@@ -14,7 +14,7 @@ test("target choices reject malformed host catalogs and unsafe record links", ()
   assert.equal(coreReferences({}).ready, false);
 });
 
-test("reference editing selects existing targets and preserves unavailable saved targets", () => {
+test("reference editing requires planning targets and preserves unavailable saved campaign targets", () => {
   assert.deepEqual(targetFromForm(form({ targetScope: "planning", targetPlanningId: "quest" }), items, core), { scope: "planning", itemId: "quest" });
   assert.deepEqual(targetFromForm(form({ targetScope: "core", targetCoreId: '["events","arrival"]' }), items, core), { scope: "core", collection: "events", id: "arrival" });
   const current = { scope: "core", collection: "characters", id: "missing" };
@@ -22,6 +22,9 @@ test("reference editing selects existing targets and preserves unavailable saved
   assert.deepEqual(targetFromForm(data, items, core, current), current);
   assert.throws(() => targetFromForm(data, items, core), /available campaign record/);
   assert.throws(() => targetFromForm(form({ targetScope: "planning", targetPlanningId: "missing" }), items, core), /existing planning item/);
+  const missingPlanning = { scope: "planning", itemId: "missing" };
+  assert.throws(() => targetFromForm(form({ targetScope: "planning", targetPlanningId: "missing" }), items, core, missingPlanning, true), /existing planning item/);
+  assert.equal(targetFromForm(form({ targetScope: "none" }), items, core, missingPlanning, true), undefined);
   assert.equal(targetFromForm(form({ targetScope: "none" }), items, core, current, true), undefined);
   assert.throws(() => targetFromForm(form({ targetScope: "none" }), items, core), /target type/);
 });

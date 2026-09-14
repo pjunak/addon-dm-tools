@@ -532,10 +532,10 @@ export function definePlannerElement(generation?: string): string {
     async #deleteSelection(): Promise<void> {
       const snapshot = this.#snapshot, items = [...this.#selection.items], flows = [...this.#selection.flows];
       if (!snapshot || this.#busy || this.#needsReload || (!items.length && !flows.length)) return;
-      if (!confirm(this.#t("Delete {0} selected items and {1} selected flows, including subtrees and attached annotations? Shared notes keep their other links.", { "0": items.length, "1": flows.length }))) return;
+      if (!confirm(this.#t("Delete {0} selected items and {1} selected flows, including subtrees and attached annotations? Shared notes keep their other links. Surviving consequences keep their text and lose links to deleted items.", { "0": items.length, "1": flows.length }))) return;
       await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteSelection(snapshot, items, flows); }, this.#t("Selection deleted."));
     }
-    async #delete(item: PlanningItem): Promise<void> { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(this.#t("Delete {0} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links.", { "0": item.title }))) return; await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteSubtree(snapshot, item.id); }, this.#t("Planning subtree deleted.")); }
+    async #delete(item: PlanningItem): Promise<void> { const snapshot = this.#snapshot; if (snapshot === undefined || !confirm(this.#t("Delete {0} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links. Surviving consequences keep their text and lose links to deleted items.", { "0": item.title }))) return; await this.#mutate(async runtime => { this.#undoDelete = await runtime.repository.deleteSubtree(snapshot, item.id); }, this.#t("Planning subtree deleted.")); }
     async #undoDeletion(): Promise<void> {
       const undo = this.#undoDelete; if (!undo) return;
       await this.#mutate(async (runtime, snapshot) => { await runtime.repository.undoDeletion(snapshot, undo); this.#undoDelete = undefined; }, this.#t("Deletion undone."));

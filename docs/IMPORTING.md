@@ -44,7 +44,11 @@ rewards, or change character-sheet mechanics.
 References can point to existing campaign or external add-on records. Obtain
 their exact identities first. Preview validates their shape but does not check
 that core/external targets exist or remain accessible. Those references do not
-grant access to their targets.
+grant access to their targets. Planning targets on both references and
+consequences must exist in the resulting dataset, either already stored or
+included in the same import. If replacement removes a planning item, explicitly
+omit or replace its target on each retained consequence while preserving the
+rest of that annotation. Preview rejects dangling targets without changing data.
 
 Only formats advertised by available providers are supported. A character
 transfer belongs in the character workspace; a full backup belongs in the host's
@@ -133,7 +137,11 @@ A change anywhere in the planning dataset, including a layout changed in another
 canvas, can invalidate the preview. This protects against unseen children and
 new references as well as edits to listed records. An empty plan issues no
 transaction. Invalid stored planning data must be repaired explicitly; importing
-does not silently discard it.
+does not silently discard it. This includes dangling consequence targets saved
+by older builds: the planner and importer report the affected consequence IDs
+and leave their text intact. Before upgrading a campaign with that error,
+preserve a verified backup and arrange an explicit correction of those records;
+neither replacement import nor this update is an automatic repair procedure.
 
 Leaving the page cancels local work and discards its visible review. Unchanged
 host context and language-only changes preserve it. Controls use English/Czech

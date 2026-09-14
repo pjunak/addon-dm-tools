@@ -155,6 +155,10 @@ function deletionMutations(snapshot: PlanningSnapshot, itemIds: ReadonlySet<stri
   for (const consequence of snapshot.consequences) {
     const anchor = consequence.anchor;
     if (anchor["scope"] === "item" ? itemIds.has(String(anchor["itemId"])) : flowIds.has(String(anchor["flowId"]))) remove("planning_consequences", consequence.id);
+    else if (consequence.target?.["scope"] === "planning" && itemIds.has(String(consequence.target["itemId"]))) {
+      const { target, ...annotation } = consequence;
+      update("planning_consequences", { ...annotation, updatedAt: Math.max(now, consequence.updatedAt + 1) });
+    }
   }
   for (const note of snapshot.notes) {
     const remaining = note.anchorIds.filter(id => !itemIds.has(id));

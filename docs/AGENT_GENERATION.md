@@ -171,10 +171,11 @@ never infer it from a display name or manufacture a URL.
 A consequence's `anchor` is `{"scope":"item","itemId":"…"}` or
 `{"scope":"flow","flowId":"…"}`. Omit an unused optional `target` rather than
 sending `null`. Verify every reference, consequence target and note anchor
-against the intended campaign. Preview checks planning-reference targets and
-anchors, but does not establish core/external target existence. A consequence's
-optional planning target also receives shape validation rather than an existence
-check. Preview does not establish the correctness of narrative relationships.
+against the intended campaign. Preview checks planning targets on both references
+and consequences, as well as anchors, against the complete resulting dataset.
+A replacement that removes a target must explicitly omit or replace that target
+on every retained consequence while preserving its prose. Preview does not
+establish core/external target existence or narrative correctness.
 
 ## Reviewable batches and replacement
 

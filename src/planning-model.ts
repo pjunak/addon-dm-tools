@@ -87,6 +87,7 @@ export function validatePlanning(dataset: PlanningDataset, t: PlannerTranslator 
   }
   const flowIds = new Set(dataset.flows.map(flow => flow.id));
   for (const consequence of dataset.consequences) {
+    if (consequence.target?.["scope"] === "planning" && !byId.has(String(consequence.target["itemId"]))) issues.push(t("Consequence {0} has a missing planning target.", { "0": consequence.id }));
     const anchor = consequence.anchor;
     if (anchor["scope"] === "item") { if (!byId.has(String(anchor["itemId"]))) issues.push(t("Consequence {0} has a missing item anchor.", { "0": consequence.id })); }
     else if (anchor["scope"] === "flow") { if (!flowIds.has(String(anchor["flowId"]))) issues.push(t("Consequence {0} has a missing flow anchor.", { "0": consequence.id })); }

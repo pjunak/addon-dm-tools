@@ -35,7 +35,7 @@ export function targetFromForm(data, items, core, current, optional = false) {
         return undefined;
     if (scope === "planning") {
         const itemId = text("targetPlanningId");
-        if (validId(itemId) && (items.some(item => item.id === itemId) || (current?.["scope"] === scope && current["itemId"] === itemId)))
+        if (validId(itemId) && items.some(item => item.id === itemId))
             return { scope, itemId };
         throw new PlannerError("Choose an existing planning item as the target.");
     }

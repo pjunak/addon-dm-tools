@@ -278,6 +278,11 @@ func Validate(dataset Dataset) []string {
 		}
 	}
 	for _, consequence := range dataset.Consequences {
+		if targetScope(consequence.Target) == "planning" {
+			if _, ok := dataset.Items[targetField(consequence.Target, "itemId")]; !ok {
+				issues = append(issues, fmt.Sprintf("consequence %s has a missing planning target", consequence.ID))
+			}
+		}
 		scope := targetScope(consequence.Anchor)
 		if scope == "item" {
 			if _, ok := dataset.Items[targetField(consequence.Anchor, "itemId")]; !ok {

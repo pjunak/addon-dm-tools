@@ -115,8 +115,9 @@ A consequence is descriptive: it never grants an item, changes a character
 sheet or marks an outcome as completed. Flow consequences appear at both
 endpoints. Reference quantity is an integer from 1 to 1,000.
 
-Unavailable saved targets remain visible and survive unrelated edits. New
-campaign choices come from the records the host permits you to read. An
+Unavailable saved campaign targets remain visible and survive unrelated edits.
+Planning targets must identify existing planning items. New campaign choices
+come from the records the host permits you to read. An
 external reference needs an explicit add-on, record kind, ID and readable name.
 
 Removing all links from a note keeps the note. Unanchored notes remain available
@@ -157,11 +158,13 @@ It leaves cards, flow and other canvases intact.
 **Delete selection** reviews one combined deletion. Deleting a container also
 deletes its descendants, their flow and attached annotations, incoming planning
 references and saved positions. Shared notes keep their remaining anchors.
+Consequences anchored elsewhere keep their text; only their links to deleted
+planning items are cleared.
 
 Review the scope before confirming. **Undo last deletion** can restore the most
 recent planner deletion while that planner session remains mounted. It includes
-the affected notes and layouts and refuses to overwrite later changes to those
-records. It is not an undo history, and it does not undo imports or reset layouts.
+the affected notes, layouts and cleared consequence links, and refuses to
+overwrite later changes to those records. It is not an undo history, and it does not undo imports or reset layouts.
 
 For larger recovery needs, use the host's
 [backup and recovery workflow](../../ttrpg-codex/docs/SELF_HOSTING.md#backups).

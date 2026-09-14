@@ -102,9 +102,10 @@ planning item, one of the six allowed core collections, or an explicit external
 add-on/kind/record identity with a label.
 
 The public route catalog supplies approved, role-visible core names and links.
-New core/planning form targets must be selectable. Existing unavailable targets
-survive unrelated edits. External targets require explicit identities; never
-infer an external URL or query private host endpoints.
+New core/planning form targets must be selectable. Existing unavailable core
+targets survive unrelated edits; planning targets must exist in the dataset.
+External targets require explicit identities; never infer an external URL or
+query private host endpoints.
 
 Consequences attach to an item or flow and may have a target of the same shape.
 They are planned annotations, with no automatic world or rules effects. Flow
@@ -115,12 +116,12 @@ valid and remains available for relinking. Saving note links does not edit
 the linked items. Hidden target fields and note selections use the same named
 draft and opening-revision protections as other forms.
 
-Dataset validation checks reference owners, planning-reference targets,
-item/flow consequence anchors and note anchors. Core/external target existence
-is not established by an import preview. A consequence's optional planning
-target also receives shape validation rather than the reference's existence
-check. Authors must verify those targets; do not claim preview validates every
-narrative link.
+Both Go and browser dataset validation check reference owners, planning targets
+of references and consequences, item/flow consequence anchors and note anchors.
+Core/external target existence is not established by an import preview. An
+optional consequence target may be omitted, but a planning target must identify
+an item in the complete resulting dataset. These checks do not establish the
+correctness of narrative relationships.
 
 ## Deletion, undo and layout reset
 
@@ -134,14 +135,20 @@ Build the complete cleanup before submitting one transaction:
 | Reset layout | Empty positions map in the current scope's existing revision-bearing view |
 
 Subtree cleanup removes deleted-item positions from surviving views and deletes
-nested views. Shared notes retain their remaining anchors. Missing targets,
-missing revisions and oversized plans fail before any write.
+nested views. Shared notes retain their remaining anchors. A consequence whose
+anchor survives keeps its title, body, kind and anchor; if its planning target
+is deleted, the same transaction omits that optional target and advances its
+timestamp. Core/external targets are unchanged. The confirmation explains this
+cleanup. Missing selected records, missing revisions and oversized plans fail
+before any write.
 
 Deletion undo retains original affected records and exact post-transaction
 revisions from the host receipt, including tombstones. It restores only the last
 planner deletion during the mounted session. Validate the combined current and
 restored dataset and refuse later edits to any affected record; retain unrelated
-edits. Never guess tombstone revisions or silently merge note content.
+edits. Cleared consequence targets are restored with the original annotation;
+later edits to that annotation block undo. Never guess tombstone revisions or
+silently merge note content.
 A confirmed undo clears the action before its confirming read, preventing a
 duplicate write after read failure. Imports do not populate this undo action.
 

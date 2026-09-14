@@ -71,7 +71,7 @@ function deletionFixture() {
     items: [validQuest(), { ...validQuest(), id: "quest-b" }, { ...validQuest(), id: "event-a", kind: "event", eventType: "story", parentId: "quest-a" }],
     flows: [{ id: "flow-a", schemaVersion: 3, sourceId: "quest-a", targetId: "quest-b", kind: "continues", label: "Passage", updatedAt: 1 }],
     references: [{ id: "ref-a", itemId: "quest-b", target: { scope: "planning", itemId: "event-a" } }],
-    consequences: [{ id: "flow-consequence", anchor: { scope: "flow", flowId: "flow-a" } }, { id: "item-consequence", anchor: { scope: "item", itemId: "quest-b" } }],
+    consequences: [{ id: "flow-consequence", anchor: { scope: "flow", flowId: "flow-a" } }, { id: "item-consequence", schemaVersion: 3, kind: "information", title: "The secret remains", body: "Authored explanation\nKeep exactly.", updatedAt: 1, anchor: { scope: "item", itemId: "quest-b" }, target: { scope: "planning", itemId: "event-a" } }],
     notes: [{ id: "shared-note", anchorIds: ["event-a", "quest-b"], title: "Shared", body: "Keep me" }],
     views: [{ id: "scope-root", schemaVersion: 3, scopeId: null, positions: { "quest-a": { x: 24, y: 24 }, "quest-b": { x: 300, y: 24 } }, updatedAt: 1 },
       { id: "scope-quest-a", schemaVersion: 3, scopeId: "quest-a", positions: { "event-a": { x: 48, y: 48 } }, updatedAt: 1 }],
@@ -118,12 +118,13 @@ test('undo restores the complete deletion using receipt revisions and retains un
 });
 
 test('undo refuses changed shared records and invalid restored ownership before publishing', async () => {
-  for (const conflict of ['note', 'parent']) {
+  for (const conflict of ['note', 'consequence', 'parent']) {
     const { dataset, repository, writes, collections } = deletionFixture();
     const undo = await repository.deleteSubtree(dataset, 'event-a'), after = applyWrites(dataset, writes[0], collections);
     if (conflict === 'note') after.revisions.set('dm_notes:shared-note', 100);
+    else if (conflict === 'consequence') after.revisions.set('planning_consequences:item-consequence', 100);
     else after.items = after.items.filter(item => item.id !== 'quest-a');
-    await assert.rejects(repository.undoDeletion(after, undo), conflict === 'note' ? /changed after deletion/ : /missing parent/);
+    await assert.rejects(repository.undoDeletion(after, undo), conflict !== 'parent' ? /changed after deletion/ : /missing parent/);
     assert.equal(writes.length, 1);
   }
 });
@@ -183,6 +184,10 @@ test("subtree deletion cleans incoming planning references and saved positions w
   }
   assert.deepEqual(validatePlanning(remaining), []);
   assert.deepEqual(remaining.consequences.map(record => record.id), ["item-consequence"]);
+  const { target, updatedAt, ...prose } = dataset.consequences[1];
+  assert.deepEqual(remaining.consequences[0], { ...prose, updatedAt: remaining.consequences[0].updatedAt });
+  assert.ok(remaining.consequences[0].updatedAt > updatedAt);
+  assert.equal(Object.hasOwn(remaining.consequences[0], "target"), false);
 });
 
 test("deletion refuses missing revisions or oversized transactions before publishing any writes", async () => {
@@ -260,4 +265,52 @@ test("group moves preserve spacing and untouched positions in one guarded layout
   await assert.rejects(repository.savePositions(dataset, null, { 'event-a': { x: 0, y: 0 } }), /Only items on this canvas/);
   await assert.rejects(repository.savePositions(dataset, null, { 'quest-a': { x: Infinity, y: 0 } }), /finite/);
   assert.equal(writes.length, 1);
+});
+
+test("deletion clears incoming consequence targets on surviving flows and leaves foreign targets intact", async () => {
+  const { dataset, repository, writes, collections } = deletionFixture();
+  const base = dataset.consequences[1];
+  dataset.consequences = [
+    { ...base, anchor: { scope: "flow", flowId: "flow-a" } },
+    { ...base, id: "core-effect", target: { scope: "core", collection: "events", id: "event-a" } },
+    { ...base, id: "external-effect", target: { scope: "external", addonId: "other", kind: "event", id: "event-a", label: "External" } },
+  ];
+  for (const effect of dataset.consequences) dataset.revisions.set('planning_consequences:' + effect.id, 4);
+  const before = structuredClone(dataset);
+  const undo = await repository.deleteSubtree(dataset, "event-a");
+  const changes = writes[0].filter(mutation => mutation.dataId === "planning_consequences");
+  assert.equal(changes.length, 1); assert.equal(changes[0].key, base.id);
+  assert.equal(changes[0].operation, "put"); assert.equal(changes[0].expectedRevision, 4);
+  const after = applyWrites(dataset, writes[0], collections);
+  assert.deepEqual(validatePlanning(after), []);
+  await repository.undoDeletion(after, undo);
+  const restored = applyWrites(after, writes[1], collections);
+  assert.deepEqual(restored.consequences.find(value => value.id === base.id).target, base.target);
+  assert.deepEqual(dataset, before);
+});
+
+test("a stale consequence cleanup is rejected with all collection guards and no retry", async () => {
+  const { dataset } = deletionFixture();
+  const before = structuredClone(dataset), calls = [];
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: () => ({}), transact: async (mutations, options) => {
+    calls.push({ mutations, options }); throw new Error("data changed");
+  } } });
+  await assert.rejects(repository.deleteSubtree(dataset, "event-a"), /data changed/);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].options.expectedDataSets, dataset.dataRevisions);
+  const consequence = calls[0].mutations.find(value => value.dataId === "planning_consequences");
+  assert.equal(consequence.expectedRevision, dataset.revisions.get("planning_consequences:item-consequence"));
+  assert.equal(Object.hasOwn(consequence.value, "target"), false);
+  assert.deepEqual(dataset, before);
+});
+
+test("stored dangling consequence targets fail visibly without rewriting or hiding the annotation", async () => {
+  const { dataset, collections } = deletionFixture();
+  dataset.items = dataset.items.filter(item => item.id !== "event-a"); dataset.references = []; dataset.notes = [];
+  const before = structuredClone(dataset);
+  const repository = new PlanningRepository({ signal: new AbortController().signal, data: { collection: collection => ({ query: async () => ({ dataRevision: 1,
+    documents: dataset[Object.keys(collections).find(key => collections[key] === collection)].map(value => ({ key: value.id, value, revision: 1 })),
+  }) }), transact: async () => assert.fail("load must not write") } });
+  await assert.rejects(repository.load(), /Consequence item-consequence has a missing planning target/);
+  assert.deepEqual(dataset, before);
 });
