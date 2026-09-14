@@ -81,6 +81,19 @@ write boundaries.
 - Services exchange serializable, schema-validated values, never DOM, functions,
   host facades or raw HTML.
 
+## Release and installation
+
+Successful main builds publish the inspected ZIP to a durable commit release;
+the source commit identifies an update even when the manifest version stays the
+same. Follow the [README installation guide](README.md#install-and-update-from-tested-commits).
+Each site's owner chooses **Latest published package**, reviews permissions and
+activates the package. Publication never installs it automatically.
+
+The host image is deployed separately by `pjunak/infra`. This add-on has no
+Compose deployment target or infra dispatch credential. Release publication uses
+the workflow's repository-scoped job token; private downloads use host-managed
+GitHub credentials. Preserve the reviewed package lifecycle on both sites.
+
 ## Working loop
 
 For prose or agent-guidance changes, review the diff, check local links, and
