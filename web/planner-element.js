@@ -21,6 +21,7 @@ export function definePlannerElement(generation) {
         return tag;
     class PlannerElement extends HTMLElement {
         #t = (key, parameters) => plannerTranslator(dashboardLocale(this.#contribution?.host))(key, parameters);
+        #controls;
         #contribution;
         #runtime;
         #snapshot;
@@ -117,6 +118,8 @@ export function definePlannerElement(generation) {
             void this.#connect();
         }
         disconnectedCallback() {
+            this.#controls?.dispose();
+            this.#controls = undefined;
             this.#disposeConnection?.();
             this.#disposeConnection = undefined;
             this.removeEventListener("fullscreenchange", this.#fullscreenChanged);
@@ -171,6 +174,8 @@ export function definePlannerElement(generation) {
             this.#unsubscribe?.();
             this.#live?.dispose();
             this.#runtime = runtime;
+            this.#controls?.dispose();
+            this.#controls = runtime.ui.enhance(this);
             this.#live = new LiveRefresh(() => { this.#liveNotice(); return !this.#busy && this.#liveSafe(); }, () => void this.#reload(undefined, true), () => this.#liveNotice());
             this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), contribution.signal);
             await this.#reload(this.#t("Loading story planner…"));
@@ -320,6 +325,7 @@ export function definePlannerElement(generation) {
                 this.#captureViewport();
             this.#disposeConnection?.();
             this.#disposeConnection = undefined;
+            this.lang = dashboardLocale(this.#contribution?.host);
             const oldDialog = this.querySelector("dialog"), oldBody = oldDialog?.querySelector(".dm-planner-dialog-body");
             const dialogScroll = oldBody?.scrollTop ?? 0;
             const wasReader = oldDialog?.classList.contains("dm-planning-reader");
@@ -445,6 +451,7 @@ export function definePlannerElement(generation) {
             viewport.dataset["scope"] = this.#scopeId ?? "";
             const stage = document.createElement("div");
             stage.className = "dm-planner-stage";
+            stage.dataset["uiSkip"] = "";
             const children = directChildren(snapshot.items, this.#scopeId);
             const positions = positionsFor(snapshot.views, this.#scopeId, children);
             const view = this.#canvasView();
@@ -732,6 +739,7 @@ export function definePlannerElement(generation) {
             const tabs = document.createElement("div");
             tabs.className = "dm-dialog-tabs";
             tabs.setAttribute("role", "tablist");
+            tabs.dataset["uiTabs"] = "";
             tabs.setAttribute("aria-label", this.#t("Item sections"));
             dialog.append(tabs);
             const body = document.createElement("div");
@@ -776,17 +784,6 @@ export function definePlannerElement(generation) {
                     button.disabled = true;
                 }
             }
-            tabs.addEventListener("keydown", event => {
-                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-                    return;
-                event.preventDefault();
-                const buttons = [...tabs.querySelectorAll("button:not(:disabled)")], index = buttons.indexOf(event.target);
-                if (!buttons.length)
-                    return;
-                const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-                buttons[next].click();
-                buttons[next].focus();
-            });
             const aside = panels.get("details");
             const form = document.createElement("form");
             form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveItem(selected, form); });
@@ -1322,4 +1319,5 @@ function subtype(item) { return item.kind === "event" ? item.eventType ?? "event
 function flowKindOptions(source, t = plannerTranslator()) { return source.kind === "branch" ? [["continues", t("Continues")], ["option", t("Option")]] : [["continues", t("Continues")]]; }
 function flowDescription(snapshot, flow) { const source = snapshot.items.find(item => item.id === flow.sourceId); const target = snapshot.items.find(item => item.id === flow.targetId); return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`; }
 function actionButton(document, label, action, style) { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined)
-    button.className = style; button.addEventListener("click", action); return button; }
+    button.className = style; if (style === "primary" || style === "danger")
+    button.dataset["uiVariant"] = style; button.addEventListener("click", action); return button; }

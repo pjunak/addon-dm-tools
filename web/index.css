@@ -26,11 +26,7 @@
 .dm-planner-shell h1, .dm-planner-shell h2, .dm-planner-shell h3, .dm-import-shell h1, .dm-import-shell h2, .dm-import-shell h3 { margin: 0; }
 .dm-planner-shell header p, .dm-import-shell > p { margin: .35rem 0 0; color: var(--text-muted, #9a8660); }
 .dm-planner-breadcrumbs { display: flex; flex-wrap: wrap; justify-content: end; gap: .35rem; }
-.dm-planner-refresh, .dm-planner-removed-draft button, .dm-planner-breadcrumbs button, .dm-planner-atlas button, .dm-planner-dialog button, .dm-import-shell button {
-  border: 1px solid var(--border-subtle, #ffffff12); border-radius: .4rem; padding: .5rem .7rem; color: inherit; background: var(--bg-raised, #241c0d); cursor: pointer;
-}
-.dm-planner-breadcrumbs button.active, .dm-planner-inspector button.primary, .dm-import-shell button.primary { border-color: var(--accent-gold, #c8a040); color: var(--accent-gold, #c8a040); }
-.dm-planner-inspector button.danger, .dm-import-shell button.danger { border-color: var(--color-danger, #ef9a9a); color: var(--color-danger, #ef9a9a); }
+.dm-planner-breadcrumbs button.active { border-color:var(--ui-accent); color:var(--ui-accent); }
 .dm-planner-workspace { display: grid; grid-template-columns: 11rem minmax(0, 1fr) minmax(16rem, 21rem); gap: .75rem; min-height: 680px; height: max(42rem, 75vh); }
 .dm-planner-atlas, .dm-planner-inspector { display: flex; flex-direction: column; align-items: stretch; gap: .65rem; border: 1px solid var(--border-subtle, #ffffff12); border-radius: .7rem; padding: .75rem; background: var(--bg-surface, #1c1509); overflow: auto; }
 .dm-planner-atlas button { text-align: left; }
@@ -52,8 +48,7 @@
 .dm-planner-note-anchors > div { max-height: 12rem; overflow: auto; display: grid; gap: .4rem; }
 .dm-planner-note-anchors label { display: flex; align-items: center; gap: .5rem; overflow-wrap: anywhere; }
 .dm-planner-inspector .dm-planner-note-anchors input { width: auto; flex: none; accent-color: var(--gold, #c8a040); }
-.dm-planner-inspector input, .dm-planner-inspector textarea, .dm-planner-inspector select, .dm-import-shell input { width: 100%; min-width: 0; border: 1px solid var(--border-subtle, #ffffff12); border-radius: .4rem; padding: .5rem; color: var(--text-light, #d4c49a); background: var(--bg-base, #141008); font: inherit; }
-.dm-tools-message { padding: .65rem .8rem; border-radius: .45rem; background: var(--bg-raised, #241c0d); }.dm-tools-message.alert { border: 1px solid var(--color-danger, #ef9a9a); }
+.dm-planner-inspector input, .dm-planner-inspector textarea, .dm-planner-inspector select, .dm-import-shell input { width:100%; min-width:0; }
 @media (max-width: 980px) { .dm-planner-workspace { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }.dm-planner-viewport { height: 32rem; }.dm-planner-atlas { flex-direction: row; flex-wrap: wrap; }.dm-planner-atlas h2, .dm-planner-atlas p { min-width: 100%; }.dm-planner-inspector { max-height: none; }.dm-planner-shell > header { display: grid; }.dm-planner-breadcrumbs { justify-content: start; } }
 
 .dm-planner-workspace > * { min-width: 0; min-height: 0; }
@@ -143,8 +138,6 @@
 .dm-planner-dialog > header { display: flex; align-items: center; gap: .5rem; padding: 1rem; border-bottom: 1px solid var(--border-subtle, #ffffff12); }
 .dm-planner-dialog > header h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-parchment, #f5edd8); }
 .dm-dialog-tabs { display: flex; gap: .25rem; padding-inline: 1rem; border-bottom: 1px solid var(--border-subtle, #ffffff12); }
-.dm-dialog-tabs button { min-height: 3rem; padding-inline: .75rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--text-muted, #9a8660); }
-.dm-dialog-tabs button[aria-selected="true"] { color: var(--accent-gold, #c8a040); border-bottom-color: var(--accent-gold, #c8a040); }
 .dm-planner-dialog-body { min-height: 0; overflow: auto; padding: 1rem; overscroll-behavior: contain; }
 .dm-planner-dialog [role="tabpanel"][hidden] { display: none; }
 .dm-planner-dialog [role="tabpanel"] { border: 0; padding-top: 0; }

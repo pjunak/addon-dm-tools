@@ -1,24 +1,7 @@
 import { plannerTranslator } from "./planner-catalogs.js";
 export function configurePlannerDialog(dialog, close) {
+    dialog.dataset["uiDialog"] = "";
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
-    dialog.addEventListener("keydown", event => {
-        if (event.key !== "Tab")
-            return;
-        const controls = [...dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]')].filter(control => control.tabIndex >= 0 && control.getClientRects().length > 0);
-        const index = controls.indexOf(dialog.ownerDocument.activeElement);
-        if (!controls.length) {
-            event.preventDefault();
-            dialog.focus();
-        }
-        else if (event.shiftKey && index <= 0) {
-            event.preventDefault();
-            controls.at(-1).focus();
-        }
-        else if (!event.shiftKey && (index === -1 || index === controls.length - 1)) {
-            event.preventDefault();
-            controls[0].focus();
-        }
-    });
     dialog.addEventListener("click", event => {
         if (event.target !== dialog)
             return;

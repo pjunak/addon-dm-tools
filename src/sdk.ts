@@ -28,7 +28,7 @@ export interface AddonContext {
     transact(mutations: readonly DataMutation[], options?: { readonly signal?: AbortSignal; readonly expectedDataSets?: readonly DataSetRevision[] }): Promise<CommitReceipt>;
   };
   readonly services: { connect(contract: string, options: { readonly range: string; readonly cardinality: "many"; readonly includeOwn?: boolean; readonly signal?: AbortSignal }): Promise<ServiceHandle> };
-  readonly ui: { bind(id: string, binding: { readonly kind: "element"; readonly tag: string }): { dispose(): void } };
+  readonly ui: { enhance(root: HTMLElement): { refresh(): void; dispose(): void }; bind(id: string, binding: { readonly kind: "element"; readonly tag: string }): { dispose(): void } };
 }
 export interface ContributionContext {
   readonly edits: { set(state: { readonly dirty: boolean; readonly saving: boolean; readonly retainOnQueryChange?: boolean }): void };

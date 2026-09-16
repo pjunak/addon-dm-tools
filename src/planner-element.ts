@@ -23,6 +23,7 @@ export function definePlannerElement(generation?: string): string {
   if (customElements.get(tag) !== undefined) return tag;
   class PlannerElement extends HTMLElement {
     readonly #t: PlannerTranslator = (key, parameters) => plannerTranslator(dashboardLocale(this.#contribution?.host))(key, parameters);
+    #controls: ReturnType<DmToolsRuntime["ui"]["enhance"]> | undefined;
     #contribution: ContributionContext | undefined; #runtime: DmToolsRuntime | undefined; #snapshot: PlanningSnapshot | undefined;
     #scopeId: string | null = null; #selectedId: string | undefined; #busy = false; #message = ""; #messageKind: "status" | "alert" = "status";
     #targetId: string | undefined; #targetPending = false; #readRequest: AbortController | undefined;
@@ -81,6 +82,7 @@ export function definePlannerElement(generation?: string): string {
       this.classList.add("dm-tools-planner"); void this.#connect();
     }
     disconnectedCallback(): void {
+      this.#controls?.dispose(); this.#controls = undefined;
       this.#disposeConnection?.(); this.#disposeConnection = undefined;
       this.removeEventListener("fullscreenchange", this.#fullscreenChanged); this.removeEventListener("focusout", this.#wakeLive);
       this.removeEventListener("pointerdown", this.#pointerStart, true);
@@ -96,7 +98,7 @@ export function definePlannerElement(generation?: string): string {
       catch (error) { this.#invalidLink(error); return; }
       this.#readRequest?.abort(); this.#busy = false; this.#writing = false; this.#invalidTarget = false; this.#snapshot = undefined; this.#targetPending = true;
       this.#newItem = undefined; this.#undoDelete = undefined; this.#helpOpen = false; this.#drafts.clearAll(); this.#committedDrafts.clear(); this.#needsReload = false; this.#editorId = undefined; this.#readerId = undefined;
-      this.#unsubscribe?.(); this.#live?.dispose(); this.#runtime = runtime;
+      this.#unsubscribe?.(); this.#live?.dispose(); this.#runtime = runtime; this.#controls?.dispose(); this.#controls = runtime.ui.enhance(this);
       this.#live = new LiveRefresh(() => { this.#liveNotice(); return !this.#busy && this.#liveSafe(); }, () => void this.#reload(undefined, true), () => this.#liveNotice());
       this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), contribution.signal);
       await this.#reload(this.#t("Loading story planner…"));
@@ -171,6 +173,7 @@ export function definePlannerElement(generation?: string): string {
     #render(captureViewport = true): void {
       if (captureViewport) this.#captureViewport();
       this.#disposeConnection?.(); this.#disposeConnection = undefined;
+      this.lang = dashboardLocale(this.#contribution?.host);
       const oldDialog = this.querySelector<HTMLDialogElement>("dialog"), oldBody = oldDialog?.querySelector<HTMLElement>(".dm-planner-dialog-body");
       const dialogScroll = oldBody?.scrollTop ?? 0;
       const wasReader = oldDialog?.classList.contains("dm-planning-reader"); const readerExpanded = oldDialog?.classList.contains("dm-reader-expanded");
@@ -236,7 +239,7 @@ export function definePlannerElement(generation?: string): string {
     #canvas(document: Document, snapshot: PlanningSnapshot): HTMLElement {
       const labels = canvasLabels(this.#contribution?.host);
       const region = document.createElement("div"); region.className = "dm-planner-canvas-region";
-      const viewport = document.createElement("div"); viewport.className = "dm-planner-viewport"; viewport.tabIndex = 0; viewport.setAttribute("aria-label", labels.canvas); viewport.dataset["scope"] = this.#scopeId ?? ""; const stage = document.createElement("div"); stage.className = "dm-planner-stage";
+      const viewport = document.createElement("div"); viewport.className = "dm-planner-viewport"; viewport.tabIndex = 0; viewport.setAttribute("aria-label", labels.canvas); viewport.dataset["scope"] = this.#scopeId ?? ""; const stage = document.createElement("div"); stage.className = "dm-planner-stage"; stage.dataset["uiSkip"] = "";
       const children = directChildren(snapshot.items, this.#scopeId); const positions = positionsFor(snapshot.views, this.#scopeId, children);
       const view = this.#canvasView(); const zoom = view.zoom; const bounds = canvasBounds(positions.values());
       const plotted = new Map([...positions].map(([id, point]) => [id, { x: point.x - bounds.left, y: point.y - bounds.top }]));
@@ -351,7 +354,7 @@ export function definePlannerElement(generation?: string): string {
       const saveItem = actionButton(document, this.#t("Save item"), () => undefined, "primary"); saveItem.type = "submit"; saveItem.setAttribute("form", `${this.#flowMarkerId}-details`);
       header.append(title, saveItem, close); dialog.append(header);
       configurePlannerDialog(dialog, closeEditor);
-      const tabs = document.createElement("div"); tabs.className = "dm-dialog-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", this.#t("Item sections")); dialog.append(tabs);
+      const tabs = document.createElement("div"); tabs.className = "dm-dialog-tabs"; tabs.setAttribute("role", "tablist"); tabs.dataset["uiTabs"] = ""; tabs.setAttribute("aria-label", this.#t("Item sections")); dialog.append(tabs);
       const body = document.createElement("div"); body.className = "dm-planner-dialog-body"; dialog.append(body); body.append(reload);
       if (this.#message) body.append(messageBlock(document, this.#message, this.#messageKind));
       if (this.#needsReload) body.append(messageBlock(document, this.#t("Reload the planner before making another change. Your edits are retained; review the saved data before retrying."), "alert"));
@@ -369,12 +372,6 @@ export function definePlannerElement(generation?: string): string {
         const button = actionButton(document, label, () => activate(id)); button.setAttribute("role", "tab"); button.dataset["tab"] = id; button.id = `${this.#flowMarkerId}-${id}-tab`; button.setAttribute("aria-controls", panel.id); panel.setAttribute("aria-labelledby", button.id); tabs.append(button);
         if (isNew && id !== "details") { button.dataset["unavailable"] = ""; button.disabled = true; }
       }
-      tabs.addEventListener("keydown", event => {
-        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        event.preventDefault(); const buttons = [...tabs.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")], index = buttons.indexOf(event.target as HTMLButtonElement); if (!buttons.length) return;
-        const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-        buttons[next]!.click(); buttons[next]!.focus();
-      });
       const aside = panels.get("details")!;
       const form = document.createElement("form"); form.addEventListener("submit", (event) => { event.preventDefault(); void this.#saveItem(selected, form); });
       form.id = `${this.#flowMarkerId}-details`;
@@ -661,4 +658,4 @@ function orthogonalPath(sourceX: number, sourceY: number, targetX: number, targe
 function subtype(item: PlanningItem): string { return item.kind === "event" ? item.eventType ?? "event" : item.kind === "branch" ? item.branchType ?? "branch" : item.kind; }
 function flowKindOptions(source: PlanningItem, t: PlannerTranslator = plannerTranslator()): readonly (readonly [string, string])[] { return source.kind === "branch" ? [["continues", t("Continues")], ["option", t("Option")]] : [["continues", t("Continues")]]; }
 function flowDescription(snapshot: PlanningSnapshot, flow: PlanningFlow): string { const source = snapshot.items.find(item => item.id === flow.sourceId); const target = snapshot.items.find(item => item.id === flow.targetId); return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`; }
-function actionButton(document: Document, label: string, action: () => void, style?: string): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined) button.className = style; button.addEventListener("click", action); return button; }
+function actionButton(document: Document, label: string, action: () => void, style?: string): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; if (style !== undefined) button.className = style; if (style === "primary" || style === "danger") button.dataset["uiVariant"] = style; button.addEventListener("click", action); return button; }

@@ -4,6 +4,11 @@ DM Tools adds a private story planner and reviewed planning imports to TTRPG
 Codex. The DM overview shows planning totals, shortcuts and recent items.
 English and Czech controls follow the host language.
 
+Planner and Import Center controls use the host's required `ui.controls.v1`
+[shared UI contract](../ttrpg-codex/docs/rewrite/UI_FOUNDATIONS.md). The host owns
+fields, searchable choices, actions, notices and dialog/tab interaction; this
+package owns planning geometry, imports and draft/save policy.
+
 ## Plan a campaign
 
 Organize plotlines and quests into a tree, then connect sibling events and

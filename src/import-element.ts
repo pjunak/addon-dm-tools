@@ -10,6 +10,7 @@ export function defineImportElement(generation?: string): string {
   const tag = generation ? `${importElementTag}-${generation}` : importElementTag;
   if (customElements.get(tag)) return tag;
   class ImportCenterElement extends HTMLElement {
+    #controls: ReturnType<DmToolsRuntime["ui"]["enhance"]> | undefined;
     #contribution: ContributionContext | undefined;
     #runtime: DmToolsRuntime | undefined;
     #adapters: readonly Adapter[] = [];
@@ -32,6 +33,7 @@ export function defineImportElement(generation?: string): string {
     }
     connectedCallback(): void { this.classList.add("dm-tools-import"); void this.#connect(); }
     disconnectedCallback(): void {
+      this.#controls?.dispose(); this.#controls = undefined;
       this.#request?.abort(); this.#request = undefined; this.#runtime = undefined;
       this.#preview = undefined; this.#selected = undefined; this.#contribution?.edits?.set({ dirty: false, saving: false });
     }
@@ -46,6 +48,7 @@ export function defineImportElement(generation?: string): string {
       const contribution = this.#contribution, runtime = contribution && runtimeFor(contribution.addon.generation);
       if (!runtime || runtime.signal.aborted) { this.#notice("missingGeneration", "alert"); this.#render(); return; }
       const request = this.#startRequest(), signal = this.#signal(runtime, request);
+      this.#controls?.dispose(); this.#controls = runtime.ui.enhance(this);
       this.#runtime = runtime; this.#adapters = []; this.#failedProviders = []; this.#preview = undefined; this.#selected = undefined; this.#fileName = "";
       this.#setPhase("discovering"); this.#notice("discovering"); this.#render();
       // Optional providers are independent; one timeout must not serialize all discovery.
@@ -60,6 +63,7 @@ export function defineImportElement(generation?: string): string {
     }
 
     #render(): void {
+      this.lang = dashboardLocale(this.#contribution?.host);
       const document = this.ownerDocument, root = node(document, "section", "dm-import-shell");
       root.setAttribute("aria-busy", String(this.#phase !== "idle"));
       const heading = node(document, "header", "dm-import-heading");
@@ -186,5 +190,5 @@ export function defineImportElement(generation?: string): string {
 }
 
 function node(document: Document, tag = "div", className = "", text?: string): HTMLElement { const element = document.createElement(tag); element.className = className; if (text !== undefined) element.textContent = text; return element; }
-function actionButton(document: Document, label: string, action: () => void, style = ""): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; button.className = style; button.addEventListener("click", action); return button; }
-function messageBlock(document: Document, message: string, role: "status" | "alert"): HTMLElement { const block = node(document, "div", `dm-tools-message ${role}`, message); block.setAttribute("role", role); return block; }
+function actionButton(document: Document, label: string, action: () => void, style = ""): HTMLButtonElement { const button = document.createElement("button"); button.type = "button"; button.textContent = label; button.className = style; if (style === "primary" || style === "danger") button.dataset["uiVariant"] = style; button.addEventListener("click", action); return button; }
+function messageBlock(document: Document, message: string, role: "status" | "alert"): HTMLElement { const block = node(document, "div", `dm-tools-message ${role}`, message); block.setAttribute("role", role); block.dataset["uiState"] = role === "alert" ? "error" : "info"; return block; }

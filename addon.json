@@ -12,7 +12,8 @@
     "workerProtocol": "^1.0.0"
   },
   "capabilities": {
-    "required": ["data.transactions", "ui.contributions", "ui.markdown", "worker.native"],
+    "required": ["data.transactions", "ui.contributions",
+      "ui.controls.v1", "ui.markdown", "worker.native"],
     "optional": []
   },
   "runtime": {

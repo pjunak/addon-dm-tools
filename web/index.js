@@ -8,9 +8,10 @@ export async function activate(context) {
     context.capabilities.require("data.transactions");
     context.capabilities.require("ui.contributions");
     context.capabilities.require("ui.markdown");
+    context.capabilities.require("ui.controls.v1");
     context.signal.throwIfAborted();
     const adapters = await context.services.connect("codex.import-adapter", { range: "^2.0.0", cardinality: "many", includeOwn: true, signal: context.signal });
-    const unregister = registerRuntime(context.addon.generation, { repository: new PlanningRepository(context), adapters, signal: context.signal });
+    const unregister = registerRuntime(context.addon.generation, { repository: new PlanningRepository(context), adapters, signal: context.signal, ui: context.ui });
     const plannerElementTag = definePlannerElement(context.addon.generation), importElementTag = defineImportElement(context.addon.generation);
     const bindings = [context.ui.bind("map.planning", { kind: "element", tag: defineMapPlanningElement(context.addon.generation) }), context.ui.bind("planner.route", { kind: "element", tag: plannerElementTag }), context.ui.bind("imports.route", { kind: "element", tag: importElementTag }),
         context.ui.bind("dashboard.slot", { kind: "element", tag: defineDashboardElement(context.addon.generation) })];

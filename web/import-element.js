@@ -7,6 +7,7 @@ export function defineImportElement(generation) {
     if (customElements.get(tag))
         return tag;
     class ImportCenterElement extends HTMLElement {
+        #controls;
         #contribution;
         #runtime;
         #adapters = [];
@@ -32,6 +33,8 @@ export function defineImportElement(generation) {
         }
         connectedCallback() { this.classList.add("dm-tools-import"); void this.#connect(); }
         disconnectedCallback() {
+            this.#controls?.dispose();
+            this.#controls = undefined;
             this.#request?.abort();
             this.#request = undefined;
             this.#runtime = undefined;
@@ -53,6 +56,8 @@ export function defineImportElement(generation) {
                 return;
             }
             const request = this.#startRequest(), signal = this.#signal(runtime, request);
+            this.#controls?.dispose();
+            this.#controls = runtime.ui.enhance(this);
             this.#runtime = runtime;
             this.#adapters = [];
             this.#failedProviders = [];
@@ -80,6 +85,7 @@ export function defineImportElement(generation) {
             this.#render();
         }
         #render() {
+            this.lang = dashboardLocale(this.#contribution?.host);
             const document = this.ownerDocument, root = node(document, "section", "dm-import-shell");
             root.setAttribute("aria-busy", String(this.#phase !== "idle"));
             const heading = node(document, "header", "dm-import-heading");
@@ -298,5 +304,6 @@ export function defineImportElement(generation) {
 }
 function node(document, tag = "div", className = "", text) { const element = document.createElement(tag); element.className = className; if (text !== undefined)
     element.textContent = text; return element; }
-function actionButton(document, label, action, style = "") { const button = document.createElement("button"); button.type = "button"; button.textContent = label; button.className = style; button.addEventListener("click", action); return button; }
-function messageBlock(document, message, role) { const block = node(document, "div", `dm-tools-message ${role}`, message); block.setAttribute("role", role); return block; }
+function actionButton(document, label, action, style = "") { const button = document.createElement("button"); button.type = "button"; button.textContent = label; button.className = style; if (style === "primary" || style === "danger")
+    button.dataset["uiVariant"] = style; button.addEventListener("click", action); return button; }
+function messageBlock(document, message, role) { const block = node(document, "div", `dm-tools-message ${role}`, message); block.setAttribute("role", role); block.dataset["uiState"] = role === "alert" ? "error" : "info"; return block; }

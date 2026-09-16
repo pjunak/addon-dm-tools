@@ -8,7 +8,7 @@ test("compiled entry binds planner and import routes and disposes idempotently",
     const { activate } = await import("../web/index.js?smoke-v3"); const bindings = []; const collections = []; let connection;
     const context = {
       addon: { id: "dm-tools", version: "3.0.0", generation: "a".repeat(64) }, signal: new AbortController().signal,
-      capabilities: { require: id => assert.ok(["data.transactions", "ui.contributions", "ui.markdown"].includes(id)) },
+      capabilities: { require: id => assert.ok(["data.transactions", "ui.contributions", "ui.markdown", "ui.controls.v1"].includes(id)) },
       data: { collection: id => { collections.push(id); return { query: async () => ({ documents: [] }), put: async () => {}, delete: async () => {} }; }, transact: async () => ({ results: [] }) },
       services: { connect: async (contract, options) => { connection = { contract, options }; return { available: false, providers: [], call: async () => assert.fail("unused") }; } },
       ui: { bind: (id, binding) => { const record = { id, binding, disposed: false }; bindings.push(record); return { dispose: () => { record.disposed = true; } }; } },
