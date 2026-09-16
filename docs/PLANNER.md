@@ -194,9 +194,34 @@ review over silently overwriting another editor's work. Reload never silently
 replaces a draft's opening revision.
 
 Leaving the planner, signing out or reloading the browser warns about unsaved
-edits. Canceling preserves them; accepting the departure discards them. Pending
-saves block ordinary navigation until their outcome is known. **Drafts are not
-persisted across an accepted browser reload or forced add-on/authority teardown.**
+edits. Canceling keeps them open. Accepting the host's **Discard unsaved changes**
+prompt on navigation or sign-out discards the active drafts. Pending saves block
+ordinary navigation until their outcome is known.
+
+### Recover after a reload or add-on update
+
+The planner keeps a recovery copy in the current browser tab. After a browser
+reload, forced add-on replacement or disable/re-enable, return to the planner
+as a DM and choose:
+
+- **Resume drafts** to review your unsaved text against the latest saved data.
+  Nothing is saved automatically, and newer campaign changes remain protected.
+- **Download drafts** to keep a plain-text copy of the retained form values.
+- **Discard recovery copy** to remove it after confirmation.
+
+Leaving this offer unopened does not erase it. Recovery includes item, flow,
+reference, consequence and note edits, including a provisional new card and
+its selected parent. Removed-record text remains available to copy. If a save
+was not confirmed before the interruption, that recovered draft cannot be
+submitted again: inspect the saved record, copy any missing text, then discard
+the draft before making a new edit. This prevents duplicate annotations or
+replaying a save whose response was lost.
+
+This copy belongs to the browser tab, not to campaign backups, and is best
+effort. Do not rely on closing the tab or clearing browser data to preserve it.
+If storage is unavailable or full, a warning asks you to download the current
+drafts before leaving. An unreadable recovery copy can be downloaded or
+explicitly discarded; it is never silently applied or erased.
 
 ## Share a link with another DM view
 

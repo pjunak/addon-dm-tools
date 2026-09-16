@@ -45,6 +45,8 @@ internal imports are outside the contract.
 | [planner-element.ts](../src/planner-element.ts) | Planner composition, forms and DOM/SVG rendering |
 | [planning-reader.ts](../src/planning-reader.ts) | Reading saved prose and annotations |
 | [planner-drafts.ts](../src/planner-drafts.ts) | Named draft values and opening revisions |
+| [planner-recovery.ts](../src/planner-recovery.ts) | Bounded tab recovery format and storage validation |
+| [planner-recovery-view.ts](../src/planner-recovery-view.ts) | Shared recovery controls and plain-text download |
 | [planner-selection.ts](../src/planner-selection.ts) | Canvas selection and group geometry |
 | [planner-connections.ts](../src/planner-connections.ts) | Click, drag and keyboard connection gestures |
 | [planner-dialog.ts](../src/planner-dialog.ts) | Shared modal focus and dismissal behavior |
@@ -157,10 +159,10 @@ deliberate overlaps, remain unchanged.
 
 ## Drafts and mutation outcomes
 
-Drafts are view-local editor state, never campaign records or an automatic merge.
-Keep each form's named values and opening revisions through selection, tab and
-scope changes, reload and other saves. Clear only the confirmed submitted draft;
-unrelated drafts survive. Preserve removed-record text for copying.
+Drafts are add-on-owned editor state, never campaign records or an automatic
+merge. Keep each form's named values and opening revisions through selection,
+tab and scope changes, reload and other saves. Clear only the confirmed submitted
+draft; unrelated drafts survive. Preserve removed-record text for copying.
 
 New items stay provisional until valid Details commit at revision zero.
 Cancel and Escape discard that provisional item; links and notes require a saved
@@ -178,8 +180,55 @@ drafts still are.
 
 The host owns navigation, sign-out and unload guards. Planner route-query
 changes retain drafts; invalid targets keep an open editor. Disposal clears
-the edit flags. Accepted departure or forced generation/authority teardown
-discards view-local drafts and never waits indefinitely for a save.
+the edit flags without waiting for a pending save. Ordinary route departure or
+sign-out removes the current editing copy after the host's discard guard. A
+forced graph/authority teardown aborts the public generation signal before
+unmounting, preserving the recovery copy. An unopened recovery offer survives
+navigation until explicitly resumed or discarded.
+
+### Recovery across generations
+
+`dm-tools-planner-drafts.v1` checkpoints named form values, original baselines
+and opening revisions, provisional identity/parent, editor selection, active tab
+and unconfirmed-save keys in `sessionStorage`. The key includes format, add-on
+ID and DM role; the browser supplies origin and tab scope. A new generation
+loads current campaign data and offers **Resume drafts**, **Download drafts** or
+**Discard recovery copy** before editing. Resume obtains fresh runtime handles;
+no SDK object, authorization token, DOM node or function is serialized. Player
+mounts cannot display the DM planner or its recovery UI.
+
+Recovery retains existing items, flows, references, consequences, shared notes,
+new flows/references and provisional items. It does not rebase their opening
+revisions. Newer records still reject stale saves; deleted records and drafts
+whose owner disappeared remain inert, copyable text. Recovered unconfirmed saves
+are review-only and cannot be submitted again, including a new annotation whose
+reply was lost. Check current saved data, copy missing text and discard the old
+draft before a deliberate new edit. A confirmed write removes its checkpoint
+before the confirming read, so read failure cannot recover it as unsaved work.
+Late replies from a detached generation cannot change the current copy.
+
+The serialized envelope is bounded to 2,000,000 UTF-16 code units, 50 drafts,
+32 named fields per form and 160,000 code units per field. Unknown versions,
+malformed/oversized copies and invalid identities/revisions are never applied
+or silently cleared: retain their exact text for download or explicit discard.
+Failed reads disable checkpoint writes for that mount, protecting unread bytes.
+Quota/access failures retain the previous copy and show that current edits need
+downloading. Storage is best effort, not a backup or an import format; no
+campaign mutation, migration or package permission is added.
+
+The choice follows the browser's [tab-scoped storage lifetime](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage)
+and [storage failure guidance](https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API).
+Reloads can retain the copy; closing/clearing the tab, origin changes or browser
+policy can remove it. An opener may initially copy storage into another tab;
+there is no subsequent cross-tab synchronization. It is not encrypted storage
+or an authority boundary against trusted same-origin code.
+
+[Recovery unit tests](../tests/planner-recovery.mjs) verify bounds, detached
+values and storage failures. The host's [installed recovery fixture](../../ttrpg-codex/frontend/test/browser/installed-planner-recovery-fixture.mts)
+exercises real reviewed replacement, disable/re-enable, stale/deleted data,
+confirmed/uncertain writes, malformed/blocked storage and player isolation on
+desktop and phone, including Czech enlarged text. The [navigation fixture](../../ttrpg-codex/frontend/test/browser/installed-planner-navigation-fixture.mts)
+retains canceled-navigation guards and verifies accepted route/sign-out discard.
 
 ## Selection, connections and viewport
 

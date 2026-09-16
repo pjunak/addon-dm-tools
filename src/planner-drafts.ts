@@ -1,14 +1,14 @@
 import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
-interface Draft {
+export interface PlannerDraft {
   readonly revision: number | undefined;
   readonly baseline: Record<string, string>;
   readonly values: Record<string, string>;
 }
 
-/** View-local edits keep the revision at which editing began, even after refresh. */
+/** Editor values retain the revision at which editing began, including recovery. */
 export class PlannerDrafts {
   readonly #changed: () => void;
-  #drafts = new Map<string, Draft>();
+  #drafts = new Map<string, PlannerDraft>();
   #forms = new WeakMap<HTMLFormElement, { key: string; revision: number | undefined }>();
 
   constructor(changed: () => void = () => undefined) { this.#changed = changed; }
@@ -41,7 +41,8 @@ export class PlannerDrafts {
 
   revision(form: HTMLFormElement): number | undefined { return this.#forms.get(form)?.revision; }
   has(key: string): boolean { return this.#drafts.has(key); }
-  entries(): IterableIterator<[string, Draft]> { return this.#drafts.entries(); }
+  entries(): IterableIterator<[string, PlannerDraft]> { return this.#drafts.entries(); }
+  restore(entries: readonly (readonly [string, PlannerDraft])[]): void { this.#drafts = new Map(entries.map(([key, value]) => [key, structuredClone(value)])); this.#changed(); }
   rekey(from: string, to: string): void { const draft = this.#drafts.get(from); if (draft) { this.#drafts.delete(from); this.#drafts.set(to, draft); this.#changed(); } }
   clear(key: string): void { if (this.#drafts.delete(key)) this.#changed(); }
   clearAll(): void { this.#drafts.clear(); this.#changed(); }

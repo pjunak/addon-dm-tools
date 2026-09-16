@@ -16,8 +16,10 @@ branches with directed story flow. Add references, planned consequences and
 shared DM notes without turning the planner into a combat or session engine.
 
 Select cards to read or edit them, move groups, connect flow, and review subtree
-deletion. The planner preserves drafts while it stays open and warns before
-leaving. A read-only map panel links locations to related planning items.
+deletion. The planner warns before leaving and keeps a recovery copy in the
+current browser tab across reloads and forced add-on replacement. Resume it for
+review, download the text or explicitly discard it; recovery never saves to the
+campaign automatically. A read-only map panel links locations to related plans.
 
 See the [planner guide](docs/PLANNER.md) for controls, shortcuts, draft recovery
 and navigation. The [graph contract](docs/GRAPH.md) explains ownership, atomic

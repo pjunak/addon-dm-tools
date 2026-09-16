@@ -1,5 +1,5 @@
 import { plannerTranslator } from "./planner-catalogs.js";
-/** View-local edits keep the revision at which editing began, even after refresh. */
+/** Editor values retain the revision at which editing began, including recovery. */
 export class PlannerDrafts {
     #changed;
     #drafts = new Map();
@@ -39,6 +39,7 @@ export class PlannerDrafts {
     revision(form) { return this.#forms.get(form)?.revision; }
     has(key) { return this.#drafts.has(key); }
     entries() { return this.#drafts.entries(); }
+    restore(entries) { this.#drafts = new Map(entries.map(([key, value]) => [key, structuredClone(value)])); this.#changed(); }
     rekey(from, to) { const draft = this.#drafts.get(from); if (draft) {
         this.#drafts.delete(from);
         this.#drafts.set(to, draft);

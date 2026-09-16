@@ -10,6 +10,8 @@ import type { ContributionContext, DataMutation } from "./sdk.js";
 import { dashboardLocale, plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
 import { LiveRefresh } from "./live-refresh.js";
 import { PlannerDrafts } from "./planner-drafts.js";
+import { PlannerRecoveryStore, provisionalItem, type PlannerRecovery } from "./planner-recovery.js";
+import { recoveryPanel, downloadDrafts } from "./planner-recovery-view.js";
 import { mountCanvasSelection, type CanvasSelection } from "./planner-selection.js";
 import { mountCanvasConnections } from "./planner-connections.js";
 import { planningReader } from "./planning-reader.js";
@@ -29,6 +31,9 @@ export function definePlannerElement(generation?: string): string {
     #targetId: string | undefined; #targetPending = false; #readRequest: AbortController | undefined;
     #drafts = new PlannerDrafts(() => this.#syncEdits()); #committedDrafts = new Set<string>(); #needsReload = false;
     #writing = false; #invalidTarget = false;
+    #recoveryStore: PlannerRecoveryStore | undefined; #recovery: PlannerRecovery | undefined;
+    #invalidRecovery: string | undefined; #recoveryUnavailable = false;
+    #unconfirmedDrafts = new Set<string>(); #uncertainRecovered = new Set<string>();
     #canvasViews = new Map<string, CanvasView>();
     #fullscreen = false;
     #flowMarkerId = `dm-flow-arrow-${crypto.randomUUID()}`;
@@ -82,6 +87,11 @@ export function definePlannerElement(generation?: string): string {
       this.classList.add("dm-tools-planner"); void this.#connect();
     }
     disconnectedCallback(): void {
+      // An active generation leaving its route has passed the host's discard guard.
+      // Forced generation teardown aborts first; an unopened recovery offer is not a current edit.
+      if (this.#contribution?.signal.aborted === false && !this.#recovery && this.#invalidRecovery === undefined) {
+        try { this.#recoveryStore?.clear(); } catch { /* Retain the last readable copy if storage is blocked. */ }
+      }
       this.#controls?.dispose(); this.#controls = undefined;
       this.#disposeConnection?.(); this.#disposeConnection = undefined;
       this.removeEventListener("fullscreenchange", this.#fullscreenChanged); this.removeEventListener("focusout", this.#wakeLive);
@@ -96,11 +106,19 @@ export function definePlannerElement(generation?: string): string {
       const runtime = runtimeFor(contribution.addon.generation); if (runtime === undefined || runtime.signal.aborted) { this.#unavailable(this.#t("This DM Tools generation is no longer active.")); return; }
       try { this.#targetId = plannerTarget(contribution.host); }
       catch (error) { this.#invalidLink(error); return; }
+      this.#recoveryStore = undefined; this.#recovery = undefined; this.#invalidRecovery = undefined;
+      this.#unconfirmedDrafts.clear(); this.#uncertainRecovered.clear();
       this.#readRequest?.abort(); this.#busy = false; this.#writing = false; this.#invalidTarget = false; this.#snapshot = undefined; this.#targetPending = true;
       this.#newItem = undefined; this.#undoDelete = undefined; this.#helpOpen = false; this.#drafts.clearAll(); this.#committedDrafts.clear(); this.#needsReload = false; this.#editorId = undefined; this.#readerId = undefined;
       this.#unsubscribe?.(); this.#live?.dispose(); this.#runtime = runtime; this.#controls?.dispose(); this.#controls = runtime.ui.enhance(this);
       this.#live = new LiveRefresh(() => { this.#liveNotice(); return !this.#busy && this.#liveSafe(); }, () => void this.#reload(undefined, true), () => this.#liveNotice());
       this.#unsubscribe = runtime.repository.subscribe(() => this.#live?.invalidate(), contribution.signal);
+      this.#recoveryStore = new PlannerRecoveryStore(() => this.ownerDocument.defaultView!.sessionStorage, contribution.addon.id);
+      const recovery = this.#recoveryStore.read(); this.#recoveryUnavailable = recovery.kind === "unavailable";
+      if (recovery.kind === "ready") this.#recovery = recovery.value;
+      if (recovery.kind === "invalid") this.#invalidRecovery = recovery.raw;
+      // A failed read must not let an empty mount erase an unread recovery copy.
+      if (recovery.kind === "unavailable") this.#recoveryStore = undefined;
       await this.#reload(this.#t("Loading story planner…"));
     }
 
@@ -197,6 +215,9 @@ export function definePlannerElement(generation?: string): string {
       const header = document.createElement("header"); const heading = document.createElement("div"); const title = document.createElement("h1"); title.textContent = this.#t("Story Planner"); const subtitle = document.createElement("p"); subtitle.textContent = this.#t("An editable tree of local story-flow canvases."); heading.append(title, subtitle); header.append(heading, this.#breadcrumbs(document, snapshot)); root.append(header);
       if (this.#message !== "" && !this.#editorId) root.append(messageBlock(document, this.#message, this.#messageKind));
       const refresh = actionButton(document, this.#t("Reload planner"), () => void this.#reload(this.#t("Reloading planning data…"))); refresh.dataset["viewAction"] = ""; refresh.className = "dm-planner-refresh"; header.append(refresh);
+      if (this.#recovery || this.#invalidRecovery !== undefined) {
+        root.append(this.#recoveryPanel()); oldDialog?.close(); this.replaceChildren(root); return;
+      }
       if (this.#needsReload && !this.#editorId) root.append(messageBlock(document, this.#t("Reload the planner before making another change. Your edits are retained; review the saved data before retrying."), "alert"));
       if (!this.#editorId) this.#removedDrafts(document, root, snapshot);
       const workspace = document.createElement("div"); workspace.className = "dm-planner-workspace";
@@ -205,14 +226,14 @@ export function definePlannerElement(generation?: string): string {
       if (dialog?.classList.contains("dm-planning-reader") && this.#message) dialog.querySelector(".dm-planner-dialog-body")!.prepend(messageBlock(document, this.#message, this.#messageKind));
       if (dialog) for (const child of root.children) if (child !== dialog) { child.setAttribute("inert", ""); child.setAttribute("aria-hidden", "true"); }
       oldDialog?.close(); this.replaceChildren(root);
-      this.#liveNotice();
+      this.#liveNotice(); this.#recoveryNotice();
       const viewport = root.querySelector<HTMLElement>(".dm-planner-viewport")!; const view = this.#canvasView(); viewport.scrollLeft = view.x; viewport.scrollTop = view.y;
       root.setAttribute("aria-busy", String(this.#busy));
       for (const control of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input,textarea,select")) {
         control.disabled = this.#busy || (this.#needsReload && control.tagName === "SELECT");
         if (control.tagName !== "SELECT") (control as HTMLInputElement | HTMLTextAreaElement).readOnly = this.#needsReload;
       }
-      for (const button of root.querySelectorAll("button")) button.disabled = this.#busy || button.hasAttribute("data-unavailable") || (this.#needsReload && !button.hasAttribute("data-view-action"));
+      for (const button of root.querySelectorAll("button")) button.disabled = this.#busy || button.hasAttribute("data-unavailable") || (button.type === "submit" && button.form?.hasAttribute("data-recovery-uncertain") === true) || (this.#needsReload && !button.hasAttribute("data-view-action"));
       if (dialog) {
         if (readerExpanded && dialog.classList.contains("dm-planning-reader")) dialog.querySelector<HTMLButtonElement>('[aria-pressed="false"]')?.click();
         dialog.showModal(); const body = dialog.querySelector<HTMLElement>(".dm-planner-dialog-body")!; body.scrollTop = wasReader === dialog.classList.contains("dm-planning-reader") ? dialogScroll : 0;
@@ -594,12 +615,17 @@ export function definePlannerElement(generation?: string): string {
       const update = (): void => { discard.hidden = !this.#drafts.has(key); };
       form.addEventListener("input", update); form.addEventListener("change", update);
       const opening = this.#drafts.revision(form);
+      if (this.#uncertainRecovered.has(key)) {
+        form.dataset["recoveryUncertain"] = "";
+        form.prepend(messageBlock(this.ownerDocument, this.#t("This draft has an unconfirmed save. Check the saved data and copy any missing text, then discard this draft. It cannot be submitted again."), "alert"));
+      }
       if (opening !== revision) form.prepend(messageBlock(this.ownerDocument, this.#t("This record changed since editing began. Copy your edits, then discard them to load the saved version."), "alert"));
     }
 
     #removedDrafts(document: Document, root: HTMLElement, snapshot: PlanningSnapshot): void {
       for (const [key, draft] of this.#drafts.entries()) {
-        if (key.startsWith("new-item:") || key.startsWith("new-flow:") || key.startsWith("new-reference:") || snapshot.revisions.has(key)) continue;
+        if ((key === `new-item:${this.#newItem?.id}`) || snapshot.revisions.has(key)) continue;
+        if ((key.startsWith("new-flow:") || key.startsWith("new-reference:")) && snapshot.items.some(item => item.id === key.slice(key.indexOf(":") + 1))) continue;
         const details = document.createElement("details"); const title = document.createElement("summary");
         title.textContent = this.#t("Unsaved edits to a removed record: {0}", { "0": draft.values["title"] || draft.values["name"] || this.#t("Planning record") });
         const content = document.createElement("pre"); content.textContent = Object.entries(draft.values).map(([field, value]) => `${field}: ${value}`).join("\n\n");
@@ -610,19 +636,90 @@ export function definePlannerElement(generation?: string): string {
 
     #acceptCommittedDrafts(): void { for (const key of this.#committedDrafts) { if (key === `new-item:${this.#newItem?.id}`) this.#newItem = undefined; this.#drafts.clear(key); } this.#committedDrafts.clear(); this.#syncEdits(); }
 
+    #recoveryValue(): PlannerRecovery {
+      const item = this.#newItem && !this.#committedDrafts.has(`new-item:${this.#newItem.id}`) ? this.#newItem : undefined;
+      const drafts = [...this.#drafts.entries()].filter(([key]) => !this.#committedDrafts.has(key));
+      const keys = new Set(drafts.map(([key]) => key)); if (item) keys.add(`new-item:${item.id}`);
+      return { format: "dm-tools-planner-drafts.v1", drafts,
+        provisional: item ? { id: item.id, kind: item.kind, parentId: item.parentId, title: item.title, updatedAt: item.updatedAt } : null,
+        unconfirmed: [...this.#unconfirmedDrafts].filter(key => keys.has(key)),
+        editor: this.#editorId ?? this.#selectedId ?? null,
+        tab: this.#dialogTab === "links" || this.#dialogTab === "notes" ? this.#dialogTab : "details" };
+    }
+    #checkpoint(): void {
+      if (!this.#recoveryStore || this.#recovery || this.#invalidRecovery !== undefined ||
+          !this.#runtime || this.#runtime.signal.aborted || this.#contribution?.signal.aborted || !this.isConnected) return;
+      const value = this.#recoveryValue(), keys = new Set(value.drafts.map(([key]) => key));
+      if (value.provisional) keys.add(`new-item:${value.provisional.id}`);
+      this.#unconfirmedDrafts = new Set(value.unconfirmed);
+      this.#uncertainRecovered = new Set([...this.#uncertainRecovered].filter(key => keys.has(key)));
+      try {
+        if (value.drafts.length || value.provisional) this.#recoveryStore.save(value);
+        else this.#recoveryStore.clear();
+        this.#recoveryUnavailable = false;
+      } catch { this.#recoveryUnavailable = true; }
+    }
+    #recoveryPanel(): HTMLElement {
+      const panel = recoveryPanel(this.ownerDocument, this.#t, {
+        pending: !!this.#recovery || this.#invalidRecovery !== undefined,
+        invalid: this.#invalidRecovery !== undefined, unavailable: this.#recoveryUnavailable,
+        resume: () => this.#resumeRecovery(),
+        discard: () => {
+          if (!confirm(this.#t("Discard this tab's recovered planner drafts?"))) return;
+          try { this.#recoveryStore?.clear(); this.#recovery = undefined; this.#invalidRecovery = undefined; this.#recoveryUnavailable = false; this.#render(); }
+          catch { this.#recoveryUnavailable = true; this.#render(); }
+        },
+        download: () => downloadDrafts(this.ownerDocument, this.#invalidRecovery ?? JSON.stringify(this.#recovery ?? this.#recoveryValue(), null, 2)),
+      });
+      for (const button of panel.querySelectorAll("button")) button.disabled = this.#busy;
+      return panel;
+    }
+    #recoveryNotice(): void {
+      if (this.#recovery || this.#invalidRecovery !== undefined) return;
+      const existing = this.querySelector<HTMLElement>("[data-planner-recovery]");
+      if (!this.#newItem && !this.#drafts.entries().next().value && !this.#recoveryUnavailable) { existing?.remove(); return; }
+      const state = String(this.#recoveryUnavailable);
+      if (existing?.dataset["recoveryState"] === state) return;
+      const panel = this.#recoveryPanel(); panel.dataset["recoveryState"] = state;
+      if (existing) existing.replaceWith(panel);
+      else (this.querySelector(".dm-planner-dialog-body") ?? this.querySelector(".dm-planner-shell"))?.prepend(panel);
+    }
+    #resumeRecovery(): void {
+      const recovery = this.#recovery, snapshot = this.#snapshot;
+      if (!recovery || !snapshot || this.#busy) return;
+      this.#newItem = recovery.provisional ? provisionalItem(recovery.provisional) : undefined;
+      this.#unconfirmedDrafts = new Set(recovery.unconfirmed); this.#uncertainRecovered = new Set(recovery.unconfirmed);
+      this.#drafts.restore(recovery.drafts);
+      if (this.#newItem && snapshot.items.some(item => item.id === this.#newItem!.id)) {
+        const from = `new-item:${this.#newItem.id}`, to = `planning_items:${this.#newItem.id}`;
+        this.#drafts.rekey(from, to);
+        if (this.#unconfirmedDrafts.delete(from)) { this.#unconfirmedDrafts.add(to); this.#uncertainRecovered.delete(from); this.#uncertainRecovered.add(to); }
+        this.#newItem = undefined;
+      }
+      const selected = snapshot.items.find(item => item.id === recovery.editor) ?? (this.#newItem?.id === recovery.editor ? this.#newItem : undefined);
+      this.#editorId = selected?.id; this.#readerId = undefined; this.#dialogTab = recovery.tab;
+      if (selected) { this.#scopeId = selected.parentId; if (!this.#newItem) this.#selectOnly(selected.id); }
+      this.#targetPending = false; this.#recovery = undefined;
+      this.#message = this.#t("Drafts restored for review. Newer saved changes are protected."); this.#messageKind = "status";
+      this.#syncEdits(); this.#render();
+      (this.querySelector<HTMLElement>("dialog input, dialog textarea") ?? this.querySelector<HTMLElement>(".dm-planner-viewport"))?.focus();
+    }
+
     #syncEdits(): void {
       const dirty = (!!this.#newItem && !this.#committedDrafts.has(`new-item:${this.#newItem.id}`)) || [...this.#drafts.entries()].some(([key]) => !this.#committedDrafts.has(key));
       this.#contribution?.edits?.set({ dirty, saving: this.#writing, retainOnQueryChange: true });
-      this.#live?.wake();
+      this.#checkpoint(); this.#recoveryNotice(); this.#live?.wake();
     }
 
     async #mutate(operation: (runtime: DmToolsRuntime, snapshot: PlanningSnapshot) => Promise<unknown>, success: string, selected?: string, draftKey?: string): Promise<boolean> {
       const runtime = this.#runtime; const original = this.#snapshot; if (runtime === undefined || original === undefined || this.#busy || this.#needsReload) return false; this.#busy = true; this.#message = this.#t("Saving…"); this.#messageKind = "status"; this.#render();
+      if (draftKey && this.#uncertainRecovered.has(draftKey)) { this.#busy = false; this.#invalid(this.#t("This draft has an unconfirmed save. Check the saved data and copy any missing text, then discard this draft. It cannot be submitted again.")); return false; }
+      if (draftKey) this.#unconfirmedDrafts.add(draftKey);
       this.#writing = true; this.#syncEdits();
       try {
         await operation(runtime, original); if (this.#runtime !== runtime || !this.isConnected) return false;
         // A confirmed write must not be offered again if the following read fails.
-        if (draftKey) this.#committedDrafts.add(draftKey);
+        if (draftKey) { this.#committedDrafts.add(draftKey); this.#unconfirmedDrafts.delete(draftKey); this.#syncEdits(); }
         const request = new AbortController(); this.#readRequest?.abort(); this.#readRequest = request;
         this.#live?.consume();
         const snapshot = await runtime.repository.load(request.signal); if (this.#runtime !== runtime || request.signal.aborted || !this.isConnected) return false;
