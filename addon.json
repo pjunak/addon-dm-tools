@@ -46,7 +46,7 @@
     { "id": "planning_views", "keyed": true, "visibility": "dm", "schema": "contracts/planning-view.schema.json", "schemaVersion": "3.0.0", "indexes": [{ "path": "/scopeId", "unique": true }] }
   ],
   "services": {
-    "provides": [{ "contract": "codex.import-adapter", "version": "2.0.0", "transport": "worker", "schema": "contracts/import-adapter.service.json" }],
-    "consumes": [{ "contract": "codex.import-adapter", "range": "^2.0.0", "cardinality": "many", "required": false, "selection": "all-compatible" }]
+    "provides": [{ "contract": "codex.import-adapter", "version": "2.0.0", "transport": "worker", "schema": "contracts/import-adapter.service.json" }, { "contract": "codex.campaign-bundle-contributor", "version": "1.0.0", "transport": "worker", "schema": "contracts/campaign-contributor.service.json" }],
+    "consumes": [{ "contract": "codex.import-adapter", "range": ">=2.0.0 <4.0.0", "cardinality": "many", "required": false, "selection": "all-compatible" }]
   }
 }

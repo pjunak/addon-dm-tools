@@ -14,6 +14,7 @@ export function defineImportElement(generation) {
         #failedProviders = [];
         #selected;
         #preview;
+        #outcome;
         #fileName = "";
         #format = "";
         #phase = "idle";
@@ -38,6 +39,7 @@ export function defineImportElement(generation) {
             this.#request?.abort();
             this.#request = undefined;
             this.#runtime = undefined;
+            this.#outcome = undefined;
             this.#preview = undefined;
             this.#selected = undefined;
             this.#contribution?.edits?.set({ dirty: false, saving: false });
@@ -80,8 +82,24 @@ export function defineImportElement(generation) {
                 failed.push(runtime.adapters.providers[index].addonId); });
             this.#adapters = adapters;
             this.#failedProviders = failed;
+            try {
+                const saved = JSON.parse(sessionStorage.getItem("dm-tools.import-receipt") ?? "null");
+                if (isRecord(saved) && typeof saved["token"] === "string" && /^[a-f0-9]{48}$/.test(saved["token"])) {
+                    const adapter = adapters.find(adapter => adapter.provider.addonId === saved["providerAddonId"] && adapter.description.features?.includes("receipt-status"));
+                    if (adapter) {
+                        this.#outcome = { token: saved["token"], adapter };
+                        await this.#readResult(runtime, request);
+                    }
+                }
+            }
+            catch { /* Receipt storage is optional; never block import discovery. */ }
+            if (!this.#current(runtime, request))
+                return;
+            if (this.#outcome && this.#message === "discovering")
+                this.#notice("uncertain", "alert");
             this.#setPhase("idle");
-            this.#notice(undefined);
+            if (!this.#outcome && this.#message === "discovering")
+                this.#notice(undefined);
             this.#render();
         }
         #render() {
@@ -93,6 +111,11 @@ export function defineImportElement(generation) {
             root.append(heading);
             if (this.#message)
                 root.append(messageBlock(document, this.#t(this.#message, this.#params), this.#messageKind));
+            if (this.#outcome) {
+                const retry = actionButton(document, this.#t("checkResult"), () => void this.#checkResult());
+                retry.disabled = this.#phase !== "idle";
+                root.append(retry);
+            }
             if (this.#selected && this.#fileName) {
                 const routing = node(document, "section", "dm-import-routing");
                 routing.setAttribute("aria-label", this.#t("center.routeTitle"));
@@ -177,6 +200,8 @@ export function defineImportElement(generation) {
             title.tabIndex = -1;
             head.append(title, node(document, "span", "dm-import-badge", this.#t(preview.mode)));
             section.append(head);
+            if (adapter.description.features?.includes("record-views"))
+                section.dataset["recordViews"] = "";
             const metrics = node(document, "div", "dm-import-summary");
             for (const key of ["creates", "updates", "skips", "deletes"]) {
                 const metric = node(document);
@@ -191,6 +216,20 @@ export function defineImportElement(generation) {
                     warnings.append(messageBlock(document, warning, "alert"));
                 section.append(warnings);
             }
+            if (adapter.description.features?.includes("record-views")) {
+                section.append(messageBlock(document, this.#t("reviewViews"), "status"));
+                if (preview.expiresAt)
+                    section.append(node(document, "p", "dm-import-hint", this.#t("expires", { time: new Date(preview.expiresAt).toLocaleTimeString(this.lang) })));
+            }
+            if (preview.references?.length) {
+                const mappings = node(document, "details", "dm-import-review-section");
+                mappings.append(node(document, "summary", "", this.#t("reservedIds")));
+                const list = node(document, "ul");
+                for (const ref of preview.references)
+                    list.append(node(document, "li", "dm-import-ref", `${ref.ref} → ${ref.collection}: ${ref.id}`));
+                mappings.append(list);
+                section.append(mappings);
+            }
             const changes = node(document, "section", "dm-import-review-section");
             changes.append(node(document, "h3", "", this.#t("changes")));
             const list = document.createElement("ul");
@@ -199,6 +238,26 @@ export function defineImportElement(generation) {
                 const operation = { create: "creates", update: "updates", delete: "deletes" };
                 summary.append(node(document, "span", "dm-import-badge", this.#t(operation[change.operation])), node(document, "strong", "", change.label));
                 details.append(summary, node(document, "p", "dm-import-hint", `${this.#t("collection")}: ${change.collection} · ${this.#t("record")}: ${change.id}`));
+                let viewsBuilt = false;
+                details.addEventListener("toggle", () => {
+                    if (details.open && !viewsBuilt && adapter.description.features?.includes("record-views")) {
+                        viewsBuilt = true;
+                        for (const view of ["dm", "player"]) {
+                            const reading = node(document, "section", "dm-import-record-view");
+                            reading.append(node(document, "h4", "", this.#t(view === "dm" ? "dmView" : "playerView")));
+                            const value = change[view];
+                            if (value) {
+                                const fields = node(document, "dl");
+                                for (const [key, field] of Object.entries(value).filter(([key]) => !["id", "updatedAt", "lastChange"].includes(key)))
+                                    fields.append(node(document, "dt", "", key), node(document, "dd", "", typeof field === "string" ? field : JSON.stringify(field, null, 2)));
+                                reading.append(fields);
+                            }
+                            else
+                                reading.append(node(document, "p", "dm-import-hint", this.#t(change.operation === "delete" ? "removedView" : "privateView")));
+                            details.append(reading);
+                        }
+                    }
+                });
                 item.append(details);
                 list.append(item);
             }
@@ -216,6 +275,10 @@ export function defineImportElement(generation) {
             if (this.#phase === "committing")
                 return;
             const cancelledPreview = this.#phase === "previewing" || this.#preview !== undefined;
+            if (this.#preview && this.#runtime && this.#selected?.description.features?.includes("cancel")) {
+                void this.#runtime.adapters.call("cancel", { contractVersion: "import-cancel.v1", token: this.#preview.token }, { providerAddonId: this.#selected.provider.addonId, deadlineMs: 3_000, signal: this.#runtime.signal }).catch(() => undefined);
+            }
+            this.#rememberOutcome(undefined);
             this.#request?.abort();
             this.#request = undefined;
             this.#preview = undefined;
@@ -279,23 +342,74 @@ export function defineImportElement(generation) {
             this.#notice("committing");
             this.#render();
             try {
+                this.#rememberOutcome(selected.description.features?.includes("receipt-status") ? { token: preview.token, adapter: selected } : undefined);
                 const result = await runtime.adapters.call("commit", { contractVersion: "import-commit.v1", token: preview.token }, { providerAddonId: selected.provider.addonId, deadlineMs: 15_000, idempotencyKey: preview.token, signal });
                 if (!this.#current(runtime, request))
                     return;
                 if (!isRecord(result) || result["contractVersion"] !== "import-commit-result.v1" || result["committed"] !== true ||
                     !Number.isSafeInteger(result["writes"]) || Number(result["writes"]) < 0 || !Number.isSafeInteger(result["deletes"]) || Number(result["deletes"]) < 0)
                     throw new Error("Invalid commit receipt");
+                this.#rememberOutcome(undefined);
                 this.#notice("committed", "status", { writes: Number(result["writes"]), deletes: Number(result["deletes"]) });
             }
             catch (error) {
-                if (this.#current(runtime, request))
+                if (this.#current(runtime, request)) {
                     this.#notice(isRecord(error) && error["code"] === "CONFLICT" ? "conflict" : "uncertain", "alert");
+                    if (this.#outcome)
+                        await this.#readResult(runtime, request);
+                }
             }
             finally {
                 if (this.#current(runtime, request)) {
                     this.#setPhase("idle");
                     this.#render();
                 }
+            }
+        }
+        #rememberOutcome(outcome) {
+            this.#outcome = outcome;
+            try {
+                if (outcome)
+                    sessionStorage.setItem("dm-tools.import-receipt", JSON.stringify({ token: outcome.token, providerAddonId: outcome.adapter.provider.addonId }));
+                else
+                    sessionStorage.removeItem("dm-tools.import-receipt");
+            }
+            catch { /* Continue using the in-memory receipt if browser storage is unavailable. */ }
+        }
+        async #readResult(runtime, request) {
+            const outcome = this.#outcome;
+            if (!outcome)
+                return;
+            try {
+                const status = await runtime.adapters.call("status", { contractVersion: "import-status.v1", token: outcome.token }, { providerAddonId: outcome.adapter.provider.addonId, deadlineMs: 3_000, signal: this.#signal(runtime, request) });
+                if (!this.#current(runtime, request) || !isRecord(status) || status["contractVersion"] !== "import-status.v1")
+                    return;
+                const result = status["result"];
+                if (status["status"] === "committed" && isRecord(result) && result["contractVersion"] === "import-commit-result.v1" && result["committed"] === true && Number.isSafeInteger(result["writes"]) && Number(result["writes"]) >= 0 && Number.isSafeInteger(result["deletes"]) && Number(result["deletes"]) >= 0) {
+                    this.#rememberOutcome(undefined);
+                    this.#notice("committed", "status", { writes: Number(result["writes"]), deletes: Number(result["deletes"]) });
+                }
+                else if (status["status"] === "failed") {
+                    this.#rememberOutcome(undefined);
+                    this.#notice("notCommitted", "alert");
+                }
+            }
+            catch { /* Retain the receipt check action; never resubmit a consumed plan. */ }
+        }
+        async #checkResult() {
+            const runtime = this.#runtime;
+            if (!runtime || !this.#outcome || this.#phase !== "idle")
+                return;
+            const request = this.#startRequest();
+            this.#setPhase("committing");
+            this.#notice("checkingResult");
+            this.#render();
+            await this.#readResult(runtime, request);
+            if (this.#current(runtime, request)) {
+                if (this.#outcome)
+                    this.#notice("uncertain", "alert");
+                this.#setPhase("idle");
+                this.#render();
             }
         }
     }

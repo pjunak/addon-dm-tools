@@ -1,12 +1,14 @@
 import type { ServiceProvider } from "./sdk.js";
 import { en, cs } from "./import-catalogs.js";
 
-export interface AdapterDescription { readonly contractVersion: "import-adapter-description.v1"; readonly id: string; readonly label: string; readonly description: string; readonly formats: readonly string[] }
+export interface AdapterDescription { readonly contractVersion: "import-adapter-description.v1"; readonly id: string; readonly label: string; readonly description: string; readonly formats: readonly string[]; readonly features?: readonly string[] }
 export interface Adapter { readonly provider: ServiceProvider; readonly description: AdapterDescription }
 export interface ImportPreview {
   readonly contractVersion: "import-preview-result.v1"; readonly token: string; readonly format: string; readonly mode: "merge" | "replace";
   readonly summary: { readonly creates: number; readonly updates: number; readonly skips: number; readonly deletes: number };
-  readonly warnings: readonly string[]; readonly changes: readonly { readonly collection: string; readonly id: string; readonly operation: "create" | "update" | "delete"; readonly label: string }[];
+  readonly warnings: readonly string[]; readonly changes: readonly { readonly collection: string; readonly id: string; readonly operation: "create" | "update" | "delete"; readonly label: string; readonly dm?: Record<string, unknown>; readonly player?: Record<string, unknown> }[];
+  readonly references?: readonly { readonly ref: string; readonly collection: string; readonly id: string }[];
+  readonly expiresAt?: string;
 }
 export type ImportMessage = keyof typeof en;
 export type ImportParams = Readonly<Record<string, string | number>>;
@@ -37,6 +39,7 @@ export function parseAdapterDescription(value: unknown): AdapterDescription {
     !Array.isArray(value["formats"]) || !value["formats"].length || value["formats"].length > 20 ||
     !value["formats"].every(format => typeof format === "string" && /^[a-z][a-z0-9.-]{1,99}$/.test(format)) ||
     new Set(value["formats"]).size !== value["formats"].length) throw new ImportProblem("invalidResponse");
+  if (value["features"] !== undefined && (!Array.isArray(value["features"]) || value["features"].length > 20 || !value["features"].every(feature => typeof feature === "string" && feature.length < 100))) throw new ImportProblem("invalidResponse");
   return value as unknown as AdapterDescription;
 }
 export function parseImportPreview(value: unknown, format: string): ImportPreview {
@@ -48,7 +51,10 @@ export function parseImportPreview(value: unknown, format: string): ImportPrevie
     !isRecord(summary) || !["creates", "updates", "skips", "deletes"].every(key => count(summary[key])) ||
     !Array.isArray(value["warnings"]) || value["warnings"].length > 100 || !value["warnings"].every(warning => text(warning, 500)) ||
     !Array.isArray(value["changes"]) || value["changes"].length > 256 ||
-    !value["changes"].every(change => isRecord(change) && text(change["collection"], 100) && text(change["id"], 120) && text(change["label"], 200) && ["create", "update", "delete"].includes(String(change["operation"])))) throw new ImportProblem("invalidResponse");
+    !value["changes"].every(change => isRecord(change) && text(change["collection"], 100) && text(change["id"], 1024) && text(change["label"], 200) && ["create", "update", "delete"].includes(String(change["operation"])))) throw new ImportProblem("invalidResponse");
+  if (value["references"] !== undefined && (!Array.isArray(value["references"]) || value["references"].length > 128 || !value["references"].every(ref => isRecord(ref) && text(ref["ref"], 100) && text(ref["collection"], 100) && text(ref["id"], 1024)))) throw new ImportProblem("invalidResponse");
+  if (value["expiresAt"] !== undefined && (!text(value["expiresAt"], 40) || !Number.isFinite(Date.parse(value["expiresAt"])))) throw new ImportProblem("invalidResponse");
+  if (value["changes"].some(change => !isRecord(change) || ["dm", "player"].some(view => change[view] !== undefined && !isRecord(change[view])))) throw new ImportProblem("invalidResponse");
   const preview = value as unknown as ImportPreview;
   for (const [operation, summary] of [["create", "creates"], ["update", "updates"], ["delete", "deletes"]] as const) {
     if (preview.changes.filter(change => change.operation === operation).length !== preview.summary[summary]) throw new ImportProblem("invalidResponse");

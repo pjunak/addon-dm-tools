@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "expectedDataSets",
+    "mutations"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "campaign-contribution-plan.v1"
+    },
+    "expectedDataSets": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "dataId",
+          "revision"
+        ],
+        "properties": {
+          "kind": {
+            "const": "collection"
+          },
+          "dataId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "mutations": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operation",
+          "collection",
+          "key",
+          "expectedRevision"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "put",
+              "delete"
+            ]
+          },
+          "collection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "value": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

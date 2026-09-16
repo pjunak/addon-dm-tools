@@ -147,3 +147,19 @@ func TestCommitRetainsAllCollectionGuardsFromPreview(t *testing.T) {
 		})
 	}
 }
+
+func TestCampaignContributionReturnsPlanWithoutWritesOrRetainedToken(t *testing.T) {
+	data := &fakeData{documents: map[string][]workerrpc.AddonDataDocument{}}
+	handler, _ := New(data)
+	params := mustJSON(t, map[string]any{"contractVersion": "campaign-contribution.v1", "contributorId": "planning-json", "document": map[string]any{
+		"format": "dm-tools-planning", "schemaVersion": 3, "generatedAt": 100, "items": []any{validItem("bundle-quest", nil)}, "flowLinks": []any{}, "references": []any{}, "consequences": []any{}, "notes": []any{},
+	}})
+	result, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: "service/codex.campaign-bundle-contributor/preview", Params: params, Meta: testMeta()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := result.(map[string]any)
+	if plan["contractVersion"] != "campaign-contribution-plan.v1" || len(plan["mutations"].([]map[string]any)) != 1 || len(plan["expectedDataSets"].([]workerrpc.AddonDataSetRevision)) != 6 || len(data.commits) != 0 || len(handler.plans) != 0 {
+		t.Fatalf("contribution=%+v", plan)
+	}
+}

@@ -17,9 +17,10 @@ func main() {
 	err := workerrpc.RunNativeWorker(ctx, workerrpc.NativeWorkerConfig{
 		Reader: os.Stdin, Writer: os.Stdout,
 		Methods: map[string]string{
-			"service/codex.import-adapter/describe": importer.ContractVersion,
-			"service/codex.import-adapter/preview":  importer.ContractVersion,
-			"service/codex.import-adapter/commit":   importer.ContractVersion,
+			"service/codex.campaign-bundle-contributor/preview": "1.0.0",
+			"service/codex.import-adapter/describe":             importer.ContractVersion,
+			"service/codex.import-adapter/preview":              importer.ContractVersion,
+			"service/codex.import-adapter/commit":               importer.ContractVersion,
 		},
 		HandlerFactory: workerrpc.NativeWorkerHandlerFactoryFunc(func(worker workerrpc.NativeWorkerContext) (workerrpc.RequestHandler, error) {
 			data, err := workerrpc.NewAddonDataClient(worker.Peer)

@@ -107,6 +107,16 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 		return nil, err
 	}
 	switch request.Method {
+	case "service/codex.campaign-bundle-contributor/preview":
+		var input struct {
+			ContractVersion string          `json:"contractVersion"`
+			ContributorID   string          `json:"contributorId"`
+			Document        json.RawMessage `json:"document"`
+		}
+		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "campaign-contribution.v1" || input.ContributorID != "planning-json" {
+			return nil, invalid("planning contribution request is invalid", nil)
+		}
+		return handler.preview(ctx, request.Meta, input.Document, false)
 	case methodPrefix + "describe":
 		if err := decodeEmpty(request.Params); err != nil {
 			return nil, invalid("import adapter description request is invalid", nil)
@@ -117,7 +127,7 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "import-preview.v1" || input.Format != "dm-tools-planning" {
 			return nil, invalid("planning preview request is invalid", nil)
 		}
-		return handler.preview(ctx, request.Meta, input.Document)
+		return handler.preview(ctx, request.Meta, input.Document, true)
 	case methodPrefix + "commit":
 		var input commitRequest
 		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "import-commit.v1" || input.Token == "" {
@@ -132,7 +142,7 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 	}
 }
 
-func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body json.RawMessage) (any, error) {
+func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body json.RawMessage, retain bool) (any, error) {
 	document, entries, err := decodeDocument(body)
 	if err != nil {
 		return nil, invalid("planning import document is invalid", map[string]any{"issue": err.Error()})
@@ -236,6 +246,17 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 		}
 		return changes[i].Collection < changes[j].Collection
 	})
+	if !retain {
+		operations := make([]map[string]any, 0, len(mutations))
+		for _, mutation := range mutations {
+			operation := map[string]any{"operation": mutation.Operation, "collection": mutation.Reference.DataID, "key": mutation.Key, "expectedRevision": mutation.ExpectedRevision}
+			if mutation.Operation == "put" {
+				operation["value"] = mutation.Value
+			}
+			operations = append(operations, operation)
+		}
+		return map[string]any{"contractVersion": "campaign-contribution-plan.v1", "expectedDataSets": dataRevisions, "mutations": operations}, nil
+	}
 	token, err := handler.storePlan(storedPlan{mutations: mutations, dataRevisions: dataRevisions, writes: result.Creates + result.Updates, deletes: result.Deletes})
 	if err != nil {
 		return nil, unavailable("could not retain the reviewed import plan")

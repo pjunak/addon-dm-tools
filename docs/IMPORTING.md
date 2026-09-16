@@ -150,3 +150,28 @@ catalogs; provider descriptions and authored content retain their own language.
 The [service schemas](../contracts/import-adapter.service.json),
 [worker](../internal/importer/handler.go) and
 [graph contract](GRAPH.md) define the technical boundaries.
+
+## Campaign bundles
+
+The host now advertises `ttrpg-codex-campaign-bundle` schema 1 through the same
+chooser. Its review includes reserved core IDs, resulting DM/player text and
+scoped planning changes. Review both views: public prose is not scanned for
+secrets. The host owns core validation and commits the exact combined plan in
+one SQLite transaction. See the host's [format and authority contract](../../ttrpg-codex/docs/decisions/0001-campaign-bundle-imports.md).
+
+To include planning, add an `addonImports` entry with `addonId: "dm-tools"`,
+`contributorId: "planning-json"` and a current `dm-tools-planning` document.
+An exact `{"$ref":"local-name"}` object inside that document resolves to the
+core ID reserved by the bundle preview. Normal schema-3 planning validation,
+merge/replacement semantics and limits still apply. This contributor prepares
+mutations under read-only authority; it does not perform its own commit.
+
+The Import Center renders optional review/receipt capabilities advertised by
+the provider. Campaign bundle cancellation discards a known server token;
+unreachable/abandoned previews expire after 15 minutes or restart. If a commit
+reply is lost, the page reads the saved receipt and offers **Check import result**
+while the outcome remains uncertain. This action never resubmits writes. A failed
+receipt requires a new preview; a missing receipt alone is not proof of failure.
+The existing standalone planning adapter still requires checking saved data after
+an ambiguous reply. Rebuild and review/activate the package to install these UI
+and contributor changes.

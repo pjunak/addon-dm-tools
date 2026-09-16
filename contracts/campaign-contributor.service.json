@@ -1,0 +1,20 @@
+{
+  "$schema": "https://junak.eu/ttrpg-codex/contracts/addons/v3/service-document.schema.json",
+  "contract": "codex.campaign-bundle-contributor",
+  "version": "1.0.0",
+  "allowsExclusive": false,
+  "methods": {
+    "preview": {
+      "requestSchema": "contracts/campaign-contributor.request.schema.json",
+      "responseSchema": "contracts/campaign-contributor.response.schema.json",
+      "maxDeadlineMs": 15000,
+      "idempotency": "none",
+      "errors": [
+        "INVALID_INPUT",
+        "VALIDATION_FAILED",
+        "CONFLICT",
+        "UNAVAILABLE"
+      ]
+    }
+  }
+}
