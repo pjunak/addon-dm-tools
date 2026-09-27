@@ -73,9 +73,11 @@ go run ./cmd/build-package
 ```
 
 The gate compiles the UI and runs unit and Chromium rendering tests. The package
-command also builds the declared Windows/Linux workers and creates a checksummed
-ZIP under `dist/`. Regenerate tracked `web/` and `worker/` outputs through
-these commands; do not edit generated files. Regression coverage includes
+command independently builds the UI and declared Windows/Linux workers, then
+creates a checksummed ZIP under `dist/`. `web/`, `worker/` and `dist/` are ignored
+build output, recreated from source; never edit or commit them. CI checks that
+building preserves tracked source and can package with no prior UI build.
+Regression coverage includes
 planning target validation in Go and the browser, reviewed import replacement
 and stale-target conflicts, and atomic deletion/undo that preserves consequence
 prose while clearing removed planning targets.

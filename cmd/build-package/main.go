@@ -44,6 +44,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if err := buildBrowser(root); err != nil {
+		return err
+	}
 	if err := buildWorkers(root); err != nil {
 		return err
 	}
@@ -88,6 +91,19 @@ func repositoryRoot() (string, error) {
 		return "", err
 	}
 	return root, nil
+}
+func buildBrowser(root string) error {
+	command := exec.Command("npm", "run", "build")
+	if runtime.GOOS == "windows" {
+		// npm is a command script on Windows; all arguments here are fixed.
+		command = exec.Command("cmd.exe", "/d", "/c", "npm run build")
+	}
+	command.Dir = root
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("build browser assets: %w", err)
+	}
+	return nil
 }
 func buildWorkers(root string) error {
 	goExecutable := filepath.Join(runtime.GOROOT(), "bin", "go")

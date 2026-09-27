@@ -124,3 +124,8 @@ schema changes. Regenerate distribution files through their owning build;
 never hand-edit them. Reuse successful checks on unchanged inputs and preserve
 CI/release gates. Do not push, deploy or convert live campaigns without explicit
 instruction.
+
+`web/`, `worker/` and `dist/` are ignored build output. The package command builds
+both browser assets and native workers; it must work without existing output.
+Tests import freshly compiled `web/` through the build-first gate above. Keep
+public contracts versioned and require builds to leave tracked source unchanged.

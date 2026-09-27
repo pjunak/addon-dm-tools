@@ -65,7 +65,14 @@ jobs:
         working-directory: addon-dm-tools
 
       - name: Build release package
-        run: go run ./cmd/build-package
+        run: |
+          node tools/clean-web.ts
+          go run ./cmd/build-package
+        working-directory: addon-dm-tools
+      - name: Verify builds preserve source ownership
+        run: |
+          git diff --exit-code
+          test -z "$(git ls-files -- web worker)"
         working-directory: addon-dm-tools
 
       - name: Inspect release package with the host
