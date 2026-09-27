@@ -67,12 +67,14 @@ SDK replacement expects a compatible `ttrpg-codex` checkout beside this one.
 npm ci
 npx playwright install chromium
 npm run check
-go test ./...
-go vet ./...
 go run ./cmd/build-package
 ```
 
-The gate compiles the UI and runs unit and Chromium rendering tests. The package
+The fast gate (`npm run check:fast`) rejects authored JavaScript, checks browser
+source plus Node tools and tests without generated output, runs type-aware lint
+against their explicit TypeScript projects, checks formatting, and runs fast Go quality
+checks. The complete gate compiles the UI, runs the same strict checks,
+runs unit and Chromium rendering tests, and runs Go tests. The package
 command independently builds the UI and declared Windows/Linux workers, then
 creates a checksummed ZIP under `dist/`. `web/`, `worker/` and `dist/` are ignored
 build output, recreated from source; never edit or commit them. CI checks that
@@ -81,6 +83,9 @@ Regression coverage includes
 planning target validation in Go and the browser, reviewed import replacement
 and stale-target conflicts, and atomic deletion/undo that preserves consequence
 prose while clearing removed planning targets.
+
+Run `npm run check:dependencies` separately when network access is available to
+audit the committed npm lockfile for high-severity dependency findings.
 
 From the host repository, inspect the built archive:
 

@@ -11,9 +11,16 @@ export class PlannerDrafts {
   #drafts = new Map<string, PlannerDraft>();
   #forms = new WeakMap<HTMLFormElement, { key: string; revision: number | undefined }>();
 
-  constructor(changed: () => void = () => undefined) { this.#changed = changed; }
+  constructor(changed: () => void = () => undefined) {
+    this.#changed = changed;
+  }
 
-  bind(form: HTMLFormElement, key: string, revision: number | undefined, t: PlannerTranslator = plannerTranslator()): void {
+  bind(
+    form: HTMLFormElement,
+    key: string,
+    revision: number | undefined,
+    t: PlannerTranslator = plannerTranslator(),
+  ): void {
     const existing = this.#drafts.get(key);
     const baseline = existing?.baseline ?? valuesOf(form);
     const openingRevision = existing ? existing.revision : revision;
@@ -22,8 +29,16 @@ export class PlannerDrafts {
         if (!Object.hasOwn(existing.values, control.name)) continue;
         const value = existing.values[control.name]!;
         // A removed destination must not silently turn into an empty/root choice.
-        if (control.tagName === "SELECT" && !Array.from((control as HTMLSelectElement).options).some(option => option.value === value)) {
-          const missing = form.ownerDocument.createElement("option"); missing.value = value; missing.textContent = t("Unavailable: {0}", { "0": value }); control.append(missing);
+        if (
+          control.tagName === "SELECT" &&
+          !Array.from((control as HTMLSelectElement).options).some(
+            (option) => option.value === value,
+          )
+        ) {
+          const missing = form.ownerDocument.createElement("option");
+          missing.value = value;
+          missing.textContent = t("Unavailable: {0}", { "0": value });
+          control.append(missing);
         }
         control.value = value;
       }
@@ -39,19 +54,46 @@ export class PlannerDrafts {
     form.addEventListener("change", capture);
   }
 
-  revision(form: HTMLFormElement): number | undefined { return this.#forms.get(form)?.revision; }
-  has(key: string): boolean { return this.#drafts.has(key); }
-  entries(): IterableIterator<[string, PlannerDraft]> { return this.#drafts.entries(); }
-  restore(entries: readonly (readonly [string, PlannerDraft])[]): void { this.#drafts = new Map(entries.map(([key, value]) => [key, structuredClone(value)])); this.#changed(); }
-  rekey(from: string, to: string): void { const draft = this.#drafts.get(from); if (draft) { this.#drafts.delete(from); this.#drafts.set(to, draft); this.#changed(); } }
-  clear(key: string): void { if (this.#drafts.delete(key)) this.#changed(); }
-  clearAll(): void { this.#drafts.clear(); this.#changed(); }
+  revision(form: HTMLFormElement): number | undefined {
+    return this.#forms.get(form)?.revision;
+  }
+  has(key: string): boolean {
+    return this.#drafts.has(key);
+  }
+  entries(): IterableIterator<[string, PlannerDraft]> {
+    return this.#drafts.entries();
+  }
+  restore(entries: readonly (readonly [string, PlannerDraft])[]): void {
+    this.#drafts = new Map(entries.map(([key, value]) => [key, structuredClone(value)]));
+    this.#changed();
+  }
+  rekey(from: string, to: string): void {
+    const draft = this.#drafts.get(from);
+    if (draft) {
+      this.#drafts.delete(from);
+      this.#drafts.set(to, draft);
+      this.#changed();
+    }
+  }
+  clear(key: string): void {
+    if (this.#drafts.delete(key)) this.#changed();
+  }
+  clearAll(): void {
+    this.#drafts.clear();
+    this.#changed();
+  }
 }
 
-function controlsOf(form: HTMLFormElement): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[] {
-  return Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name],textarea[name],select[name]"));
+function controlsOf(
+  form: HTMLFormElement,
+): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[] {
+  return Array.from(
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      "input[name],textarea[name],select[name]",
+    ),
+  );
 }
 
 function valuesOf(form: HTMLFormElement): Record<string, string> {
-  return Object.fromEntries(controlsOf(form).map(control => [control.name, control.value]));
+  return Object.fromEntries(controlsOf(form).map((control) => [control.name, control.value]));
 }

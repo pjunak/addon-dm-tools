@@ -3,15 +3,42 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#web/*": {
+      "types": "./src/*.ts",
+      "default": "./web/*.js"
+    }
+  },
   "scripts": {
     "build": "node tools/clean-web.ts && tsc -p tsconfig.json && node tools/copy-style.ts",
-    "test": "node --test tests/*.mjs",
-    "test:rendering": "node tools/browser-rendering-check.mjs --root . --fixture tests/browser/planner-v3.html",
-    "check": "npm run build && npm test && npm run test:rendering"
+    "test": "node --test tests/*.mts",
+    "test:rendering": "node tools/browser-rendering-check.mts --root . --fixture tests/browser/planner-v3.html",
+    "typecheck:source": "tsc -p tsconfig.json --noEmit",
+    "typecheck:node": "tsc -p tsconfig.node.json",
+    "typecheck": "npm run typecheck:source && npm run typecheck:node",
+    "check:source": "node tools/check-source.mts",
+    "check:go": "go run ./tools/check.go",
+    "check:workflows": "go run ./tools/check.go workflows",
+    "check:vulnerabilities": "go run ./tools/check.go vuln",
+    "check:dependencies": "npm audit --package-lock-only --audit-level=high",
+    "lint:src": "oxlint --type-aware --tsconfig tsconfig.json --deny-warnings --report-unused-disable-directives src",
+    "lint:node": "oxlint --type-aware --tsconfig tsconfig.node.json --deny-warnings --report-unused-disable-directives tools tests",
+    "lint": "npm run lint:src && npm run lint:node",
+    "lint:fix": "npm run lint:src -- --fix && npm run lint:node -- --fix",
+    "format": "prettier --write \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mts}\" \"tests/**/*.{ts,mts,html}\" package.json \"tsconfig*.json\" .oxlintrc.json .prettierrc.json",
+    "format:check": "prettier --check \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mts}\" \"tests/**/*.{ts,mts,html}\" package.json \"tsconfig*.json\" .oxlintrc.json .prettierrc.json",
+    "check:fast": "npm run check:source && npm run typecheck && npm run lint && npm run format:check && go run ./tools/check.go fast",
+    "check": "npm run check:fast && npm run build && npm test && npm run test:rendering && go run ./tools/check.go test"
+  },
+  "engines": {
+    "node": ">=26"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "26.6.3",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
     "playwright": "1.62.0",
-    "typescript": "^5.9.0"
+    "prettier": "3.9.9",
+    "typescript": "7.0.2"
   }
 }

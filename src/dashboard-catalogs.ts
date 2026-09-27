@@ -22,18 +22,21 @@ export const en = {
   "dashboard.status.encounters": "Encounters",
   "dashboard.status.notes": "Marginalia",
   "dashboard.workflow.title": "Planning tools",
-  "dashboard.workflow.body": "Edit directly, inspect relationships, or review an atomically imported structure.",
+  "dashboard.workflow.body":
+    "Edit directly, inspect relationships, or review an atomically imported structure.",
   "dashboard.workflow.label": "DM planning tools",
   "dashboard.planning.title": "Story Planner",
-  "dashboard.planning.body": "Build nested plotlines, quests, events, branches, references, and consequences across focused canvases.",
+  "dashboard.planning.body":
+    "Build nested plotlines, quests, events, branches, references, and consequences across focused canvases.",
   "dashboard.import.title": "Import Center",
   "dashboard.import.body": "Preview and atomically commit a generated planning document.",
-  "dashboard.importMissing": "Planning import is currently unavailable. You can still edit plans directly.",
+  "dashboard.importMissing":
+    "Planning import is currently unavailable. You can still edit plans directly.",
   "dashboard.importError": "Import-provider status could not be checked.",
   "dashboard.items.title": "Recently changed",
   "dashboard.empty.body": "No planning items are stored yet.",
   "dashboard.empty.action": "Create the first item",
-  "dashboard.unnamed": "Untitled planning item"
+  "dashboard.unnamed": "Untitled planning item",
 } as const;
 export const cs = {
   "dashboard.refresh": "Obnovit přehled",
@@ -52,17 +55,20 @@ export const cs = {
   "dashboard.loading": "Ověřuji plánovací data a dostupnost nástrojů…",
   "dashboard.forbidden": "Přehled Nástrojů PJ je dostupný jen v účinné roli PJ.",
   "dashboard.error.title": "Plánovací data nejsou dostupná",
-  "dashboard.error.body": "Plánovací data se nepodařilo načíst. Odkazy pro obnovu zůstávají dostupné.",
+  "dashboard.error.body":
+    "Plánovací data se nepodařilo načíst. Odkazy pro obnovu zůstávají dostupné.",
   "dashboard.status.total": "Celkem",
   "dashboard.status.plotlines": "Dějové linky",
   "dashboard.status.quests": "Úkoly",
   "dashboard.status.encounters": "Střetnutí",
   "dashboard.status.notes": "Poznámky",
   "dashboard.workflow.title": "Plánovací nástroje",
-  "dashboard.workflow.body": "Upravujte přímo, procházejte vazby nebo zkontrolujte atomicky importovanou strukturu.",
+  "dashboard.workflow.body":
+    "Upravujte přímo, procházejte vazby nebo zkontrolujte atomicky importovanou strukturu.",
   "dashboard.workflow.label": "Nástroje plánování PJ",
   "dashboard.planning.title": "Plánovač příběhu",
-  "dashboard.planning.body": "Tvořte vnořené dějové linky, úkoly, události, větvení, odkazy a následky na přehledných samostatných plátnech.",
+  "dashboard.planning.body":
+    "Tvořte vnořené dějové linky, úkoly, události, větvení, odkazy a následky na přehledných samostatných plátnech.",
   "dashboard.import.title": "Centrum importu",
   "dashboard.import.body": "Zobrazte náhled a atomicky uložte vygenerovaný plánovací dokument.",
   "dashboard.importMissing": "Import plánů nyní není dostupný. Plány můžete dál upravovat přímo.",
@@ -70,5 +76,5 @@ export const cs = {
   "dashboard.items.title": "Nedávno změněné",
   "dashboard.empty.body": "Zatím nejsou uložené žádné plánovací položky.",
   "dashboard.empty.action": "Vytvořit první položku",
-  "dashboard.unnamed": "Plánovací položka bez názvu"
+  "dashboard.unnamed": "Plánovací položka bez názvu",
 } as const;

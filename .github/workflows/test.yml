@@ -39,29 +39,27 @@ jobs:
           go-version-file: addon-dm-tools/go.mod
           cache-dependency-path: |
             addon-dm-tools/go.sum
+            addon-dm-tools/go.tools.sum
             ttrpg-codex/go.sum
 
       - run: npm ci
         working-directory: addon-dm-tools
-
-      - run: npm run build
-        working-directory: addon-dm-tools
-
-      - run: npm test
-        working-directory: addon-dm-tools
-
-      - run: go test ./...
-        working-directory: addon-dm-tools
-
-      - run: go vet ./...
+      - run: npm run check:dependencies
         working-directory: addon-dm-tools
 
       - name: Install Chromium for rendering contracts
         run: npx playwright install --with-deps chromium
         working-directory: addon-dm-tools
 
-      - name: Check planner rendering contract
-        run: npm run test:rendering
+      - run: go mod download -modfile=go.tools.mod
+        working-directory: addon-dm-tools
+      - run: go run ./tools/check.go workflows
+        working-directory: addon-dm-tools
+      - run: go run ./tools/check.go vuln
+        working-directory: addon-dm-tools
+
+      - name: Run source, analysis, test, and rendering gates
+        run: npm run check
         working-directory: addon-dm-tools
 
       - name: Build release package

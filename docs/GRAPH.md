@@ -223,7 +223,7 @@ policy can remove it. An opener may initially copy storage into another tab;
 there is no subsequent cross-tab synchronization. It is not encrypted storage
 or an authority boundary against trusted same-origin code.
 
-[Recovery unit tests](../tests/planner-recovery.mjs) verify bounds, detached
+[Recovery unit tests](../tests/planner-recovery.mts) verify bounds, detached
 values and storage failures. The host's [installed recovery fixture](../../ttrpg-codex/frontend/test/browser/installed-planner-recovery-fixture.mts)
 exercises real reviewed replacement, disable/re-enable, stale/deleted data,
 confirmed/uncertain writes, malformed/blocked storage and player isolation on

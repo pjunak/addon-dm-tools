@@ -114,10 +114,18 @@ keep its fixture aligned with intentional card, flow and layout changes.
 
 ~~~text
 npm run check
-go test ./...
-go vet ./...
 go run ./cmd/build-package
 ~~~
+
+`npm run check:fast` rejects authored JavaScript, type-checks browser source plus
+Node tools and tests without generated output, runs type-aware Oxlint against
+the explicit source and Node projects, checks formatting, and runs the fast Go quality gate.
+The full check builds the browser, repeats those strict checks, runs
+unit and Chromium rendering tests, and runs the Go test gate. Use
+`npm run check:go`, `npm run check:workflows`, and
+`npm run check:vulnerabilities` for the corresponding full Go, workflow, and
+vulnerability modes. Run `npm run check:dependencies` separately with network
+access to audit the committed npm lockfile for high-severity findings.
 
 Inspect the ZIP with the host inspector after package, manifest, worker or
 schema changes. Regenerate distribution files through their owning build;

@@ -1,2 +1,12 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and keep them LF across development platforms.
+* text=auto eol=lf
+
+# Keep Go tooling deterministic across Windows and Unix checkouts.
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.ts text eol=lf
+*.mts text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.html text eol=lf
