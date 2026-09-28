@@ -195,6 +195,7 @@ a removed record remains available to copy before discarding.
 | Situation | What to do |
 | --- | --- |
 | New data is available while reading or editing | Finish the current task, then use **Reload planner** when ready |
+| The initial planner load is still waiting | Use **Reload planner** to cancel that read and request the data again; retained drafts stay in this tab |
 | A save conflicts with another change | Reload, compare the saved values with the retained draft, then deliberately revise or discard it |
 | A draft's parent or target has disappeared | Select a valid replacement or discard the affected edit |
 | A read or write fails | Use **Reload planner** before another mutation; copy retained text if needed |

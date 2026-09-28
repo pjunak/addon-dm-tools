@@ -299,7 +299,9 @@ export function definePlannerElement(generation?: string): string {
 
     async #reload(loading?: string, live = false): Promise<void> {
       const runtime = this.#runtime;
-      if (runtime === undefined || this.#busy) return;
+      // Only an explicit initial reload may supersede a pending read. Loaded
+      // views keep their existing save and refresh exclusion.
+      if (runtime === undefined || (this.#busy && (this.#snapshot !== undefined || live))) return;
       const request = new AbortController();
       this.#readRequest?.abort();
       this.#readRequest = request;
@@ -310,7 +312,7 @@ export function definePlannerElement(generation?: string): string {
         this.#message = loading;
         this.#messageKind = "status";
       }
-      if (!live) this.#render();
+      if (!live) this.#renderReload();
       try {
         const snapshot = await runtime.repository.load(request.signal);
         if (
@@ -377,10 +379,20 @@ export function definePlannerElement(generation?: string): string {
           this.isConnected
         ) {
           this.#busy = false;
-          if (render) this.#render();
+          if (render) this.#renderReload();
           this.#live?.wake();
         }
       }
+    }
+
+    #renderReload(): void {
+      const focused =
+        this.querySelector(".dm-planner-refresh") === this.ownerDocument.activeElement;
+      this.#render();
+      if (focused)
+        this.querySelector<HTMLButtonElement>(".dm-planner-refresh")?.focus({
+          preventScroll: true,
+        });
     }
 
     #applyTarget(): void {
@@ -492,15 +504,16 @@ export function definePlannerElement(generation?: string): string {
       const focusName = oldDialog?.contains(focused) ? focused?.getAttribute("name") : undefined;
       const snapshot = this.#snapshot;
       if (snapshot === undefined) {
-        this.replaceChildren(messageBlock(this.ownerDocument, this.#message, this.#messageKind));
-        if (!this.#busy)
-          this.append(
-            actionButton(
-              this.ownerDocument,
-              this.#t("Reload planner"),
-              () => void this.#reload(this.#t("Loading story planner…")),
-            ),
-          );
+        this.replaceChildren(
+          messageBlock(this.ownerDocument, this.#message, this.#messageKind),
+          actionButton(
+            this.ownerDocument,
+            this.#t("Reload planner"),
+            () => void this.#reload(this.#t("Loading story planner…")),
+            "dm-planner-refresh",
+          ),
+        );
+        this.#controls?.refresh();
         return;
       }
       const document = this.ownerDocument;

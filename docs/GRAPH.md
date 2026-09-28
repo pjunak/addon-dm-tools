@@ -300,6 +300,9 @@ defer a read that finishes after typing or dragging begins; a late response
 must not replace active work. Explicit reload keeps editor draft baselines.
 
 Failed reads expose **Reload planner** without an automatic retry loop.
+During the initial load, the same action can abort and replace a pending read.
+It retains keyboard focus and the stored recovery copy; obsolete replies cannot
+finish the replacement load. Loaded views keep their existing busy/save guards.
 Confirmed writes consume notifications before their confirming read; events
 arriving during that read remain pending. Test these boundaries when changing
 refresh or save behavior, alongside the public route and rendering contracts.
