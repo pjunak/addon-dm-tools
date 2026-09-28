@@ -484,7 +484,8 @@ export function definePlannerElement(generation?: string): string {
       this.lang = dashboardLocale(this.#contribution?.host);
       const oldDialog = this.querySelector<HTMLDialogElement>("dialog"),
         oldBody = oldDialog?.querySelector<HTMLElement>(".dm-planner-dialog-body");
-      const dialogScroll = oldBody?.scrollTop ?? 0;
+      const dialogScroll = oldDialog?.scrollTop ?? 0,
+        bodyScroll = oldBody?.scrollTop ?? 0;
       const wasReader = oldDialog?.classList.contains("dm-planning-reader");
       const readerExpanded = oldDialog?.classList.contains("dm-reader-expanded");
       const focused = this.ownerDocument.activeElement as HTMLInputElement | null;
@@ -625,13 +626,15 @@ export function definePlannerElement(generation?: string): string {
           (button.type === "submit" &&
             button.form?.hasAttribute("data-recovery-uncertain") === true) ||
           (this.#needsReload && !button.hasAttribute("data-view-action"));
+      this.#controls?.refresh();
       if (dialog) {
         if (readerExpanded && dialog.classList.contains("dm-planning-reader"))
           dialog.querySelector<HTMLButtonElement>('[aria-pressed="false"]')?.click();
         dialog.showModal();
         const body = dialog.querySelector<HTMLElement>(".dm-planner-dialog-body")!;
-        body.scrollTop =
-          wasReader === dialog.classList.contains("dm-planning-reader") ? dialogScroll : 0;
+        const sameView = wasReader === dialog.classList.contains("dm-planning-reader");
+        dialog.scrollTop = sameView ? dialogScroll : 0;
+        body.scrollTop = sameView ? bodyScroll : 0;
         const control = focusName
           ? dialog.querySelector<HTMLElement>(`[name="${CSS.escape(focusName)}"]`)
           : undefined;
@@ -1137,7 +1140,10 @@ export function definePlannerElement(generation?: string): string {
       const panels = new Map<string, HTMLElement>();
       const activate = (id: string): void => {
         if (isNew && id !== "details") return;
-        if (this.#dialogTab !== id) body.scrollTop = 0;
+        if (this.#dialogTab !== id) {
+          dialog.scrollTop = 0;
+          body.scrollTop = 0;
+        }
         this.#dialogTab = id;
         for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) {
           const active = button.dataset["tab"] === id;

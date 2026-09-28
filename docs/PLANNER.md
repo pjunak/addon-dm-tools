@@ -68,8 +68,8 @@ Choose **Edit item** from the reader, or double-click a card on the canvas.
 The editor has **Details**, **Links** and **Notes** tabs, with **Save item** in
 its header. On phones it appears as a bottom sheet; actions wrap at their
 natural width and the whole dialog scrolls, keeping enlarged text and content
-reachable. Closing or switching tabs
-retains existing-record drafts; closing an unsaved new-card editor cancels
+reachable. Saved updates preserve the scroll position within the updated
+content. Closing or switching tabs retains existing-record drafts; closing an unsaved new-card editor cancels
 that creation. Closing the editor returns to saved content if the reader is
 open. Closing the reader restores focus and the canvas view.
 
