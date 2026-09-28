@@ -4,15 +4,15 @@ import {
   plannerTranslator,
   plannerLabel,
 } from "./planner-catalogs.js";
-import type { PlanningItem } from "./planning-model.js";
 import { messageBlock, selectField, textField } from "./planner-fields.js";
+import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
 
 const coreCollections = ["characters", "factions", "locations", "mysteries", "artifacts", "events"];
 const validId = (value: string): boolean =>
   /^[a-z0-9][a-z0-9._-]{0,119}$/u.test(value) &&
   !["__proto__", "prototype", "constructor"].includes(value);
 type Target = Readonly<Record<string, unknown>>;
-type PlanningTargetItem = Pick<PlanningItem, "id" | "title">;
+type PlanningTargetItem = PlanningChoiceItem;
 export interface CoreReference {
   readonly collection: string;
   readonly id: string;
@@ -165,7 +165,9 @@ export function appendTargetFields(
   const planning = document.createElement("div"),
     campaign = document.createElement("div"),
     external = document.createElement("div");
-  const planningOptions = items.map((item) => [item.id, item.title] as [string, string]);
+  const planningOptions = planningChoices(items).map(
+    ({ id, label }) => [id, label] as [string, string],
+  );
   if (current?.["scope"] === "planning" && !items.some((item) => item.id === current["itemId"]))
     planningOptions.push([scalarText(current["itemId"]), targetLabel(current, items, core, t)]);
   planning.append(

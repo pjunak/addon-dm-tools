@@ -20,8 +20,9 @@ import {
   targetLabel,
   targetLink,
 } from "./planner-targets.js";
-import { appendNoteAnchors, noteAnchors } from "./planner-note-anchors.js";
-import { option, textField, textArea, selectField, messageBlock } from "./planner-fields.js";
+import { appendNoteAnchors, noteAnchors, type NoteAnchorFilter } from "./planner-note-anchors.js";
+import { planningChoices } from "./planner-choices.js";
+import { textField, textArea, selectField, messageBlock } from "./planner-fields.js";
 import {
   availableParents,
   directChildren,
@@ -79,6 +80,7 @@ export function definePlannerElement(generation?: string): string {
     #targetPending = false;
     #readRequest: AbortController | undefined;
     #drafts = new PlannerDrafts(() => this.#syncEdits());
+    #noteFilters = new Map<string, NoteAnchorFilter>();
     #committedDrafts = new Set<string>();
     #needsReload = false;
     #writing = false;
@@ -260,6 +262,7 @@ export function definePlannerElement(generation?: string): string {
       this.#undoDelete = undefined;
       this.#helpOpen = false;
       this.#drafts.clearAll();
+      this.#noteFilters.clear();
       this.#committedDrafts.clear();
       this.#needsReload = false;
       this.#editorId = undefined;
@@ -1060,7 +1063,11 @@ export function definePlannerElement(generation?: string): string {
             if (select) {
               select.value = target;
               select.dispatchEvent(new Event("change", { bubbles: true }));
-              select.focus();
+              this.#controls?.refresh();
+              (
+                select.parentElement?.querySelector<HTMLInputElement>('input[role="combobox"]') ??
+                select
+              ).focus();
             }
           }),
         );
@@ -1251,19 +1258,17 @@ export function definePlannerElement(generation?: string): string {
       const section = document.createElement("section");
       const title = document.createElement("h3");
       title.textContent = this.#t("Story flow");
-      const select = document.createElement("select");
-      select.append(option(document, "", this.#t("Connect to sibling…")));
-      for (const sibling of directChildren(snapshot.items, this.#scopeId).filter(
-        (item) => item.id !== selected.id,
-      ))
-        select.append(option(document, sibling.id, sibling.title));
+      const siblings = planningChoices(
+        directChildren(snapshot.items, this.#scopeId).filter((item) => item.id !== selected.id),
+      );
       const form = document.createElement("form");
       form.dataset["createFlow"] = "";
       form.setAttribute("aria-label", this.#t("Create story flow"));
-      select.name = "targetId";
-      select.setAttribute("aria-label", this.#t("Flow target"));
       form.append(
-        select,
+        selectField(document, this.#t("Flow target"), "targetId", "", [
+          ["", this.#t("Connect to sibling…")],
+          ...siblings.map(({ id, label }) => [id, label] as const),
+        ]),
         selectField(
           document,
           this.#t("Flow type"),
@@ -1610,12 +1615,15 @@ export function definePlannerElement(generation?: string): string {
               "status",
             ),
           );
+        const filter = this.#noteFilters.get(note.id) ?? { query: "" };
+        this.#noteFilters.set(note.id, filter);
         const refreshAnchors = appendNoteAnchors(
           document,
           form,
           note.anchorIds,
           snapshot.items,
           this.#t,
+          filter,
         );
         form.append(...form.querySelectorAll("button"));
         this.#bindDraft(form, `dm_notes:${note.id}`, snapshot.revisions.get(`dm_notes:${note.id}`));

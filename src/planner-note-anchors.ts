@@ -1,7 +1,10 @@
 import { PlannerError, type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
-import type { PlanningItem } from "./planning-model.js";
+import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
 
-type NoteAnchorItem = Pick<PlanningItem, "id" | "title">;
+type NoteAnchorItem = PlanningChoiceItem;
+export interface NoteAnchorFilter {
+  query: string;
+}
 
 export function noteAnchors(value: string, items: readonly NoteAnchorItem[]): readonly string[] {
   let ids: unknown;
@@ -27,6 +30,7 @@ export function appendNoteAnchors(
   ids: readonly string[],
   items: readonly NoteAnchorItem[],
   t: PlannerTranslator = plannerTranslator(),
+  filter: NoteAnchorFilter = { query: "" },
 ): () => void {
   const value = document.createElement("input");
   value.type = "hidden";
@@ -38,23 +42,63 @@ export function appendNoteAnchors(
   legend.textContent = t("Linked planning items");
   group.append(legend);
   const choices = document.createElement("div");
-  group.append(choices);
+  choices.className = "dm-planner-note-choices";
+  const field = document.createElement("div"),
+    label = document.createElement("label"),
+    search = document.createElement("input");
+  field.dataset["uiField"] = "";
+  field.dataset["uiKey"] = `note-anchor-search-${form.dataset["noteId"] ?? crypto.randomUUID()}`;
+  search.id = `note-anchor-search-${crypto.randomUUID()}`;
+  search.type = "search";
+  search.dataset["ui"] = "search";
+  search.maxLength = 200;
+  search.value = filter.query;
+  label.htmlFor = search.id;
+  label.textContent = t("Find linked planning items");
+  field.append(label, search);
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-atomic", "true");
+  group.append(field, status, choices);
   form.append(value, group);
+  const options = new Map(planningChoices(items).map((choice) => [choice.id, choice]));
+  const rows: { text: string; label: HTMLLabelElement; checkbox: HTMLInputElement }[] = [];
+  const applyFilter = (): void => {
+    const query = filter.query.trim().toLocaleLowerCase();
+    let matches = 0,
+      linked = 0;
+    for (const row of rows) {
+      const match = row.text.toLocaleLowerCase().includes(query);
+      if (match) matches++;
+      if (row.checkbox.checked) linked++;
+      row.label.hidden = !match && !row.checkbox.checked;
+    }
+    status.textContent =
+      matches === 0
+        ? `${t("No matching planning items.")} ${t("{0} linked items stay visible.", { "0": linked })}`
+        : t("{0} matching planning items; {1} linked.", { "0": matches, "1": linked });
+  };
+  search.addEventListener("codex-query", () => {
+    filter.query = search.value;
+    applyFilter();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) event.preventDefault();
+  });
   const refresh = (): void => {
     const selected = JSON.parse(value.value) as string[];
     choices.replaceChildren();
+    rows.length = 0;
     for (const id of new Set([...items.map((item) => item.id), ...selected])) {
       const label = document.createElement("label"),
         checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = id;
       checkbox.checked = selected.includes(id);
-      label.append(
-        checkbox,
-        document.createTextNode(
-          items.find((item) => item.id === id)?.title ?? t("Unavailable: {0}", { "0": id }),
-        ),
-      );
+      const choice = options.get(id);
+      const text = choice?.label ?? t("Unavailable: {0}", { "0": id });
+      label.append(checkbox, document.createTextNode(text));
+      rows.push({ text: `${text} ${choice?.trail ?? ""} ${id}`, label, checkbox });
       choices.append(label);
       checkbox.addEventListener("change", () => {
         value.value = JSON.stringify(
@@ -64,8 +108,10 @@ export function appendNoteAnchors(
           ),
         );
         value.dispatchEvent(new Event("input", { bubbles: true }));
+        applyFilter();
       });
     }
+    applyFilter();
   };
   return refresh;
 }

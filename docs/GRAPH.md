@@ -52,6 +52,7 @@ internal imports are outside the contract.
 | [planner-dialog.ts](../src/planner-dialog.ts) | Shared modal focus and dismissal behavior |
 | [planner-viewport.ts](../src/planner-viewport.ts) | Zoom, bounds, fit and viewport restoration |
 | [planner-targets.ts](../src/planner-targets.ts) | Public target catalogs and form values |
+| [planner-choices.ts](../src/planner-choices.ts) | Shared readable choice labels, ownership paths and duplicate-title disambiguation |
 | [planner-note-anchors.ts](../src/planner-note-anchors.ts) | Shared-note anchor selection |
 | [live-refresh.ts](../src/live-refresh.ts) | Coalesced invalidations and deferred refresh |
 | [dashboard-model.ts](../src/dashboard-model.ts) and [dashboard-element.ts](../src/dashboard-element.ts) | Overview projection and rendering |

@@ -331,7 +331,7 @@
   border: 1px solid var(--border-subtle, #ffffff12);
   border-radius: 0.4rem;
 }
-.dm-planner-note-anchors > div {
+.dm-planner-note-choices {
   max-height: 12rem;
   overflow: auto;
   display: grid;
@@ -342,6 +342,9 @@
   align-items: center;
   gap: 0.5rem;
   overflow-wrap: anywhere;
+}
+.dm-planner-note-choices > label[hidden] {
+  display: none;
 }
 .dm-planner-inspector .dm-planner-note-anchors input {
   width: auto;
@@ -929,11 +932,15 @@
   }
 }
 @media (max-width: 600px) {
-  .dm-planner-dialog {
+  .dm-planner-dialog[data-ui-dialog] {
     margin: auto 0 0;
     width: 100%;
+    max-width: 100%;
     max-height: 92dvh;
     border-radius: 0.75rem 0.75rem 0 0;
+  }
+  .dm-planner-dialog[open] {
+    display: block;
   }
   .dm-planner-dialog > header {
     flex-wrap: wrap;
@@ -943,9 +950,10 @@
     flex-basis: 100%;
   }
   .dm-planner-dialog > header button {
-    flex: 1;
+    flex: 1 1 auto;
   }
   .dm-planner-dialog-body {
+    overflow: visible;
     padding: 0.75rem;
   }
 }

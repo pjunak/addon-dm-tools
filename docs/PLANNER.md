@@ -66,7 +66,9 @@ The read-only planning list on a map location uses the same links.
 
 Choose **Edit item** from the reader, or double-click a card on the canvas.
 The editor has **Details**, **Links** and **Notes** tabs, with **Save item** in
-its header. On phones it appears as a bottom sheet. Closing or switching tabs
+its header. On phones it appears as a bottom sheet; actions wrap at their
+natural width and the whole dialog scrolls, keeping enlarged text and content
+reachable. Closing or switching tabs
 retains existing-record drafts; closing an unsaved new-card editor cancels
 that creation. Closing the editor returns to saved content if the reader is
 open. Closing the reader restores focus and the canvas view.
@@ -92,6 +94,11 @@ You can change its label and type; changing an option to a continuing flow does
 not change its endpoints. Labels and arrowheads show the planned direction.
 Removing a flow reviews and removes its attached consequences in the same
 operation; endpoint cards and whole-item consequences remain.
+
+Long flow-target lists use the host's searchable selector. Type part of a name,
+then choose a result with the keyboard or pointer; typing alone never changes
+the selected target. Repeated planning titles show their ownership path, with
+the record ID added when the path is also identical.
 
 Change **Kind** or **Parent** in item details to reorganize the tree. Only
 plotlines and quests are valid parents, and an item cannot become its own
@@ -122,6 +129,12 @@ external reference needs an explicit add-on, record kind, ID and readable name.
 
 Removing all links from a note keeps the note. Unanchored notes remain available
 in a selected item's annotations so you can link them again.
+
+Use **Find linked planning items** to filter a shared note's choices by name,
+ownership path or ID. Linked items stay visible even when they do not match,
+so filtering never unlinks them. The search and its clear action are supplied
+by the host. Each note keeps its filter while the planner remains mounted;
+the filter is view state and is never saved into campaign data.
 
 ## Move around the canvas
 

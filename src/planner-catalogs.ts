@@ -213,6 +213,11 @@ export const plannerCs = {
   "Choose up to 100 existing planning items for this note.":
     "Pro tuto poznámku vyberte nejvýše 100 existujících plánovacích položek.",
   "Linked planning items": "Propojené plánovací položky",
+  "Find linked planning items": "Najít propojené plánovací položky",
+  "No matching planning items.": "Žádné odpovídající plánovací položky.",
+  "{0} linked items stay visible.": "Počet stále zobrazených propojených položek: {0}.",
+  "{0} matching planning items; {1} linked.":
+    "Odpovídající plánovací položky: {0}; propojené: {1}.",
   "Unavailable: {0}": "Nedostupné: {0}",
   "No target": "Bez cíle",
   "Unavailable planning item: {0}": "Nedostupná plánovací položka: {0}",
