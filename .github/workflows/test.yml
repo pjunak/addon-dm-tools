@@ -22,11 +22,27 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: addon-dm-tools
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: addon-dm-tools/go.mod
+          cache-dependency-path: |
+            addon-dm-tools/go.sum
+            addon-dm-tools/go.tools.sum
+            addon-dm-tools/host-sdk-revision.txt
+      - name: Resolve immutable native build dependencies
+        id: dependencies
+        shell: bash
+        run: |
+          host_sdk=$(go run ./tools/check.go dependency-ref host-sdk-revision.txt)
+          printf 'host_sdk=%s\n' "$host_sdk" >> "$GITHUB_OUTPUT"
+        working-directory: addon-dm-tools
 
       - uses: actions/checkout@v7
         with:
           repository: pjunak/ttrpg-codex
+          ref: ${{ steps.dependencies.outputs.host_sdk }}
           path: ttrpg-codex
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -34,13 +50,6 @@ jobs:
           cache: npm
           cache-dependency-path: addon-dm-tools/package-lock.json
 
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: addon-dm-tools/go.mod
-          cache-dependency-path: |
-            addon-dm-tools/go.sum
-            addon-dm-tools/go.tools.sum
-            ttrpg-codex/go.sum
 
       - run: npm ci
         working-directory: addon-dm-tools

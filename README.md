@@ -63,6 +63,15 @@ the public Add-on API v3. No host-private DOM or graph objects are used.
 Use Node.js 26 and the Go version in [go.mod](go.mod). The Go module's local
 SDK replacement expects a compatible `ttrpg-codex` checkout beside this one.
 
+Standalone CI fetches the exact host commit in
+[host-sdk-revision.txt](host-sdk-revision.txt) before checking or packaging.
+Update that pin in a new add-on commit to ship an SDK fix; rerunning an old
+commit must not silently compile a newer SDK or replace its published ZIP.
+`go run ./tools/check.go dependency-ref host-sdk-revision.txt` validates the pin
+without requiring sibling modules. Local builds use the adjacent checkout;
+the host's compatibility suite deliberately builds against its candidate SDK
+and records the actual source commits and package hashes separately.
+
 ```text
 npm ci
 npx playwright install chromium
