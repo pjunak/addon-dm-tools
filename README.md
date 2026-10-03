@@ -5,7 +5,7 @@ Codex. The DM overview shows planning totals, shortcuts and recent items.
 English and Czech controls follow the host language.
 
 Planner and Import Center controls use the host's required `ui.controls.v1`
-[shared UI contract](../ttrpg-codex/docs/rewrite/UI_FOUNDATIONS.md). The host owns
+[shared UI contract](../ttrpg-codex/docs/reference/UI_FOUNDATIONS.md). The host owns
 fields, searchable choices, actions, notices and dialog/tab interaction; this
 package owns planning geometry, imports and draft/save policy.
 
@@ -60,17 +60,10 @@ the public Add-on API v3. No host-private DOM or graph objects are used.
 
 ## Develop and package
 
-Use Node.js 26 and the Go version in [go.mod](go.mod). The Go module's local
-SDK replacement expects a compatible `ttrpg-codex` checkout beside this one.
-
-Standalone CI fetches the exact host commit in
-[host-sdk-revision.txt](host-sdk-revision.txt) before checking or packaging.
-Update that pin in a new add-on commit to ship an SDK fix; rerunning an old
-commit must not silently compile a newer SDK or replace its published ZIP.
-`go run ./tools/check.go dependency-ref host-sdk-revision.txt` validates the pin
-without requiring sibling modules. Local builds use the adjacent checkout;
-the host's compatibility suite deliberately builds against its candidate SDK
-and records the actual source commits and package hashes separately.
+Use Node.js 26 and the Go version in [go.mod](go.mod). The repository builds
+from a plain clone; the host's worker SDK and package inspector are ordinary Go
+module requirements. To develop against an unreleased host change, run
+`go work init . ../ttrpg-codex` (the `go.work` file is ignored).
 
 ```text
 npm ci
@@ -96,15 +89,15 @@ prose while clearing removed planning targets.
 Run `npm run check:dependencies` separately when network access is available to
 audit the committed npm lockfile for high-severity dependency findings.
 
-From the host repository, inspect the built archive:
+Inspect the built archive with the host's inspector:
 
 ```text
-go run ./cmd/codex-addon-inspect ../addon-dm-tools/dist/dm-tools-3.0.0.zip
+go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-3.0.0.zip
 ```
 
 Install through upload, inspection, permission review, approval and activation.
 Source changes do not update an installed generation. Future work is tracked
-only in the [suite backlog](../ttrpg-codex/docs/BACKLOG.md).
+in the host's [backlog](https://github.com/pjunak/ttrpg-codex/blob/main/docs/BACKLOG.md).
 
 
 ## Install and update from tested commits
