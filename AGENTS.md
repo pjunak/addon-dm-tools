@@ -1,8 +1,11 @@
-# AGENTS.md — addon-dm-tools
+# DM Tools add-on
 
-DM Tools is an Add-on API v3 TypeScript/Go package for the sibling
-`ttrpg-codex` host. Its add-on ID and six collection IDs are permanent campaign
-data namespaces.
+DM Tools is a TTRPG Codex add-on (TypeScript UI plus a native Go worker) for
+private story planning, the Atlas and the Import Center. Its add-on ID and six
+collection IDs are permanent campaign data namespaces.
+
+This is a personal project: preserve planning data first, then keep the UI
+friendly and the code clear. Old formats and extra hardening are low priority.
 
 ## Read by task
 
@@ -17,13 +20,11 @@ before changing code or generating a document.
 | Prepare an update, review an import, or change preview/commit | [Import Center guide](docs/IMPORTING.md) |
 | Change ownership, flow, annotations, layout, drafts or persistence | [Graph contract](docs/GRAPH.md) and the relevant [schemas](contracts/) |
 | Change the planning JSON format | Content-generation and Import Center guides, schemas, Go importer and documented-example tests |
-| Change host integration, manifests, permissions or lifecycle | [Public Add-on API](../ttrpg-codex/examples/addons/API_V3.md) |
+| Change host integration, manifests, permissions or lifecycle | The host's [add-on guide](https://github.com/pjunak/ttrpg-codex/blob/main/examples/addons/AUTHORING.md) and [API reference](https://github.com/pjunak/ttrpg-codex/blob/main/examples/addons/API_V3.md) |
 
-Sibling links assume adjacent checkouts. In an independent checkout, locate
-compatible public contracts when needed. Do not assume parent workspace
-instructions were loaded or read unrelated sibling implementations.
-Go builds require the compatible sibling host SDK replacement in
-[go.mod](go.mod); this does not make host internals part of this add-on.
+The repository builds from a plain clone; the host's worker SDK is an ordinary
+Go module requirement. Tasks for all repositories live in the host's
+`docs/BACKLOG.md`.
 
 ## Creating importable content
 
@@ -81,59 +82,29 @@ write boundaries.
 - Services exchange serializable, schema-validated values, never DOM, functions,
   host facades or raw HTML.
 
-## Release and installation
-
-Successful main builds publish the inspected ZIP to a durable commit release;
-the source commit identifies an update even when the manifest version stays the
-same. Follow the [README installation guide](README.md#install-and-update-from-tested-commits).
-Each site's owner chooses **Latest published package**, reviews permissions and
-activates the package. Publication never installs it automatically.
-
-The host image is deployed separately by `pjunak/infra`. This add-on has no
-Compose deployment target or infra dispatch credential. Release publication uses
-the workflow's repository-scoped job token; private downloads use host-managed
-GitHub credentials. Preserve the reviewed package lifecycle on both sites.
-
 ## Working loop
 
-For prose or agent-guidance changes, review the diff, check local links, and
-verify changed commands and contract claims. Exercise documented JSON examples
-through the real import parser/preview using synthetic data:
-
-~~~text
-go test ./internal/importer -run TestDocumentedPlanningExamples
-~~~
-
-That command validates repository examples. It does not preview arbitrary user
-documents or contact a campaign.
-
-For runtime/build changes, run the complete gate below. Install dependencies
-when missing/stale, and run `npx playwright install chromium` when the required
-browser is missing/stale. The gate includes a real-browser planner contract;
-keep its fixture aligned with intentional card, flow and layout changes.
-
-~~~text
-npm run check
+```text
+npm run check:fast        # source guard, types, Oxlint, Prettier, fast Go checks
+npm run check             # build, unit and Chromium rendering tests, Go tests
 go run ./cmd/build-package
-~~~
+go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-3.0.0.zip
+```
 
-`npm run check:fast` rejects authored JavaScript, type-checks browser source plus
-Node tools and tests without generated output, runs type-aware Oxlint against
-the explicit source and Node projects, checks formatting, and runs the fast Go quality gate.
-The full check builds the browser, repeats those strict checks, runs
-unit and Chromium rendering tests, and runs the Go test gate. Use
-`npm run check:go`, `npm run check:workflows`, and
-`npm run check:vulnerabilities` for the corresponding full Go, workflow, and
-vulnerability modes. Run `npm run check:dependencies` separately with network
-access to audit the committed npm lockfile for high-severity findings.
+Run `npx playwright install chromium` if the browser is missing. The Chromium
+planner contract must follow intentional card, flow and layout changes.
+`npm run check:go`, `check:workflows`, `check:vulnerabilities` and
+`check:dependencies` run the remaining CI modes. To try a documented planning
+example through the real importer:
 
-Inspect the ZIP with the host inspector after package, manifest, worker or
-schema changes. Regenerate distribution files through their owning build;
-never hand-edit them. Reuse successful checks on unchanged inputs and preserve
-CI/release gates. Do not push, deploy or convert live campaigns without explicit
-instruction.
+```text
+go test ./internal/importer -run TestDocumentedPlanningExamples
+```
 
-`web/`, `worker/` and `dist/` are ignored build output. The package command builds
-both browser assets and native workers; it must work without existing output.
-Tests import freshly compiled `web/` through the build-first gate above. Keep
-public contracts versioned and require builds to leave tracked source unchanged.
+`web/`, `worker/` and `dist/` are ignored build output; never hand-edit them.
+Inspect the ZIP after package, manifest, worker or schema changes. To work
+against a local host change, use an uncommitted `go work init . ../ttrpg-codex`.
+
+Successful `main` builds publish the inspected ZIP as a GitHub release; DMs
+install it through Settings → Add-ons. Ask before pushing, deploying or touching
+a live campaign.

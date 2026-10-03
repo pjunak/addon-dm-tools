@@ -225,11 +225,7 @@ there is no subsequent cross-tab synchronization. It is not encrypted storage
 or an authority boundary against trusted same-origin code.
 
 [Recovery unit tests](../tests/planner-recovery.mts) verify bounds, detached
-values and storage failures. The host's [installed recovery fixture](../../ttrpg-codex/frontend/test/browser/installed-planner-recovery-fixture.mts)
-exercises real reviewed replacement, disable/re-enable, stale/deleted data,
-confirmed/uncertain writes, malformed/blocked storage and player isolation on
-desktop and phone, including Czech enlarged text. The [navigation fixture](../../ttrpg-codex/frontend/test/browser/installed-planner-navigation-fixture.mts)
-retains canceled-navigation guards and verifies accepted route/sign-out discard.
+values and storage failures.
 
 ## Selection, connections and viewport
 

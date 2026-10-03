@@ -3,6 +3,7 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths-ignore: ["**/*.md"]
   pull_request:
   workflow_dispatch:
 
@@ -20,79 +21,41 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-        with:
-          path: addon-dm-tools
       - uses: actions/setup-go@v7
         with:
-          go-version-file: addon-dm-tools/go.mod
+          go-version-file: go.mod
           cache-dependency-path: |
-            addon-dm-tools/go.sum
-            addon-dm-tools/go.tools.sum
-            addon-dm-tools/host-sdk-revision.txt
-      - name: Resolve immutable native build dependencies
-        id: dependencies
-        shell: bash
-        run: |
-          host_sdk=$(go run ./tools/check.go dependency-ref host-sdk-revision.txt)
-          printf 'host_sdk=%s\n' "$host_sdk" >> "$GITHUB_OUTPUT"
-        working-directory: addon-dm-tools
-
-      - uses: actions/checkout@v7
-        with:
-          repository: pjunak/ttrpg-codex
-          ref: ${{ steps.dependencies.outputs.host_sdk }}
-          path: ttrpg-codex
-          persist-credentials: false
-
+            go.sum
+            go.tools.sum
       - uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: addon-dm-tools/package-lock.json
-
-
       - run: npm ci
-        working-directory: addon-dm-tools
       - run: npm run check:dependencies
-        working-directory: addon-dm-tools
-
       - name: Install Chromium for rendering contracts
         run: npx playwright install --with-deps chromium
-        working-directory: addon-dm-tools
-
       - run: go mod download -modfile=go.tools.mod
-        working-directory: addon-dm-tools
       - run: go run ./tools/check.go workflows
-        working-directory: addon-dm-tools
       - run: go run ./tools/check.go vuln
-        working-directory: addon-dm-tools
-
       - name: Run source, analysis, test, and rendering gates
         run: npm run check
-        working-directory: addon-dm-tools
-
       - name: Build release package
         run: |
           node tools/clean-web.ts
           go run ./cmd/build-package
-        working-directory: addon-dm-tools
-      - name: Verify builds preserve source ownership
+      - name: Verify the build left tracked source unchanged
         run: |
           git diff --exit-code
           test -z "$(git ls-files -- web worker)"
-        working-directory: addon-dm-tools
-
-      - name: Inspect release package with the host
-        run: go run ./cmd/codex-addon-inspect ../addon-dm-tools/dist/dm-tools-3.0.0.zip
-        working-directory: ttrpg-codex
-
+      - name: Inspect release package with the host inspector
+        run: go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-3.0.0.zip
       - uses: actions/upload-artifact@v7
         with:
           name: reviewed-package
-          path: addon-dm-tools/dist/*.zip
+          path: dist/*.zip
           if-no-files-found: error
           retention-days: 14
-
 
   publish:
     name: Publish tested commit
