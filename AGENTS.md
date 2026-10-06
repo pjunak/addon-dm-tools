@@ -88,7 +88,7 @@ write boundaries.
 npm run check:fast        # source guard, types, Oxlint, Prettier, fast Go checks
 npm run check             # build, unit and Chromium rendering tests, Go tests
 go run ./cmd/build-package
-go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-3.0.0.zip
+go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-<version>.zip
 ```
 
 Run `npx playwright install chromium` if the browser is missing. The Chromium
