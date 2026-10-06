@@ -34,8 +34,8 @@
     "node": ">=26"
   },
   "devDependencies": {
-    "@types/node": "26.6.3",
-    "oxlint": "1.86.0",
+    "@types/node": "26.6.4",
+    "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "playwright": "1.63.0",
     "prettier": "3.9.9",
