@@ -28,6 +28,7 @@ import {
   directChildren,
   localFlows,
   newItem,
+  parseTags,
   scopeTrail,
   validateItemEdit,
   validatePlanning,
@@ -1667,14 +1668,7 @@ export function definePlannerElement(generation?: string): string {
       if (!snapshot) return;
       const data = new FormData(form);
       const text = (name: string): string => formText(data, name).trim();
-      const tags = [
-        ...new Set(
-          text("tags")
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean),
-        ),
-      ];
+      const tags = parseTags(text("tags"));
       if (tags.length > 40 || tags.some((tag) => tag.length > 60)) {
         this.#invalid(this.#t("Use up to 40 tags, with at most 60 characters each."));
         return;

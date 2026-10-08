@@ -5,6 +5,7 @@ import {
   directChildren,
   localFlows,
   newItem,
+  parseTags,
   subtreeIds,
   validateItemEdit,
   validatePlanning,
@@ -258,4 +259,8 @@ void test("consequence planning targets must exist while optional and foreign ta
     "Consequence effect has a missing planning target.",
   ]);
   assert.deepEqual(invalid, before);
+});
+
+test("tags are unique ignoring case and keep the first spelling", () => {
+  assert.deepEqual(parseTags(" NPC, villain ,npc,, Villain ,Žena"), ["NPC", "villain", "Žena"]);
 });

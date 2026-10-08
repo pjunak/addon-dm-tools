@@ -259,6 +259,21 @@ export function validatePlanning(
   return [...new Set(issues)];
 }
 
+// Tags are unique ignoring case, like the importer requires; the first
+// spelling wins.
+export function parseTags(text: string): string[] {
+  const seen = new Set<string>();
+  return text
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (tag === "" || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export function newItem(
   kind: PlanningKind,
   parentId: string | null,
