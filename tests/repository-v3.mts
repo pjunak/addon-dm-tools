@@ -560,7 +560,7 @@ void test("reset clears only the active layout and retains its revision for the 
   assert.equal(writes[0][0].key, "scope-root");
   assert.deepEqual(mutationValue(writes[0], "scope-root", isPlanningView).positions, {});
   const after = applyWrites(dataset, writes[0], collections);
-  await repository.savePosition(after, null, "quest-a", 48, 72);
+  await repository.savePositions(after, null, { "quest-a": { x: 48, y: 72 } });
   assert.equal(writes[1][0].expectedRevision, writes[0][0].expectedRevision + 1);
   assert.deepEqual(mutationValue(writes[1], "scope-root", isPlanningView).positions, {
     "quest-a": { x: 48, y: 72 },
@@ -719,7 +719,9 @@ void test("all writes retain the validated snapshot including empty collections"
   });
   const snapshot = await repository.load();
   await repository.put(snapshot, "planning_items", validQuest(), 7);
-  await repository.savePosition({ ...snapshot, items: [validQuest()] }, null, "quest-a", 20, 30);
+  await repository.savePositions({ ...snapshot, items: [validQuest()] }, null, {
+    "quest-a": { x: 20, y: 30 },
+  });
   for (const write of writes) assert.deepEqual(write.options.expectedDataSets, dataRevisions);
   assert.equal(writes[0].mutations[0].expectedRevision, 7);
   await assert.rejects(

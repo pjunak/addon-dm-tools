@@ -276,15 +276,6 @@ export class PlanningRepository {
       revision,
     );
   }
-  async savePosition(
-    snapshot: PlanningSnapshot,
-    scopeId: string | null,
-    itemId: string,
-    x: number,
-    y: number,
-  ): Promise<void> {
-    await this.savePositions(snapshot, scopeId, { [itemId]: { x, y } });
-  }
   async savePositions(
     snapshot: PlanningSnapshot,
     scopeId: string | null,
