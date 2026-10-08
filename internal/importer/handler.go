@@ -395,7 +395,7 @@ func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[str
 				} else {
 					normalized, err := planning.DecodeStored(collection, document.Value)
 					if err != nil {
-						return nil, dataset, nil, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key})
+						return nil, dataset, nil, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key, "issue": err.Error()})
 					}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
 					apply(dataset, normalized)

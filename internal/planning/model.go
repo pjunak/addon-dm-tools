@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 const SchemaVersion = 3
@@ -303,7 +304,7 @@ func validateItem(item Item) error {
 	if err := common(item.ID, item.SchemaVersion, item.UpdatedAt); err != nil {
 		return err
 	}
-	if !oneOf(item.Kind, "plotline", "quest", "event", "branch") || strings.TrimSpace(item.Title) == "" || len(item.Title) > 160 || len(item.Summary) > 2000 || len(item.Body) > 80000 || len(item.Objective) > 10000 || len(item.Setup) > 30000 || len(item.Resolution) > 30000 || len(item.Tags) > 40 {
+	if !oneOf(item.Kind, "plotline", "quest", "event", "branch") || strings.TrimSpace(item.Title) == "" || tooLong(item.Title, 160) || tooLong(item.Summary, 2000) || tooLong(item.Body, 80000) || tooLong(item.Objective, 10000) || tooLong(item.Setup, 30000) || tooLong(item.Resolution, 30000) || len(item.Tags) > 40 {
 		return errors.New("planning item fields are invalid")
 	}
 	if item.ParentID != nil && !validID(*item.ParentID) {
@@ -316,7 +317,7 @@ func validateItem(item Item) error {
 		return errors.New("planning item branchType is invalid")
 	}
 	for _, tag := range item.Tags {
-		if strings.TrimSpace(tag) == "" || len(tag) > 60 {
+		if strings.TrimSpace(tag) == "" || tooLong(tag, 60) {
 			return errors.New("planning item tag is invalid")
 		}
 	}
@@ -329,7 +330,7 @@ func validateFlow(flow Flow) error {
 	if err := common(flow.ID, flow.SchemaVersion, flow.UpdatedAt); err != nil {
 		return err
 	}
-	if !validID(flow.SourceID) || !validID(flow.TargetID) || flow.SourceID == flow.TargetID || !oneOf(flow.Kind, "continues", "option") || len(flow.Label) > 200 {
+	if !validID(flow.SourceID) || !validID(flow.TargetID) || flow.SourceID == flow.TargetID || !oneOf(flow.Kind, "continues", "option") || tooLong(flow.Label, 200) {
 		return errors.New("planning flow fields are invalid")
 	}
 	return nil
@@ -338,9 +339,9 @@ func validateReference(value Reference) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if !validID(value.ItemID) || strings.TrimSpace(value.Name) == "" || len(value.Name) > 200 ||
+	if !validID(value.ItemID) || strings.TrimSpace(value.Name) == "" || tooLong(value.Name, 200) ||
 		!oneOf(value.Relation, "related", "involves", "features", "located-at", "opposes", "supports", "reveals", "requires", "rewards") ||
-		value.Quantity < 1 || value.Quantity > 1000 || len(value.Notes) > 2000 || !validTarget(value.Target) {
+		value.Quantity < 1 || value.Quantity > 1000 || tooLong(value.Notes, 2000) || !validTarget(value.Target) {
 		return errors.New("planning reference fields are invalid")
 	}
 	return nil
@@ -349,7 +350,7 @@ func validateConsequence(value Consequence) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if !oneOf(value.Kind, "world", "reward", "information", "complication") || strings.TrimSpace(value.Title) == "" || len(value.Title) > 200 || len(value.Body) > 10000 || !validAnchor(value.Anchor) || len(value.Target) > 0 && !validTarget(value.Target) {
+	if !oneOf(value.Kind, "world", "reward", "information", "complication") || strings.TrimSpace(value.Title) == "" || tooLong(value.Title, 200) || tooLong(value.Body, 10000) || !validAnchor(value.Anchor) || len(value.Target) > 0 && !validTarget(value.Target) {
 		return errors.New("planning consequence fields are invalid")
 	}
 	return nil
@@ -358,7 +359,7 @@ func validateNote(value Note) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if strings.TrimSpace(value.Title) == "" || len(value.Title) > 200 || len(value.Body) > 30000 || len(value.AnchorIDs) > 100 {
+	if strings.TrimSpace(value.Title) == "" || tooLong(value.Title, 200) || tooLong(value.Body, 30000) || len(value.AnchorIDs) > 100 {
 		return errors.New("DM note fields are invalid")
 	}
 	for _, id := range value.AnchorIDs {
@@ -419,7 +420,7 @@ func validTarget(raw json.RawMessage) bool {
 			ID      string `json:"id"`
 			Label   string `json:"label"`
 		}
-		return decodeExact(raw, &value) == nil && validAddonID(value.AddonID) && len(value.Kind) > 0 && len(value.Kind) <= 80 && validID(value.ID) && len(value.Label) > 0 && len(value.Label) <= 200
+		return decodeExact(raw, &value) == nil && validAddonID(value.AddonID) && len(value.Kind) > 0 && !tooLong(value.Kind, 80) && validID(value.ID) && len(value.Label) > 0 && !tooLong(value.Label, 200)
 	default:
 		return false
 	}
@@ -502,4 +503,10 @@ func decodeExact(body []byte, destination any) error {
 		return errors.New("JSON contains more than one value")
 	}
 	return nil
+}
+
+// tooLong counts characters like the JSON Schema maxLength it mirrors, not
+// bytes, so accented text accepted by the planner also passes import checks.
+func tooLong(value string, maximum int) bool {
+	return utf8.RuneCountInString(value) > maximum
 }

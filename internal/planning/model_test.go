@@ -1,6 +1,9 @@
 package planning
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidateRejectsCrossScopeAndCycles(t *testing.T) {
 	parentA := "quest-a"
@@ -60,5 +63,16 @@ func TestNormalizeRejectsSchemaDriftAndAmbiguousRecords(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 		})
+	}
+}
+
+func TestTextLimitsCountCharactersLikeTheSchemas(t *testing.T) {
+	item := Item{ID: "quest-a", SchemaVersion: 3, Kind: "quest", Title: strings.Repeat("č", 160), Tags: []string{strings.Repeat("ř", 60)}}
+	if err := validateItem(item); err != nil {
+		t.Fatalf("160 accented characters were rejected: %v", err)
+	}
+	item.Title += "č"
+	if validateItem(item) == nil {
+		t.Fatal("161 characters were accepted")
 	}
 }
