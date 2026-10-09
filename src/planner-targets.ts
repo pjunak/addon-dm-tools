@@ -217,8 +217,8 @@ export function appendTargetFields(
       label,
       name,
       current?.["scope"] === "external" ? scalarText(current[key]) : "",
+      limit,
     );
-    field.querySelector("input")!.maxLength = limit;
     external.append(field);
   }
   form.append(scope, planning, campaign, external);

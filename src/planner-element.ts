@@ -1213,25 +1213,15 @@ export function definePlannerElement(generation?: string): string {
         this.#t,
       );
       form.append(
-        textField(document, this.#t("Title"), "title", selected.title),
-        textArea(document, this.#t("Summary"), "summary", selected.summary, 3),
-        textArea(document, this.#t("Objective"), "objective", selected.objective, 3),
-        textArea(document, this.#t("Body"), "body", selected.body, 7),
-        textArea(document, this.#t("Setup"), "setup", selected.setup, 5),
-        textArea(document, this.#t("Resolution"), "resolution", selected.resolution, 5),
-        textField(document, this.#t("Tags"), "tags", selected.tags.join(", ")),
+        textField(document, this.#t("Title"), "title", selected.title, 160),
+        textArea(document, this.#t("Summary"), "summary", selected.summary, 3, 2000),
+        textArea(document, this.#t("Objective"), "objective", selected.objective, 3, 10000),
+        textArea(document, this.#t("Body"), "body", selected.body, 7, 80000),
+        textArea(document, this.#t("Setup"), "setup", selected.setup, 5, 30000),
+        textArea(document, this.#t("Resolution"), "resolution", selected.resolution, 5, 30000),
+        // Up to 40 tags of 60 characters, comma separated.
+        textField(document, this.#t("Tags"), "tags", selected.tags.join(", "), 2440),
       );
-      for (const [name, limit] of Object.entries({
-        title: 160,
-        summary: 2000,
-        objective: 10000,
-        body: 80000,
-        setup: 30000,
-        resolution: 30000,
-        tags: 2440,
-      }))
-        form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.maxLength =
-          limit;
       this.#bindDraft(
         form,
         isNew ? `new-item:${selected.id}` : `planning_items:${selected.id}`,
@@ -1305,9 +1295,8 @@ export function definePlannerElement(generation?: string): string {
           selected.kind === "branch" ? "option" : "continues",
           flowKindOptions(selected, this.#t),
         ),
-        textField(document, this.#t("Flow label"), "label", ""),
+        textField(document, this.#t("Flow label"), "label", "", 200),
       );
-      form.querySelector<HTMLInputElement>("input")!.maxLength = 200;
       const create = actionButton(document, this.#t("Create flow"), () => undefined, "primary");
       create.type = "submit";
       form.append(create);
@@ -1356,9 +1345,8 @@ export function definePlannerElement(generation?: string): string {
             flow.kind,
             flowKindOptions(source, this.#t),
           ),
-          textField(document, this.#t("Flow label"), "label", flow.label),
+          textField(document, this.#t("Flow label"), "label", flow.label, 200),
         );
-        editForm.querySelector<HTMLInputElement>("input")!.maxLength = 200;
         const save = actionButton(document, this.#t("Save flow"), () => undefined, "primary");
         save.type = "submit";
         editForm.append(save);
@@ -1404,8 +1392,7 @@ export function definePlannerElement(generation?: string): string {
         undefined,
         this.#t,
       );
-      createForm.append(textField(document, this.#t("Reference name (optional)"), "name", ""));
-      createForm.querySelector<HTMLInputElement>('[name="name"]')!.maxLength = 200;
+      createForm.append(textField(document, this.#t("Reference name (optional)"), "name", "", 200));
       const add = actionButton(document, this.#t("Add reference"), () => undefined, "primary");
       add.type = "submit";
       createForm.append(add);
@@ -1474,13 +1461,11 @@ export function definePlannerElement(generation?: string): string {
         input.step = "1";
         input.required = true;
         form.append(
-          textField(document, this.#t("Reference"), "name", reference.name),
+          textField(document, this.#t("Reference"), "name", reference.name, 200),
           relation,
           quantity,
-          textArea(document, this.#t("Notes"), "notes", reference.notes, 2),
+          textArea(document, this.#t("Notes"), "notes", reference.notes, 2, 2000),
         );
-        form.querySelector<HTMLInputElement>('[name="name"]')!.maxLength = 200;
-        form.querySelector<HTMLTextAreaElement>('[name="notes"]')!.maxLength = 2000;
         const save = actionButton(document, this.#t("Save reference"), () => undefined, "primary");
         save.type = "submit";
         form.append(
@@ -1549,14 +1534,14 @@ export function definePlannerElement(generation?: string): string {
           ),
         );
         form.append(
-          textField(document, this.#t("Consequence"), "title", consequence.title),
+          textField(document, this.#t("Consequence"), "title", consequence.title, 200),
           selectField(document, this.#t("Kind"), "kind", consequence.kind, [
             ["world", this.#t("World")],
             ["reward", this.#t("Reward")],
             ["information", this.#t("Information")],
             ["complication", this.#t("Complication")],
           ]),
-          textArea(document, this.#t("Details"), "body", consequence.body, 3),
+          textArea(document, this.#t("Details"), "body", consequence.body, 3, 10000),
         );
         const save = actionButton(
           document,
@@ -1616,8 +1601,8 @@ export function definePlannerElement(generation?: string): string {
           void this.#saveNote(note, form, selected.id);
         });
         form.append(
-          textField(document, this.#t("DM note"), "title", note.title),
-          textArea(document, this.#t("Private details"), "body", note.body, 4),
+          textField(document, this.#t("DM note"), "title", note.title, 200),
+          textArea(document, this.#t("Private details"), "body", note.body, 4, 30000),
         );
         const save = actionButton(document, this.#t("Save note"), () => undefined, "primary");
         save.type = "submit";

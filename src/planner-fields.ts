@@ -9,6 +9,7 @@ export function textField(
   label: string,
   name: string,
   value: string,
+  maxLength?: number,
 ): HTMLLabelElement {
   const wrapper = document.createElement("label");
   wrapper.dataset["uiField"] = "";
@@ -18,6 +19,7 @@ export function textField(
   const input = document.createElement("input");
   input.name = name;
   input.value = value;
+  if (maxLength !== undefined) input.maxLength = maxLength;
   wrapper.append(text, input);
   return wrapper;
 }
@@ -27,6 +29,7 @@ export function textArea(
   name: string,
   value: string,
   rows: number,
+  maxLength?: number,
 ): HTMLLabelElement {
   const wrapper = document.createElement("label");
   wrapper.dataset["uiField"] = "";
@@ -37,6 +40,7 @@ export function textArea(
   input.name = name;
   input.value = value;
   input.rows = rows;
+  if (maxLength !== undefined) input.maxLength = maxLength;
   wrapper.append(text, input);
   return wrapper;
 }
