@@ -22,7 +22,15 @@ import {
 } from "./planner-targets.js";
 import { appendNoteAnchors, noteAnchors, type NoteAnchorFilter } from "./planner-note-anchors.js";
 import { planningChoices } from "./planner-choices.js";
-import { textField, textArea, selectField, messageBlock } from "./planner-fields.js";
+import {
+  actionButton,
+  formText,
+  messageBlock,
+  scalarText,
+  selectField,
+  textArea,
+  textField,
+} from "./planner-fields.js";
 import {
   availableParents,
   directChildren,
@@ -2576,27 +2584,4 @@ function flowDescription(snapshot: PlanningSnapshot, flow: PlanningFlow): string
   const source = snapshot.items.find((item) => item.id === flow.sourceId);
   const target = snapshot.items.find((item) => item.id === flow.targetId);
   return `${source?.title ?? flow.sourceId} → ${target?.title ?? flow.targetId}${flow.label ? `: ${flow.label}` : ""}`;
-}
-function actionButton(
-  document: Document,
-  label: string,
-  action: () => void,
-  style?: string,
-): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  if (style !== undefined) button.className = style;
-  if (style === "primary" || style === "danger") button.dataset["uiVariant"] = style;
-  button.addEventListener("click", action);
-  return button;
-}
-
-function formText(data: FormData, name: string): string {
-  const value = data.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-function scalarText(value: unknown): string {
-  return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }

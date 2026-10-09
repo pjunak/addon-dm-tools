@@ -1,3 +1,4 @@
+import { actionButton, messageBlock } from "./planner-fields.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
 import { dashboardLocale } from "./dashboard-model.js";
@@ -682,24 +683,4 @@ function node(document: Document, tag = "div", className = "", text?: string): H
   element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
-}
-function actionButton(
-  document: Document,
-  label: string,
-  action: () => void,
-  style = "",
-): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  button.className = style;
-  if (style === "primary" || style === "danger") button.dataset["uiVariant"] = style;
-  button.addEventListener("click", action);
-  return button;
-}
-function messageBlock(document: Document, message: string, role: "status" | "alert"): HTMLElement {
-  const block = node(document, "div", `dm-tools-message ${role}`, message);
-  block.setAttribute("role", role);
-  block.dataset["uiState"] = role === "alert" ? "error" : "info";
-  return block;
 }

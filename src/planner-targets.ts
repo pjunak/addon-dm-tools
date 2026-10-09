@@ -4,7 +4,7 @@ import {
   plannerTranslator,
   plannerLabel,
 } from "./planner-catalogs.js";
-import { messageBlock, selectField, textField } from "./planner-fields.js";
+import { formText, messageBlock, scalarText, selectField, textField } from "./planner-fields.js";
 import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
 
 const coreCollections = ["characters", "factions", "locations", "mysteries", "artifacts", "events"];
@@ -258,13 +258,4 @@ export function targetLink(
   link.href = href;
   link.textContent = label;
   return link;
-}
-
-function formText(data: FormData, name: string): string {
-  const value = data.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-function scalarText(value: unknown): string {
-  return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }

@@ -78,3 +78,24 @@ export function messageBlock(
   block.textContent = message;
   return block;
 }
+export function actionButton(
+  document: Document,
+  label: string,
+  action: () => void,
+  style = "",
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  if (style) button.className = style;
+  if (style === "primary" || style === "danger") button.dataset["uiVariant"] = style;
+  button.addEventListener("click", action);
+  return button;
+}
+export function formText(data: FormData, name: string): string {
+  const value = data.get(name);
+  return typeof value === "string" ? value : "";
+}
+export function scalarText(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
