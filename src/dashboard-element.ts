@@ -110,7 +110,9 @@ export function defineDashboardElement(generation: string): string {
       };
       const overview = section("dashboard.title", "h2");
       overview.append(element("p", t("dashboard.description"), "dm-dashboard-hint"));
-      if (this.#status === "loading") {
+      // A live refresh keeps the current summary on screen, marked busy, so
+      // the panel does not blink on every change elsewhere.
+      if (this.#status === "loading" && !this.#snapshot) {
         const loading = element("p", t("dashboard.loading"), "dm-dashboard-hint");
         loading.setAttribute("role", "status");
         overview.append(loading);

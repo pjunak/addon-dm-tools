@@ -147,7 +147,10 @@ export function defineMapPlanningElement(generation: string): string {
         t = plannerTranslator(dashboardLocale(this.#context?.host)),
         root = document.createElement("div");
       root.setAttribute("aria-busy", String(this.#status === "loading"));
-      if (this.#status !== "ready") {
+      // A live refresh keeps the current list on screen, marked busy, so the
+      // panel does not blink on every change elsewhere.
+      const shown = this.#status === "error" ? undefined : this.#snapshot;
+      if (!shown) {
         const message = document.createElement("p");
         message.setAttribute("role", this.#status === "error" ? "alert" : "status");
         message.textContent = t(
@@ -162,8 +165,8 @@ export function defineMapPlanningElement(generation: string): string {
         retry.addEventListener("click", () => void this.#load());
         root.append(retry);
       }
-      if (this.#snapshot && this.#status === "ready") {
-        const items = relatedPlanning(this.#snapshot, locationId(this.#context?.host) ?? "");
+      if (shown) {
+        const items = relatedPlanning(shown, locationId(this.#context?.host) ?? "");
         if (!items.length) {
           const empty = document.createElement("p");
           empty.textContent = t("No planning items reference this location.");
