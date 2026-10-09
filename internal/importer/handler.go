@@ -11,13 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/pjunak/addon-dm-tools/internal/planning"
 	"github.com/pjunak/ttrpg-codex/sdk/go/workerrpc"
+
+	"github.com/pjunak/addon-dm-tools/internal/jsonexact"
 )
 
 const Contract = "codex.import-adapter"
@@ -113,7 +114,7 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 			ContributorID   string          `json:"contributorId"`
 			Document        json.RawMessage `json:"document"`
 		}
-		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "campaign-contribution.v1" || input.ContributorID != "planning-json" {
+		if jsonexact.Decode(request.Params, &input) != nil || input.ContractVersion != "campaign-contribution.v1" || input.ContributorID != "planning-json" {
 			return nil, invalid("planning contribution request is invalid", nil)
 		}
 		return handler.preview(ctx, request.Meta, input.Document, false)
@@ -124,13 +125,13 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 		return map[string]any{"contractVersion": "import-adapter-description.v1", "id": "planning-json", "label": "DM Tools planning", "description": "Nested story plans, local flow, references, consequences, and DM notes.", "formats": []string{"dm-tools-planning"}}, nil
 	case methodPrefix + "preview":
 		var input previewRequest
-		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "import-preview.v1" || input.Format != "dm-tools-planning" {
+		if jsonexact.Decode(request.Params, &input) != nil || input.ContractVersion != "import-preview.v1" || input.Format != "dm-tools-planning" {
 			return nil, invalid("planning preview request is invalid", nil)
 		}
 		return handler.preview(ctx, request.Meta, input.Document, true)
 	case methodPrefix + "commit":
 		var input commitRequest
-		if decodeExact(request.Params, &input) != nil || input.ContractVersion != "import-commit.v1" || input.Token == "" {
+		if jsonexact.Decode(request.Params, &input) != nil || input.ContractVersion != "import-commit.v1" || input.Token == "" {
 			return nil, invalid("planning commit request is invalid", nil)
 		}
 		if request.Meta == nil || request.Meta.IdempotencyKey == "" {
@@ -285,7 +286,7 @@ func (handler *Handler) commit(ctx context.Context, meta *workerrpc.Meta, token 
 
 func decodeDocument(body json.RawMessage) (importDocument, []importEntry, error) {
 	var raw map[string]json.RawMessage
-	if decodeExact(body, &raw) != nil {
+	if jsonexact.Decode(body, &raw) != nil {
 		return importDocument{}, nil, errors.New("document must be one exact JSON object")
 	}
 	allowed := map[string]bool{"format": true, "schemaVersion": true, "generatedAt": true, "mode": true, "items": true, "flowLinks": true, "references": true, "consequences": true, "notes": true}
@@ -300,7 +301,7 @@ func decodeDocument(body json.RawMessage) (importDocument, []importEntry, error)
 		}
 	}
 	var document importDocument
-	if decodeExact(body, &document) != nil || document.Format != "dm-tools-planning" || document.SchemaVersion != planning.SchemaVersion || document.GeneratedAt < 0 {
+	if jsonexact.Decode(body, &document) != nil || document.Format != "dm-tools-planning" || document.SchemaVersion != planning.SchemaVersion || document.GeneratedAt < 0 {
 		return importDocument{}, nil, errors.New("document identity or generatedAt is invalid")
 	}
 	if document.Mode == "" {
@@ -334,7 +335,7 @@ func decodeDocument(body json.RawMessage) (importDocument, []importEntry, error)
 
 func decodeEntry(collection string, body json.RawMessage, generatedAt int64) (importEntry, error) {
 	var raw map[string]json.RawMessage
-	if decodeExact(body, &raw) != nil {
+	if jsonexact.Decode(body, &raw) != nil {
 		return importEntry{}, errors.New("import record must be an object")
 	}
 	var operation string
@@ -386,7 +387,7 @@ func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (map[str
 			for _, document := range page.Documents {
 				if collection == "planning_views" {
 					var view planning.View
-					if decodeExact(document.Value, &view) != nil || view.SchemaVersion != planning.SchemaVersion {
+					if jsonexact.Decode(document.Value, &view) != nil || view.SchemaVersion != planning.SchemaVersion {
 						return nil, dataset, nil, invalid("stored planning view is invalid", map[string]any{"id": document.Key})
 					}
 					normalized := planning.Normalized{Collection: collection, ID: view.ID, Label: "Saved canvas layout", UpdatedAt: view.UpdatedAt, Value: &view, Body: document.Value}
@@ -497,19 +498,8 @@ func unavailable(message string) error {
 }
 func decodeEmpty(body json.RawMessage) error {
 	var value map[string]json.RawMessage
-	if decodeExact(body, &value) != nil || len(value) != 0 {
+	if jsonexact.Decode(body, &value) != nil || len(value) != 0 {
 		return errors.New("expected empty object")
-	}
-	return nil
-}
-func decodeExact(body []byte, destination any) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("JSON contains more than one value")
 	}
 	return nil
 }

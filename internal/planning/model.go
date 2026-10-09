@@ -3,15 +3,15 @@
 package planning
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/pjunak/addon-dm-tools/internal/jsonexact"
 )
 
 const SchemaVersion = 3
@@ -108,7 +108,7 @@ func Normalize(collection string, body json.RawMessage, updatedAt int64) (Normal
 		return Normalized{}, errors.New("generatedAt must be a non-negative epoch-millisecond integer")
 	}
 	var raw map[string]json.RawMessage
-	if err := decodeExact(body, &raw); err != nil {
+	if err := jsonexact.Decode(body, &raw); err != nil {
 		return Normalized{}, fmt.Errorf("%s record must be one object: %w", collection, err)
 	}
 	required := map[string][]string{
@@ -138,7 +138,7 @@ func Normalize(collection string, body json.RawMessage, updatedAt int64) (Normal
 	default:
 		return Normalized{}, fmt.Errorf("unknown planning collection %q", collection)
 	}
-	if err := decodeExact(body, value); err != nil {
+	if err := jsonexact.Decode(body, value); err != nil {
 		return Normalized{}, fmt.Errorf("%s record is invalid: %w", collection, err)
 	}
 	var id, label string
@@ -386,13 +386,13 @@ func validAnchor(raw json.RawMessage) bool {
 			Scope  string `json:"scope"`
 			ItemID string `json:"itemId"`
 		}
-		return decodeExact(raw, &value) == nil && validID(value.ItemID)
+		return jsonexact.Decode(raw, &value) == nil && validID(value.ItemID)
 	case "flow":
 		var value struct {
 			Scope  string `json:"scope"`
 			FlowID string `json:"flowId"`
 		}
-		return decodeExact(raw, &value) == nil && validID(value.FlowID)
+		return jsonexact.Decode(raw, &value) == nil && validID(value.FlowID)
 	default:
 		return false
 	}
@@ -404,14 +404,14 @@ func validTarget(raw json.RawMessage) bool {
 			Scope  string `json:"scope"`
 			ItemID string `json:"itemId"`
 		}
-		return decodeExact(raw, &value) == nil && validID(value.ItemID)
+		return jsonexact.Decode(raw, &value) == nil && validID(value.ItemID)
 	case "core":
 		var value struct {
 			Scope      string `json:"scope"`
 			Collection string `json:"collection"`
 			ID         string `json:"id"`
 		}
-		return decodeExact(raw, &value) == nil && oneOf(value.Collection, "characters", "factions", "locations", "mysteries", "artifacts", "events") && validID(value.ID)
+		return jsonexact.Decode(raw, &value) == nil && oneOf(value.Collection, "characters", "factions", "locations", "mysteries", "artifacts", "events") && validID(value.ID)
 	case "external":
 		var value struct {
 			Scope   string `json:"scope"`
@@ -420,7 +420,7 @@ func validTarget(raw json.RawMessage) bool {
 			ID      string `json:"id"`
 			Label   string `json:"label"`
 		}
-		return decodeExact(raw, &value) == nil && validAddonID(value.AddonID) && len(value.Kind) > 0 && !tooLong(value.Kind, 80) && validID(value.ID) && len(value.Label) > 0 && !tooLong(value.Label, 200)
+		return jsonexact.Decode(raw, &value) == nil && validAddonID(value.AddonID) && len(value.Kind) > 0 && !tooLong(value.Kind, 80) && validID(value.ID) && len(value.Label) > 0 && !tooLong(value.Label, 200)
 	default:
 		return false
 	}
@@ -492,17 +492,6 @@ func unique(values []string) []string {
 	}
 	sort.Strings(result)
 	return result
-}
-func decodeExact(body []byte, destination any) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("JSON contains more than one value")
-	}
-	return nil
 }
 
 // tooLong counts characters like the JSON Schema maxLength it mirrors, not
