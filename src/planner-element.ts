@@ -28,6 +28,7 @@ import {
   directChildren,
   localFlows,
   newItem,
+  notesDeletedWith,
   parseTags,
   scopeTrail,
   validateItemEdit,
@@ -40,9 +41,9 @@ import {
   type PlanningKind,
   type PlanningReference,
 } from "./planning-model.js";
-import type { DeletionUndo, PlanningSnapshot } from "./planning-repository.js";
+import type { CollectionId, DeletionUndo, PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
-import type { ContributionContext, DataMutation } from "./sdk.js";
+import type { ContributionContext } from "./sdk.js";
 import {
   dashboardLocale,
   plannerLink,
@@ -1483,6 +1484,7 @@ export function definePlannerElement(generation?: string): string {
               void this.#deleteRecord(
                 "planning_references",
                 reference.id,
+                this.#t("Delete the reference {0}?", { "0": reference.name }),
                 this.#t("Reference deleted."),
                 selected.id,
               ),
@@ -1564,6 +1566,7 @@ export function definePlannerElement(generation?: string): string {
               void this.#deleteRecord(
                 "planning_consequences",
                 consequence.id,
+                this.#t("Delete the consequence {0}?", { "0": consequence.title }),
                 this.#t("Consequence deleted."),
                 selected.id,
               ),
@@ -1619,6 +1622,7 @@ export function definePlannerElement(generation?: string): string {
               void this.#deleteRecord(
                 "dm_notes",
                 note.id,
+                this.#t("Delete the DM note {0} and its private details?", { "0": note.title }),
                 this.#t("DM note deleted."),
                 selected.id,
               ),
@@ -1875,9 +1879,12 @@ export function definePlannerElement(generation?: string): string {
       if (!snapshot || this.#busy || this.#needsReload || (!items.length && !flows.length)) return;
       if (
         !confirm(
-          this.#t(
-            "Delete {0} selected items and {1} selected flows, including subtrees and attached annotations? Shared notes keep their other links. Surviving consequences keep their text and lose links to deleted items.",
-            { "0": items.length, "1": flows.length },
+          this.#withNoteLoss(
+            this.#t(
+              "Delete {0} selected items and {1} selected flows, including subtrees and attached annotations? Shared notes keep their other links. Surviving consequences keep their text and lose links to deleted items.",
+              { "0": items.length, "1": flows.length },
+            ),
+            notesDeletedWith(snapshot, items),
           ),
         )
       )
@@ -1891,9 +1898,12 @@ export function definePlannerElement(generation?: string): string {
       if (
         snapshot === undefined ||
         !confirm(
-          this.#t(
-            "Delete {0} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links. Surviving consequences keep their text and lose links to deleted items.",
-            { "0": item.title },
+          this.#withNoteLoss(
+            this.#t(
+              "Delete {0} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links. Surviving consequences keep their text and lose links to deleted items.",
+              { "0": item.title },
+            ),
+            notesDeletedWith(snapshot, [item.id]),
           ),
         )
       )
@@ -1901,6 +1911,11 @@ export function definePlannerElement(generation?: string): string {
       await this.#mutate(async (runtime) => {
         this.#undoDelete = await runtime.repository.deleteSubtree(snapshot, item.id);
       }, this.#t("Planning subtree deleted."));
+    }
+    #withNoteLoss(question: string, notes: number): string {
+      return notes === 0
+        ? question
+        : `${question} ${this.#t("{0} DM notes linked only to these items will be deleted too.", { "0": notes })}`;
     }
     async #undoDeletion(): Promise<void> {
       const undo = this.#undoDelete;
@@ -2138,25 +2153,22 @@ export function definePlannerElement(generation?: string): string {
       );
     }
     async #deleteRecord(
-      collection: string,
+      collection: Extract<
+        CollectionId,
+        "planning_references" | "planning_consequences" | "dm_notes"
+      >,
       id: string,
+      question: string,
       success: string,
       selectedId: string,
     ): Promise<void> {
-      const revision = this.#snapshot?.revisions.get(`${collection}:${id}`);
-      if (revision === undefined) {
-        this.#invalid(this.#t("This record changed or no longer exists. Reload the planner."));
-        return;
-      }
-      const mutation: DataMutation = {
-        operation: "delete",
-        kind: "collection",
-        dataId: collection,
-        key: id,
-        expectedRevision: revision,
-      };
+      if (this.#busy || this.#needsReload || !confirm(question)) return;
       await this.#mutate(
-        async (runtime, snapshot) => runtime.repository.transact(snapshot, [mutation]),
+        async (runtime, snapshot) => {
+          this.#undoDelete = await runtime.repository.deleteRecords(snapshot, [
+            { dataId: collection, key: id },
+          ]);
+        },
         success,
         selectedId,
         `${collection}:${id}`,

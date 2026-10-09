@@ -259,6 +259,18 @@ export function validatePlanning(
   return [...new Set(issues)];
 }
 
+/** Counts the notes deleted with these items because they lose every anchor. */
+export function notesDeletedWith(
+  dataset: Pick<PlanningDataset, "items" | "notes">,
+  rootIds: readonly string[],
+): number {
+  const ids = new Set<string>();
+  for (const id of rootIds) for (const child of subtreeIds(dataset.items, id)) ids.add(child);
+  return dataset.notes.filter(
+    (note) => note.anchorIds.length > 0 && note.anchorIds.every((id) => ids.has(id)),
+  ).length;
+}
+
 // Tags are unique ignoring case, like the importer requires; the first
 // spelling wins.
 export function parseTags(text: string): string[] {

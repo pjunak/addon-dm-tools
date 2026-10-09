@@ -135,6 +135,7 @@ Build the complete cleanup before submitting one transaction:
 | Delete flow | The flow and its anchored consequences |
 | Delete item/subtree | Descendants, incident flows and consequences, owned/incoming planning references, affected notes and layouts |
 | Delete overlapping selection | Union of selected subtrees and explicitly selected flows, without duplicate mutations |
+| Delete note, reference or consequence | That one record |
 | Reset layout | Empty positions map in the current scope's existing revision-bearing view |
 
 Subtree cleanup removes deleted-item positions from surviving views and deletes

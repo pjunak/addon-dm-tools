@@ -170,6 +170,12 @@ export const plannerCs = {
   "Delete {0} and its subtree, attached flows and consequences, and incoming planning references? Shared notes will keep their other links. Surviving consequences keep their text and lose links to deleted items.":
     "Odstranit „{0}“ a jeho podstrom, připojené návaznosti a následky i příchozí plánovací odkazy? Sdílené poznámky si zachovají ostatní vazby. Ponechaným následkům zůstane text, ale ztratí odkazy na odstraněné položky.",
   "Planning subtree deleted.": "Plánovací podstrom byl odstraněn.",
+  "{0} DM notes linked only to these items will be deleted too.":
+    "Odstraní se i poznámky DM navázané jen na tyto položky (počet: {0}).",
+  "Delete the reference {0}?": "Odstranit odkaz „{0}“?",
+  "Delete the consequence {0}?": "Odstranit následek „{0}“?",
+  "Delete the DM note {0} and its private details?":
+    "Odstranit poznámku DM „{0}“ i její soukromé podrobnosti?",
   "Deletion undone.": "Odstranění bylo vráceno.",
   "Reset the positions on this canvas? Items, links and other canvases will stay unchanged.":
     "Obnovit pozice na tomto plátně? Položky, vazby i ostatní plátna zůstanou beze změny.",

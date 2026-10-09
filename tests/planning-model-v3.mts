@@ -5,6 +5,7 @@ import {
   directChildren,
   localFlows,
   newItem,
+  notesDeletedWith,
   parseTags,
   subtreeIds,
   validateItemEdit,
@@ -263,4 +264,21 @@ void test("consequence planning targets must exist while optional and foreign ta
 
 test("tags are unique ignoring case and keep the first spelling", () => {
   assert.deepEqual(parseTags(" NPC, villain ,npc,, Villain ,Žena"), ["NPC", "villain", "Žena"]);
+});
+
+test("item deletion counts only notes that lose every anchor", () => {
+  const items = [
+    { ...newItem("quest", null), id: "quest-a" },
+    { ...newItem("event", "quest-a"), id: "event-a" },
+    { ...newItem("quest", null), id: "quest-b" },
+  ];
+  const note = (id: string, anchorIds: string[]) =>
+    ({ id, schemaVersion: 3, title: id, body: "", anchorIds, updatedAt: 1 }) as DmNote;
+  const notes = [
+    note("only-child", ["event-a"]),
+    note("shared", ["event-a", "quest-b"]),
+    note("unanchored", []),
+  ];
+  assert.equal(notesDeletedWith({ items, notes }, ["quest-a"]), 1);
+  assert.equal(notesDeletedWith({ items, notes }, ["quest-a", "quest-b"]), 2);
 });

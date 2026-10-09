@@ -170,9 +170,11 @@ It leaves cards, flow and other canvases intact.
 
 **Delete selection** reviews one combined deletion. Deleting a container also
 deletes its descendants, their flow and attached annotations, incoming planning
-references and saved positions. Shared notes keep their remaining anchors.
-Consequences anchored elsewhere keep their text; only their links to deleted
-planning items are cleared.
+references and saved positions. Shared notes keep their remaining anchors; a
+note linked only to deleted items is deleted too, and the confirmation counts
+those notes. Consequences anchored elsewhere keep their text; only their links
+to deleted planning items are cleared. Deleting a single note, reference or
+consequence from its form also asks first.
 
 Review the scope before confirming. **Undo last deletion** can restore the most
 recent planner deletion while that planner session remains mounted. It includes

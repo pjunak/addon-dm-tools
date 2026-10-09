@@ -21,7 +21,7 @@ import {
   type PlanningView,
 } from "./planning-model.js";
 
-type CollectionId =
+export type CollectionId =
   | "planning_items"
   | "planning_flow_links"
   | "planning_references"
@@ -191,8 +191,27 @@ export class PlanningRepository {
     for (const flow of snapshot.flows)
       if (ids.has(flow.sourceId) || ids.has(flow.targetId)) flowIds.add(flow.id);
     if (!ids.size && !flowIds.size) return;
-    const mutations = deletionMutations(snapshot, ids, flowIds),
-      receipt = await this.transact(snapshot, mutations);
+    return this.#deleteWithUndo(snapshot, deletionMutations(snapshot, ids, flowIds));
+  }
+  /** Deletes standalone annotations (notes, references, consequences). */
+  async deleteRecords(
+    snapshot: PlanningSnapshot,
+    records: readonly { readonly dataId: CollectionId; readonly key: string }[],
+  ): Promise<DeletionUndo | undefined> {
+    if (!records.length) return;
+    const mutations: DataMutation[] = records.map(({ dataId, key }) => {
+      const expectedRevision = snapshot.revisions.get(`${dataId}:${key}`);
+      if (expectedRevision === undefined)
+        throw new PlannerError("This record changed or no longer exists. Reload the planner.");
+      return { operation: "delete", kind: "collection", dataId, key, expectedRevision };
+    });
+    return this.#deleteWithUndo(snapshot, mutations);
+  }
+  async #deleteWithUndo(
+    snapshot: PlanningSnapshot,
+    mutations: readonly DataMutation[],
+  ): Promise<DeletionUndo> {
+    const receipt = await this.transact(snapshot, mutations);
     const original = recordsByCollection(snapshot);
     // Deleted keys retain tombstone revisions. Undo must never recreate at zero
     // or borrow newer revisions from a subsequently edited record.

@@ -864,3 +864,24 @@ void test("stored dangling consequence targets fail visibly without rewriting or
   );
   assert.deepEqual(dataset, before);
 });
+
+void test("single annotation deletes can be undone", async () => {
+  const { dataset, repository, writes, collections } = deletionFixture();
+  const note = dataset.notes[0];
+  assert.ok(note);
+  const undo = await repository.deleteRecords(dataset, [{ dataId: "dm_notes", key: note.id }]);
+  assert.ok(undo);
+  assert.deepEqual(
+    writes[0]?.map((write) => [write.operation, write.dataId, write.key]),
+    [["delete", "dm_notes", note.id]],
+  );
+  const after = applyWrites(dataset, writes[0]!, collections);
+  assert.equal(
+    after.notes.some((value) => value.id === note.id),
+    false,
+  );
+  await repository.undoDeletion(after, undo);
+  const restored = writes[1]?.[0];
+  assert.equal(restored?.operation, "put");
+  assert.equal(restored?.key, note.id);
+});
