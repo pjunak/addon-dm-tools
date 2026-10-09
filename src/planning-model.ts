@@ -79,6 +79,14 @@ export interface PlanningDataset {
   readonly views: readonly PlanningView[];
 }
 
+/** A planning record ID as the worker stores it; never an object-prototype name. */
+export function validPlanningId(value: string): boolean {
+  return (
+    /^[a-z0-9][a-z0-9._-]{0,119}$/u.test(value) &&
+    !["__proto__", "prototype", "constructor"].includes(value)
+  );
+}
+
 export function directChildren(
   items: readonly PlanningItem[],
   scopeId: string | null,

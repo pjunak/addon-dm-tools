@@ -1,5 +1,5 @@
 import { PlannerError } from "./planner-catalogs.js";
-import type { PlanningItem } from "./planning-model.js";
+import { validPlanningId, type PlanningItem } from "./planning-model.js";
 import { en, cs } from "./dashboard-catalogs.js";
 
 type DashboardItem = Pick<
@@ -74,8 +74,7 @@ export function plannerTarget(host: unknown): string | undefined {
     pair.length !== 2 ||
     pair[0] !== "item" ||
     typeof pair[1] !== "string" ||
-    !/^[a-z0-9][a-z0-9._-]{0,119}$/u.test(pair[1]) ||
-    ["__proto__", "prototype", "constructor"].includes(pair[1])
+    !validPlanningId(pair[1])
   )
     throw new PlannerError("Invalid planner link.");
   return pair[1];

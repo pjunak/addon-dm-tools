@@ -6,11 +6,9 @@ import {
 } from "./planner-catalogs.js";
 import { formText, messageBlock, scalarText, selectField, textField } from "./planner-fields.js";
 import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
+import { validPlanningId as validId } from "./planning-model.js";
 
 const coreCollections = ["characters", "factions", "locations", "mysteries", "artifacts", "events"];
-const validId = (value: string): boolean =>
-  /^[a-z0-9][a-z0-9._-]{0,119}$/u.test(value) &&
-  !["__proto__", "prototype", "constructor"].includes(value);
 type Target = Readonly<Record<string, unknown>>;
 type PlanningTargetItem = PlanningChoiceItem;
 export interface CoreReference {
