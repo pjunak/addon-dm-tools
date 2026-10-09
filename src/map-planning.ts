@@ -1,5 +1,4 @@
 import type { PlanningDataset } from "./planning-model.js";
-import { itemAnnotations } from "./planning-reader.js";
 import { dashboardLocale, plannerLink } from "./dashboard-model.js";
 import { plannerTranslator } from "./planner-catalogs.js";
 import { runtimeFor } from "./runtime.js";
@@ -26,13 +25,24 @@ export function relatedPlanning<
     target?.["scope"] === "core" &&
     target["collection"] === "locations" &&
     target["id"] === locationId;
-  return dataset.items.filter((item) => {
-    const annotations = itemAnnotations(dataset, item.id);
-    return (
-      annotations.references.some((value) => matches(value.target)) ||
-      annotations.consequences.some((value) => matches(value.target))
-    );
-  });
+  // An item relates to the location through its own references, or through a
+  // consequence anchored to it or to a flow it starts or ends, as in
+  // itemAnnotations. Collect those items in one pass over each list.
+  const related = new Set<string>();
+  for (const reference of dataset.references)
+    if (matches(reference.target)) related.add(reference.itemId);
+  const flowItems = new Map(dataset.flows.map((flow) => [flow.id, flow]));
+  for (const consequence of dataset.consequences) {
+    if (!matches(consequence.target)) continue;
+    const anchor = consequence.anchor;
+    if (anchor["scope"] === "item") {
+      if (typeof anchor["itemId"] === "string") related.add(anchor["itemId"]);
+    } else {
+      const flow = flowItems.get(anchor["flowId"] as string);
+      if (flow) related.add(flow.sourceId).add(flow.targetId);
+    }
+  }
+  return dataset.items.filter((item) => related.has(item.id));
 }
 
 function locationId(host: unknown): string | undefined {
