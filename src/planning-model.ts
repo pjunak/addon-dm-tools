@@ -310,6 +310,14 @@ export function newItem(
     updatedAt: now,
   };
 }
+// Planning IDs allow 120 characters, so "scope-" plus a long item ID can exceed
+// that. Such IDs keep a readable prefix and a stable hash of the full ID.
 export function scopeViewId(scopeId: string | null): string {
-  return scopeId === null ? "scope-root" : `scope-${scopeId}`;
+  if (scopeId === null) return "scope-root";
+  const id = `scope-${scopeId}`;
+  if (id.length <= 120) return id;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < scopeId.length; index++)
+    hash = Math.imul(hash ^ scopeId.charCodeAt(index), 0x01000193);
+  return `scope-${scopeId.slice(0, 100)}-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }

@@ -307,8 +307,8 @@ export class PlanningRepository {
       if (!Number.isFinite(point.x) || !Number.isFinite(point.y))
         throw new PlannerError("Canvas positions must be finite numbers.");
     }
-    const id = scopeViewId(scopeId);
-    const current = snapshot.views.find((view) => view.id === id);
+    const current = snapshot.views.find((view) => view.scopeId === scopeId);
+    const id = current?.id ?? scopeViewId(scopeId);
     const next: PlanningView = {
       id,
       schemaVersion: 3,

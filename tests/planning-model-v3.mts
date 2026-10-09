@@ -7,6 +7,7 @@ import {
   newItem,
   notesDeletedWith,
   parseTags,
+  scopeViewId,
   subtreeIds,
   validateItemEdit,
   validatePlanning,
@@ -281,4 +282,14 @@ test("item deletion counts only notes that lose every anchor", () => {
   ];
   assert.equal(notesDeletedWith({ items, notes }, ["quest-a"]), 1);
   assert.equal(notesDeletedWith({ items, notes }, ["quest-a", "quest-b"]), 2);
+});
+
+test("canvas view IDs stay valid for the longest item IDs", () => {
+  assert.equal(scopeViewId(null), "scope-root");
+  assert.equal(scopeViewId("quest-a"), "scope-quest-a");
+  const long = "q".repeat(120);
+  const id = scopeViewId(long);
+  assert.match(id, /^[a-z0-9][a-z0-9._-]{0,119}$/);
+  assert.equal(id, scopeViewId(long));
+  assert.notEqual(id, scopeViewId("q".repeat(119) + "r"));
 });
