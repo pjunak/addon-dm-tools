@@ -137,11 +137,9 @@ A change anywhere in the planning dataset, including a layout changed in another
 canvas, can invalidate the preview. This protects against unseen children and
 new references as well as edits to listed records. An empty plan issues no
 transaction. Invalid stored planning data must be repaired explicitly; importing
-does not silently discard it. This includes dangling consequence targets saved
-by older builds: the planner and importer report the affected consequence IDs
-and leave their text intact. Before upgrading a campaign with that error,
-preserve a verified backup and arrange an explicit correction of those records;
-neither replacement import nor this update is an automatic repair procedure.
+does not silently discard it. This includes dangling consequence targets: the
+planner and importer report the affected consequence IDs and leave their text
+intact. Fix those entries by hand; replacement import is not a repair procedure.
 
 Leaving the page cancels local work and discards its visible review. Unchanged
 host context and language-only changes preserve it. Controls use English/Czech
@@ -153,7 +151,7 @@ The [service schemas](../contracts/import-adapter.service.json),
 
 ## Campaign bundles
 
-The host now advertises `ttrpg-codex-campaign-bundle` schema 1 through the same
+The host advertises `ttrpg-codex-campaign-bundle` schema 1 through the same
 chooser. Its review includes reserved core IDs, resulting DM/player text and
 scoped planning changes. Review both views: public prose is not scanned for
 secrets. The host owns core validation and commits the exact combined plan in
@@ -172,6 +170,5 @@ unreachable/abandoned previews expire after 15 minutes or restart. If a commit
 reply is lost, the page reads the saved receipt and offers **Check import result**
 while the outcome remains uncertain. This action never resubmits writes. A failed
 receipt requires a new preview; a missing receipt alone is not proof of failure.
-The existing standalone planning adapter still requires checking saved data after
-an ambiguous reply. Rebuild and review/activate the package to install these UI
-and contributor changes.
+The standalone planning adapter requires checking saved data after an ambiguous
+reply.
