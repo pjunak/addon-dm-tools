@@ -306,5 +306,5 @@ globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
     restoredDialog.getAttribute("aria-label"),
     "Edit planning item",
   );
-  return { name: "DM Tools planner v3 rendering", checks };
+  return { name: "DM Tools planner rendering", checks };
 };

@@ -26,7 +26,7 @@ void test("compiled entry binds planner and import routes and disposes idempoten
   });
   try {
     const compiledEntry = new URL("../web/index.js", import.meta.url);
-    compiledEntry.searchParams.set("smoke-v3", "1");
+    compiledEntry.searchParams.set("smoke", "1");
     const { activate } = (await import(compiledEntry.href)) as {
       activate: (context: unknown) => Promise<{ dispose(): void }>;
     };
