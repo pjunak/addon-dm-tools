@@ -93,8 +93,10 @@ const dataRevisions: FixtureSnapshot["dataRevisions"] = collectionIds.map((dataI
 }));
 const receipt = (mutations: readonly FixtureMutation[]) => ({
   results: mutations.map((mutation) => ({
+    kind: mutation.kind,
     dataId: mutation.dataId,
     key: mutation.key,
+    beforeRevision: mutation.expectedRevision,
     afterRevision: mutation.expectedRevision + 1,
     deleted: mutation.operation === "delete",
   })),

@@ -30,12 +30,16 @@ export type CollectionId =
   | "planning_views";
 export type PlanningRecord =
   PlanningItem | PlanningFlow | PlanningReference | PlanningConsequence | DmNote | PlanningView;
+/** The part of the host's data API the repository uses. */
 interface PlanningRepositoryContext {
   readonly signal: AbortSignal;
   readonly data: {
     readonly subscribe?: AddonContext["data"]["subscribe"];
     collection(id: string): Pick<CollectionHandle<PlanningRecord>, "query">;
-    readonly transact: AddonContext["data"]["transact"];
+    transact(
+      mutations: readonly DataMutation[],
+      options?: Parameters<AddonContext["data"]["transact"]>[1],
+    ): Promise<Pick<CommitReceipt, "results">>;
   };
 }
 export interface PlanningSnapshot extends PlanningDataset {
@@ -141,7 +145,7 @@ export class PlanningRepository {
   async transact(
     snapshot: PlanningSnapshot,
     mutations: readonly DataMutation[],
-  ): Promise<CommitReceipt> {
+  ): Promise<Pick<CommitReceipt, "results">> {
     const guards = snapshot.dataRevisions;
     if (
       !Array.isArray(guards) ||

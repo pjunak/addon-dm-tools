@@ -94,18 +94,33 @@ const repository = new PlanningRepository({
   },
 });
 const adapters: ServiceHandle = {
+  contract: "codex.import-adapter",
+  range: ">=2.0.0 <4.0.0",
+  cardinality: "many",
   available: false,
   providers: [],
   async call<T>(): Promise<T> {
     throw new Error("No adapters in rendering fixture");
   },
 };
+const declaration = {
+  id: "planner.route",
+  surface: "route",
+  label: "Planner",
+  roles: ["dm"],
+  order: 0,
+  requires: [],
+  config: {},
+} as const;
 const ui: AddonContext["ui"] = {
   enhance() {
     return { refresh() {}, dispose() {} };
   },
-  bind() {
-    return { dispose() {} };
+  async showRuleDetails() {},
+  declarations: () => [],
+  bind(_id, binding) {
+    void binding;
+    return { descriptor: declaration, dispose() {} };
   },
 };
 const generation = "a".repeat(64);
@@ -115,9 +130,10 @@ definePlannerElement();
 const planner = document.createElement("dm-tools-planner-page");
 const contribution: ContributionContext = {
   addon: { id: "dm-tools", generation },
-  contribution: { id: "planner.route", config: {} },
+  contribution: declaration,
   signal,
   edits: { set() {} },
+  host: { contractVersion: "addon-route-context.v1", locale: "en", query: [] },
 };
 planner.codexContribution = contribution;
 requiredElement(document, "#fixture", HTMLElement).append(planner);
