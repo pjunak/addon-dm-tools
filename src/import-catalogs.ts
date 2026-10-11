@@ -66,6 +66,14 @@ export const en = {
   dropHint: "Drop a JSON file here, or choose one below. Maximum 2 MiB.",
   collection: "Collection",
   record: "Record",
+  "export.title": "Planning export",
+  "export.body":
+    "Download the current story plans as a dm-tools-planning merge file. It gives an author or agent the exact IDs and timestamps for new content and updates. Importing it unchanged changes nothing; layouts are not included.",
+  "export.action": "Download planning data",
+  exporting: "Reading current planning…",
+  exported:
+    "Downloaded {file}. It contains private DM planning; share it only with tools you trust.",
+  exportFailed: "Could not read the current planning. Try again; nothing was downloaded.",
 } as const;
 export const cs: Record<keyof typeof en, string> = {
   checkResult: "Ověřit výsledek importu",
@@ -135,4 +143,12 @@ export const cs: Record<keyof typeof en, string> = {
   dropHint: "Přetáhněte sem soubor JSON nebo jej vyberte níže. Nejvýše 2 MiB.",
   collection: "Kolekce",
   record: "Záznam",
+  "export.title": "Export plánování",
+  "export.body":
+    "Stáhněte aktuální příběhové plány jako slučovací soubor dm-tools-planning. Autor nebo agent v něm najde přesná ID a časová razítka pro nový obsah i úpravy. Import beze změn nic nezmění; rozložení plátna není součástí.",
+  "export.action": "Stáhnout data plánování",
+  exporting: "Načítá se aktuální plánování…",
+  exported:
+    "Staženo: {file}. Obsahuje soukromé plánování PJ; sdílejte jej jen s nástroji, kterým důvěřujete.",
+  exportFailed: "Aktuální plánování se nepodařilo načíst. Zkuste to znovu; nic nebylo staženo.",
 };

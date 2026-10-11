@@ -2,6 +2,8 @@ import { actionButton, messageBlock } from "./planner-fields.js";
 import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
 import { dashboardLocale } from "./dashboard-model.js";
+import { downloadFile } from "./download.js";
+import { planningExport, planningExportName } from "./planning-export.js";
 import {
   ImportProblem,
   importText,
@@ -17,7 +19,7 @@ import {
 } from "./import-model.js";
 
 export const importElementTag = "dm-tools-import-center";
-type Phase = "idle" | "discovering" | "previewing" | "committing";
+type Phase = "idle" | "discovering" | "previewing" | "committing" | "exporting";
 
 export function defineImportElement(generation?: string): string {
   const tag = generation ? `${importElementTag}-${generation}` : importElementTag;
@@ -311,7 +313,44 @@ export function defineImportElement(generation?: string): string {
         supported.append(card);
       }
       chooser.append(supported);
+      const exporter = node(document, "section", "dm-import-export"),
+        exportHead = node(document, "div", "dm-import-section-head");
+      exportHead.append(node(document, "h2", "", this.#t("export.title")));
+      const download = actionButton(document, this.#t("export.action"), () => void this.#export());
+      download.disabled = this.#phase !== "idle";
+      exportHead.append(download);
+      exporter.append(exportHead, node(document, "p", "dm-import-hint", this.#t("export.body")));
+      chooser.append(exporter);
       return chooser;
+    }
+
+    async #export(): Promise<void> {
+      const runtime = this.#runtime;
+      if (!runtime || this.#phase !== "idle") return;
+      const request = this.#startRequest();
+      this.#setPhase("exporting");
+      this.#notice("exporting");
+      this.#render();
+      try {
+        const snapshot = await runtime.repository.load(this.#signal(runtime, request));
+        if (!this.#current(runtime, request)) return;
+        const now = new Date(),
+          name = planningExportName(now);
+        downloadFile(
+          this.ownerDocument,
+          `${JSON.stringify(planningExport(snapshot, now.getTime()), null, 2)}\n`,
+          name,
+          "application/json;charset=utf-8",
+        );
+        this.#notice("exported", "status", { file: name });
+      } catch {
+        if (this.#current(runtime, request)) this.#notice("exportFailed", "alert");
+      } finally {
+        if (this.#current(runtime, request)) {
+          this.#setPhase("idle");
+          this.#render();
+        }
+      }
     }
 
     #renderPreview(document: Document, preview: ImportPreview, adapter: Adapter): HTMLElement {

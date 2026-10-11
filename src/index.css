@@ -537,7 +537,8 @@
   letter-spacing: 0.05em;
 }
 .dm-import-chooser,
-.dm-import-adapters {
+.dm-import-adapters,
+.dm-import-export {
   display: grid;
   gap: var(--space-5, 1.25rem);
   min-width: 0;

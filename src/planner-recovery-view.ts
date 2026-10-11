@@ -1,4 +1,5 @@
 import type { PlannerTranslator } from "./planner-catalogs.js";
+import { downloadFile } from "./download.js";
 import { messageBlock } from "./planner-fields.js";
 
 export function recoveryPanel(
@@ -53,15 +54,5 @@ export function recoveryPanel(
 }
 
 export function downloadDrafts(document: Document, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "planner-drafts.txt";
-  try {
-    document.body.append(link);
-    link.click();
-  } finally {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
+  downloadFile(document, text, "planner-drafts.txt", "text/plain;charset=utf-8");
 }
