@@ -1,0 +1,68 @@
+{
+  "format": "dm-tools-planning",
+  "schemaVersion": 3,
+  "generatedAt": 1785024030000,
+  "mode": "merge",
+  "items": [
+    {
+      "operation": "update",
+      "id": "example-plotline",
+      "schemaVersion": 3,
+      "kind": "plotline",
+      "parentId": null,
+      "title": "The missing courier",
+      "summary": "Find the courier and recover the message.",
+      "body": "",
+      "objective": "",
+      "setup": "",
+      "resolution": "",
+      "tags": [],
+      "expectedUpdatedAt": 1785024000000
+    },
+    {
+      "operation": "update",
+      "id": "example-find-courier",
+      "schemaVersion": 3,
+      "kind": "quest",
+      "parentId": "example-plotline",
+      "title": "Find the courier",
+      "summary": "Follow the trail to the old bridge.",
+      "body": "",
+      "objective": "",
+      "setup": "",
+      "resolution": "",
+      "tags": [],
+      "expectedUpdatedAt": 1785024000000
+    },
+    {
+      "operation": "update",
+      "id": "example-recover-message",
+      "schemaVersion": 3,
+      "kind": "quest",
+      "parentId": "example-plotline",
+      "title": "Recover the message",
+      "summary": "Retrieve the courier's sealed letter.",
+      "body": "",
+      "objective": "",
+      "setup": "",
+      "resolution": "",
+      "tags": [],
+      "expectedUpdatedAt": 1785024000000
+    }
+  ],
+  "flowLinks": [
+    {
+      "operation": "update",
+      "id": "example-next-quest",
+      "schemaVersion": 3,
+      "sourceId": "example-find-courier",
+      "targetId": "example-recover-message",
+      "kind": "continues",
+      "label": "Once the courier is found",
+      "expectedUpdatedAt": 1785024000000
+    }
+  ],
+  "references": [],
+  "consequences": [],
+  "notes": []
+}
