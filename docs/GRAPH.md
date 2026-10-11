@@ -39,7 +39,9 @@ internal imports are outside the contract.
 | --- | --- |
 | [contracts/](../contracts/) | Closed stored-record and service schemas |
 | [internal/planning/](../internal/planning/) | Authoritative import normalization and complete-dataset validation |
-| [internal/importer/](../internal/importer/) | Retained preview plans and exact single-use commit |
+| [internal/importer/](../internal/importer/) | Retained preview plans, exact single-use commit and the offline check |
+| [cmd/check-plan/](../cmd/check-plan/) | Command-line offline preview for authors |
+| [planning-export.ts](../src/planning-export.ts) | Current planning as an importable merge document |
 | [planning-model.ts](../src/planning-model.ts) | Browser projection and defensive graph validation |
 | [planning-repository.ts](../src/planning-repository.ts) | Browser persistence, full snapshots, guarded writes and cleanup |
 | [planner-element.ts](../src/planner-element.ts) | Planner composition, forms and DOM/SVG rendering |

@@ -5,7 +5,7 @@ Codex. The DM overview shows planning totals, shortcuts and recent items.
 English and Czech controls follow the host language.
 
 Planner and Import Center controls use the host's required `ui.controls.v1`
-[shared UI contract](../ttrpg-codex/docs/reference/UI_FOUNDATIONS.md). The host owns
+[shared UI contract](https://github.com/pjunak/ttrpg-codex/blob/main/docs/reference/UI_FOUNDATIONS.md). The host owns
 fields, searchable choices, actions, notices and dialog/tab interaction; this
 package owns planning geometry, imports and draft/save policy.
 
@@ -28,7 +28,10 @@ writes and conflict handling.
 ## Import planning
 
 In the Import Center, choose or drop a JSON file, review the proposed changes
-and warnings, then apply the exact reviewed plan. Providers advertise supported
+and warnings, then apply the exact reviewed plan. **Download planning data**
+saves the current plans as an importable merge document, the baseline for
+writing new content by hand or with an agent. `go run ./cmd/check-plan` runs
+the importer's validation on a file offline. Providers advertise supported
 formats through `codex.import-adapter` v2. Ambiguous formats are blocked;
 missing import providers do not prevent ordinary planner editing.
 
@@ -37,8 +40,9 @@ review through one host transaction. Concurrent changes require another review;
 there is no silent merge.
 
 - [Import Center workflow, update rules and recovery](docs/IMPORTING.md)
-- [Prepare context and generate planning JSON](docs/AGENT_GENERATION.md)
-- [Complete annotated story example](docs/examples/planning-context.json) and
+- [Prepare context, generate and check planning JSON](docs/AGENT_GENERATION.md)
+- [Complete annotated story example](docs/examples/planning-context.json),
+  [a planning export](docs/examples/planning-export.json) and
   [a complete-record update](docs/examples/planning-update.json)
 
 ## Data and ownership

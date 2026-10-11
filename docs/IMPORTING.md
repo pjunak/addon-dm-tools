@@ -8,9 +8,23 @@ For creating a planning document, start with
 [Generating importable planning content](AGENT_GENERATION.md). For editing
 saved plans, see the [planner guide](PLANNER.md).
 
+## Export current planning
+
+**Download planning data**, below the supported document types, saves
+`dm-tools-planning-<date>.json`. It is a valid merge document in which every
+planning record is an `update` carrying its stored timestamp as
+`expectedUpdatedAt`. Give it to whoever writes the next document: it supplies
+exact IDs, parents and update baselines, and it is the baseline for
+`go run ./cmd/check-plan`. Importing it unchanged reports every record as
+unchanged and writes nothing.
+
+The export holds the DM's private planning text. It does not include saved
+canvas layouts, core campaign records or other add-ons' data. It is a working
+copy for authoring, not a backup. Download a fresh one after every commit.
+
 ## Import a planning document
 
-1. Sign in as DM and open **Import Center** from the DM overview.
+1. Sign in as DM and open **Import Center** from the sidebar or the DM overview.
 2. Check **Supported document types**. The planning provider advertises
    `dm-tools-planning`. Use **Refresh available formats** if a newly enabled
    provider is missing or discovery failed.
@@ -52,7 +66,7 @@ rest of that annotation. Preview rejects dangling targets without changing data.
 
 Only formats advertised by available providers are supported. A character
 transfer belongs in the character workspace; a full backup belongs in the host's
-[backup and recovery workflow](../../ttrpg-codex/docs/SELF_HOSTING.md#backups).
+[backup and recovery workflow](https://github.com/pjunak/ttrpg-codex/blob/main/docs/SELF_HOSTING.md#backups).
 Do not rename a document's `format` to make the planning importer accept it.
 
 ## Merge and replacement
@@ -102,6 +116,7 @@ observed timestamp. Example timestamps are fixtures, not values for a campaign.
 
 | Situation | Next step |
 | --- | --- |
+| Preview fails without saying why | Run `go run ./cmd/check-plan file.json export.json` against a fresh export; it prints the importer's reason |
 | Invalid JSON, unknown field or unsupported schema | Correct the document; do not remove `format` or guess another version |
 | Unsupported format | Enable the intended provider and refresh discovery |
 | More than one provider claims a format | Resolve the ambiguity; the page will not choose arbitrarily |
@@ -155,7 +170,10 @@ The host advertises `ttrpg-codex-campaign-bundle` schema 1 through the same
 chooser. Its review includes reserved core IDs, resulting DM/player text and
 scoped planning changes. Review both views: public prose is not scanned for
 secrets. The host owns core validation and commits the exact combined plan in
-one SQLite transaction. See the host's [format and authority contract](../../ttrpg-codex/docs/decisions/0001-campaign-bundle-imports.md).
+one SQLite transaction. Write bundles with the host's
+[campaign bundle guide](https://github.com/pjunak/ttrpg-codex/blob/main/docs/reference/CAMPAIGN_BUNDLES.md);
+its [decision record](https://github.com/pjunak/ttrpg-codex/blob/main/docs/decisions/0001-campaign-bundle-imports.md)
+explains the authority model.
 
 To include planning, add an `addonImports` entry with `addonId: "dm-tools"`,
 `contributorId: "planning-json"` and a current `dm-tools-planning` document.

@@ -16,10 +16,10 @@ before changing code or generating a document.
 | --- | --- |
 | Setup, commands or package boundaries | [README.md](README.md) |
 | Use or explain the planner | [Planner guide](docs/PLANNER.md) |
-| Create importable story context from notes, conversation or an agent brief | [Content-generation guide](docs/AGENT_GENERATION.md), including its context brief and worked examples |
+| Create importable story context from notes, conversation or an agent brief | [Content-generation guide](docs/AGENT_GENERATION.md): workflow, brief, field limits, `check-plan` and worked examples |
 | Prepare an update, review an import, or change preview/commit | [Import Center guide](docs/IMPORTING.md) |
 | Change ownership, flow, annotations, layout, drafts or persistence | [Graph contract](docs/GRAPH.md) and the relevant [schemas](contracts/) |
-| Change the planning JSON format | Content-generation and Import Center guides, schemas, Go importer and documented-example tests |
+| Change the planning JSON format | Content-generation and Import Center guides, schemas, Go importer, export (`src/planning-export.ts`) and documented-example tests |
 | Change host integration, manifests, permissions or lifecycle | The host's [add-on guide](https://github.com/pjunak/ttrpg-codex/blob/main/examples/addons/AUTHORING.md) and [API reference](https://github.com/pjunak/ttrpg-codex/blob/main/examples/addons/API_V3.md) |
 
 The repository builds from a plain clone; the host's worker SDK is an ordinary
@@ -32,8 +32,9 @@ Go module requirement. Tasks for all repositories live in the host's
   and preservation requirements. Use the guide's brief to identify missing
   context. Continue independent work while a required identity or baseline is
   unavailable; never invent an existing record ID, timestamp or validation result.
-- Use current authorized records for existing parents, targets and updates.
-  Include enough surrounding graph to reason about ownership and flow.
+- Take existing IDs, parents and update baselines from a current planning
+  export (Import Center → **Download planning data**). Include enough
+  surrounding graph to reason about ownership and flow.
   Keep secrets and unrelated campaign dumps out of the authoring context.
 - Default to a reviewable merge. An update is a complete record: preserve every
   field outside the requested edit and use its exact stored timestamp. Do not
@@ -46,9 +47,9 @@ Go module requirement. Tasks for all repositories live in the host's
   layouts are deleted. Follow the user's existing authorization; do not invent
   an additional approval checkpoint.
 - Deliver the JSON separately from assumptions, change scope and validation
-  results. Check the actual candidate, not just a similar sample. Syntax checks
-  and repository fixture tests do not prove that a user document will preview
-  against current campaign data.
+  results. Check the actual candidate with `go run ./cmd/check-plan plan.json
+  export.json` until it prints `VALID`. That check cannot see edits made after
+  the export; the Import Center preview remains the final check.
 - Preparing a file or obtaining a preview is not authorization to commit it.
   Apply only within the user's authorized scope. If the commit outcome is
   uncertain, inspect current data before another attempt.
@@ -61,9 +62,9 @@ authoritative import validation in `internal/planning`, and retained preview
 plans in `internal/importer`. The provider-neutral Import Center routes only
 through advertised formats and broker handles.
 
-`cmd/worker` is the native composition root. Stdout is reserved for framed RPC;
-diagnostics go to stderr. JSON schemas under `contracts/` define activation and
-write boundaries.
+`cmd/worker` is the native composition root. Its stdout is reserved for framed
+RPC; diagnostics go to stderr. `cmd/check-plan` runs the same preview offline.
+JSON schemas under `contracts/` define activation and write boundaries.
 
 - Planning schema version 3 is the only runtime format. Do not add a permanent
   legacy compatibility layer.
@@ -94,11 +95,12 @@ go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-<version>.zip
 Run `npx playwright install chromium` if the browser is missing. The Chromium
 planner contract must follow intentional card, flow and layout changes.
 `npm run check:go`, `check:workflows`, `check:vulnerabilities` and
-`check:dependencies` run the remaining CI modes. To try a documented planning
-example through the real importer:
+`check:dependencies` run the remaining CI modes. To run the documented planning
+examples or a single planning file through the real importer:
 
 ```text
-go test ./internal/importer -run TestDocumentedPlanningExamples
+go test ./internal/importer -run 'TestDocumentedPlanningExamples|TestCheck'
+go run ./cmd/check-plan plan.json [planning-export.json]
 ```
 
 `web/`, `worker/` and `dist/` are ignored build output; never hand-edit them.

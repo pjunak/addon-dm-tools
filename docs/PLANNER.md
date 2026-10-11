@@ -182,7 +182,7 @@ the affected notes, layouts and cleared consequence links, and refuses to
 overwrite later changes to those records. It is not an undo history, and it does not undo imports or reset layouts.
 
 For larger recovery needs, use the host's
-[backup and recovery workflow](../../ttrpg-codex/docs/SELF_HOSTING.md#backups).
+[backup and recovery workflow](https://github.com/pjunak/ttrpg-codex/blob/main/docs/SELF_HOSTING.md#backups).
 [Replacement imports](IMPORTING.md#merge-and-replacement) can delete the entire
 DM Tools planning dataset and all layouts; they are not a targeted delete tool.
 
