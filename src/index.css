@@ -36,9 +36,8 @@
   border: 1px solid var(--border-subtle, #ffffff12);
   border-radius: var(--radius, 6px);
 }
-.dm-dashboard-tile.accent {
-  border-color: rgba(var(--accent-gold-rgb, 200, 160, 64), 0.35);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-gold-rgb, 200, 160, 64), 0.08);
+.dm-dashboard-tile.accent .dm-dashboard-value {
+  color: var(--accent-gold, #c8a040);
 }
 .dm-dashboard-label {
   font-size: 0.75rem;
@@ -60,15 +59,18 @@
 .dm-dashboard-workflows a {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.25rem;
-  padding: 1rem 0.75rem;
+  padding: 1rem;
   background: var(--bg-surface, #1c1509);
   border: 1px solid var(--border-subtle, #ffffff12);
   border-radius: var(--radius-lg, 12px);
   color: var(--accent-gold, #c8a040);
   text-decoration: none;
-  text-align: center;
+  text-align: start;
+}
+.dm-dashboard-workflows a strong::after {
+  content: " →";
 }
 .dm-dashboard-recent {
   display: grid;

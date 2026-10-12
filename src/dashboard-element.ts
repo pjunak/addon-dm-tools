@@ -138,12 +138,14 @@ export function defineDashboardElement(generation: string): string {
         }
         overview.append(totals);
       }
-      const refresh = document.createElement("button");
-      refresh.className = "dm-dashboard-refresh";
-      refresh.textContent = t("dashboard.refresh");
-      refresh.disabled = this.#status === "loading";
-      refresh.addEventListener("click", () => void this.#load());
-      overview.append(refresh);
+      // Planning changes refresh the overview live; a manual retry is only for failures.
+      if (this.#status === "error") {
+        const retry = document.createElement("button");
+        retry.className = "dm-dashboard-refresh";
+        retry.textContent = t("dashboard.refresh");
+        retry.addEventListener("click", () => void this.#load());
+        overview.append(retry);
+      }
       root.append(overview);
       const addonId = this.#context?.addon.id ?? "dm-tools";
       const workflows = section("dashboard.workflow.title");

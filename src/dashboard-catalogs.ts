@@ -1,5 +1,5 @@
 export const en = {
-  "dashboard.refresh": "Refresh overview",
+  "dashboard.refresh": "Try again",
   "planner.kind.plotline": "Plotline",
   "planner.kind.quest": "Quest",
   "planner.kind.event": "Event",
@@ -39,7 +39,7 @@ export const en = {
   "dashboard.unnamed": "Untitled planning item",
 } as const;
 export const cs = {
-  "dashboard.refresh": "Obnovit přehled",
+  "dashboard.refresh": "Zkusit znovu",
   "planner.kind.plotline": "Dějová linka",
   "planner.kind.quest": "Úkol",
   "planner.kind.event": "Událost",
