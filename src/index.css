@@ -176,7 +176,8 @@
   padding-inline: 0.35rem;
 }
 .dm-planner-breadcrumbs button + button::before {
-  content: "›";
+  /* Decorative: the empty alternative keeps it out of the button's name. */
+  content: "›" / "";
   margin-inline-end: 0.5rem;
   color: var(--text-muted, #9a8660);
 }
