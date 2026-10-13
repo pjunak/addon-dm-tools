@@ -564,14 +564,17 @@ export function definePlannerElement(generation?: string): string {
       root.append(header);
       if (this.#message !== "" && !this.#editorId)
         root.append(messageBlock(document, this.#message, this.#messageKind));
-      const refresh = actionButton(
-        document,
-        this.#t("Reload planner"),
-        () => void this.#reload(this.#t("Reloading planning data…")),
-      );
-      refresh.dataset["viewAction"] = "";
-      refresh.className = "dm-planner-refresh";
-      header.append(refresh);
+      // Planning changes arrive live; reloading is a recovery step after a failure.
+      if (this.#needsReload || (this.#message !== "" && this.#messageKind === "alert")) {
+        const refresh = actionButton(
+          document,
+          this.#t("Reload planner"),
+          () => void this.#reload(this.#t("Reloading planning data…")),
+        );
+        refresh.dataset["viewAction"] = "";
+        refresh.className = "dm-planner-refresh";
+        header.append(refresh);
+      }
       if (this.#recovery || this.#invalidRecovery !== undefined) {
         root.append(this.#recoveryPanel());
         oldDialog?.close();
