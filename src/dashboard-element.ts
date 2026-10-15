@@ -123,7 +123,8 @@ export function defineDashboardElement(generation: string): string {
         overview.append(element("h3", t("dashboard.error.title")), error);
       }
       const summary = this.#snapshot && summarizePlanning(this.#snapshot, this.#locale);
-      if (summary) {
+      // An empty campaign shows its "nothing stored yet" invitation, not a row of zeros.
+      if (summary && summary.counts.total > 0) {
         const totals = document.createElement("div");
         totals.className = "dm-dashboard-totals";
         for (const [key, count] of Object.entries(summary.counts)) {

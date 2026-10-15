@@ -280,7 +280,9 @@ and open the reader. Scope changes update browser history. Unchanged targets
 do not rebuild edited forms; invalid queries preserve an open view and its drafts.
 A missing saved target falls back to the campaign canvas with an explanation.
 
-Dashboard counts and recent links come from a validated snapshot. Each mounted
+Dashboard counts and recent links come from a validated snapshot; an empty
+campaign shows the invitation to create its first item instead of zero counts.
+Each mounted
 view owns its request lifetime; disconnect cancels that view's reads without
 aborting the activation generation. Custom-element definitions include the
 package generation so replacement cannot reuse old browser implementations.
