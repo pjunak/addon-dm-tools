@@ -176,7 +176,6 @@ export function defineImportElement(generation?: string): string {
       root.setAttribute("aria-busy", String(this.#phase !== "idle"));
       const heading = node(document, "header", "dm-import-heading");
       heading.append(
-        node(document, "p", "dm-import-meta", this.#t("center.kicker")),
         node(document, "h1", "", this.#t("center.title")),
         node(document, "p", "dm-import-hint", this.#t("center.intro")),
       );
@@ -235,7 +234,6 @@ export function defineImportElement(generation?: string): string {
       dropzone.append(
         icon,
         node(document, "h2", "", this.#t("center.chooseTitle")),
-        node(document, "p", "dm-import-hint", this.#t("center.chooseBody")),
         node(document, "p", "dm-import-hint", this.#t("dropHint")),
       );
       const input = document.createElement("input");

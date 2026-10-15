@@ -48,8 +48,8 @@ export const plannerCs = {
   "Invalid planner link.": "Neplatný odkaz do plánovače.",
   "Reload planner": "Obnovit plánovač",
   "Story Planner": "Plánovač příběhu",
-  "An editable tree of local story-flow canvases.":
-    "Upravitelný strom pláten s návaznostmi příběhu.",
+  "Plan plotlines and quests, each with its own canvas of events and branches.":
+    "Plánujte dějové linky a úkoly, každou s vlastním plátnem událostí a větvení.",
   "Reloading planning data…": "Obnovuji plánovací data…",
   "Reload the planner before making another change. Your edits are retained; review the saved data before retrying.":
     "Před další změnou obnovte plánovač. Úpravy zůstaly zachovány; před dalším pokusem zkontrolujte uložená data.",

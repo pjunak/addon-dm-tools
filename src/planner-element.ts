@@ -558,7 +558,9 @@ export function definePlannerElement(generation?: string): string {
       const title = document.createElement("h1");
       title.textContent = this.#t("Story Planner");
       const subtitle = document.createElement("p");
-      subtitle.textContent = this.#t("An editable tree of local story-flow canvases.");
+      subtitle.textContent = this.#t(
+        "Plan plotlines and quests, each with its own canvas of events and branches.",
+      );
       heading.append(title, subtitle);
       header.append(heading, this.#breadcrumbs(document, snapshot));
       root.append(header);
