@@ -714,11 +714,18 @@ export function definePlannerElement(generation?: string): string {
             this.#create(this.#newItem!.kind),
           ),
         );
-      const help = document.createElement("p");
+      // Each input gets its own instructions; CSS shows the one that fits the device.
+      const help = document.createElement("p"),
+        touchHelp = document.createElement("p");
+      help.className = "dm-planner-help-pointer";
       help.textContent = this.#t(
         "Click to select; Shift-click adds to the selection. Drag empty canvas to select a group. Double-click or Enter to edit. Shift+Enter opens a plotline or quest. Middle-drag or Alt-drag pans.",
       );
-      aside.append(help);
+      touchHelp.className = "dm-planner-help-touch";
+      touchHelp.textContent = this.#t(
+        "Tap a card to select it and drag it to move it. Swipe empty canvas to scroll.",
+      );
+      aside.append(help, touchHelp);
       return aside;
     }
 

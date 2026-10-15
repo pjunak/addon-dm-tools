@@ -63,6 +63,8 @@ export const plannerCs = {
   "Resume new item": "Pokračovat v nové položce",
   "Click to select; Shift-click adds to the selection. Drag empty canvas to select a group. Double-click or Enter to edit. Shift+Enter opens a plotline or quest. Middle-drag or Alt-drag pans.":
     "Kliknutím vyberete; Shift a kliknutí přidá k výběru. Tažením prázdného plátna vyberete skupinu. Dvojklik nebo Enter otevře editor. Shift+Enter otevře dějovou linku nebo úkol. Prostřední tlačítko nebo Alt a tažení posouvá pohled.",
+  "Tap a card to select it and drag it to move it. Swipe empty canvas to scroll.":
+    "Klepnutím kartu vyberete, tažením ji přesunete. Přejetím po prázdném plátně se posouváte.",
   "Story flow": "Návaznosti příběhu",
   "{0} to {1}": "{0} → {1}",
   "Needs details": "Chybí podrobnosti",

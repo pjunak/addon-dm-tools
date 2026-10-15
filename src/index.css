@@ -309,6 +309,17 @@
   overflow: hidden;
 }
 /* The canvas is wider than the view; keep the notice within what is visible. */
+.dm-planner-help-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .dm-planner-help-pointer {
+    display: none;
+  }
+  .dm-planner-help-touch {
+    display: block;
+  }
+}
 .dm-planner-stage > .empty {
   position: absolute;
   left: min(4rem, 5cqi);
