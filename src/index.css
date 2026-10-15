@@ -227,6 +227,7 @@
 .dm-planner-viewport {
   position: relative;
   overflow: auto;
+  container-type: inline-size;
   border: 1px solid var(--border-subtle, #ffffff12);
   border-radius: 0.7rem;
   background-color: var(--bg-base, #141008);
@@ -307,10 +308,12 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* The canvas is wider than the view; keep the notice within what is visible. */
 .dm-planner-stage > .empty {
   position: absolute;
-  left: 4rem;
-  top: 4rem;
+  left: min(4rem, 5cqi);
+  top: min(4rem, 5cqi);
+  max-width: min(32rem, calc(100cqi - 2 * min(4rem, 5cqi)));
 }
 .dm-planner-inspector form,
 .dm-planner-inspector section {
