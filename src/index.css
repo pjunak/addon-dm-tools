@@ -509,6 +509,70 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Stored problems stay above the canvas until they are repaired. */
+.dm-planner-issues {
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle, #ffffff12);
+  border-left: 4px solid var(--color-danger, #ef9a9a);
+  border-radius: 0.7rem;
+  background: var(--bg-surface, #1c1509);
+}
+.dm-planner-issues summary {
+  color: var(--color-danger, #ef9a9a);
+  font-weight: 600;
+  cursor: pointer;
+}
+.dm-planner-issues > p {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted, #9a8660);
+  font-size: 0.85rem;
+}
+.dm-planner-issues ul {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 18rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.dm-planner-issues li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border-subtle, #ffffff12);
+  border-radius: var(--radius, 6px);
+  background: var(--bg-raised, #241c0d);
+}
+.dm-planner-issues li p {
+  grid-column: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dm-planner-issues .dm-planner-issue-record {
+  color: var(--text-muted, #9a8660);
+  font-size: 0.82rem;
+}
+.dm-planner-issues li > [data-ui-actions] {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 0.4rem;
+}
+@media (max-width: 640px) {
+  .dm-planner-issues li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dm-planner-issues li > [data-ui-actions] {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: start;
+  }
+}
 .dm-planner-flow-label {
   fill: var(--text-parchment, #f5edd8);
   font: 12px var(--font-ui, sans-serif);

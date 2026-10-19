@@ -292,7 +292,7 @@ export const plannerCs = {
   "Flow {0} has a missing endpoint.": "Návaznosti {0} chybí koncová položka.",
   "Flow {0} crosses canvas scopes.": "Návaznost {0} propojuje různá plátna.",
   "Option flow {0} does not start at a branch.": "Volitelná návaznost {0} nezačíná ve větvení.",
-  "Flow cycle reaches {0}.": "Cyklus návazností dosahuje položky {0}.",
+  "Flow {0} is part of a cycle.": "Návaznost {0} je součástí cyklu.",
   "Reference {0} has a missing item.": "Odkazu {0} chybí položka.",
   "Reference {0} has a missing planning target.": "Odkazu {0} chybí plánovací cíl.",
   "Consequence {0} has a missing item anchor.": "Následku {0} chybí navázaná položka.",
@@ -300,8 +300,15 @@ export const plannerCs = {
   "Consequence {0} has a missing planning target.": "Následku {0} chybí plánovací cíl.",
   "Consequence {0} has an invalid anchor.": "Následek {0} má neplatné přiřazení.",
   "Note {0} has a missing anchor {1}.": "Poznámce {0} chybí navázaná položka {1}.",
+  "Planning data problems: {0}": "Problémy v plánovacích datech: {0}",
+  "Some saved planning records break planning rules. Repair them here or in the item editor. Other changes stay available while they add no new problems.":
+    "Některé uložené plánovací záznamy porušují pravidla plánování. Opravte je zde nebo v editoru položky. Ostatní změny zůstávají dostupné, pokud nepřidají nové problémy.",
+  "Remove missing target": "Odebrat chybějící cíl",
+  "Remove missing links": "Odebrat chybějící vazby",
+  "Planning data repaired.": "Plánovací data byla opravena.",
+  "This problem has no automatic repair. Edit the record instead.":
+    "Tento problém nelze opravit automaticky. Upravte záznam.",
   "New {0}": "Nová položka: {0}",
-  "Stored planning data is inconsistent: {0}": "Uložená plánovací data jsou nekonzistentní: {0}",
   "Collection revisions are missing. Reload the planner before saving.":
     "Chybí revize kolekcí. Před uložením obnovte plánovač.",
   "This flow no longer exists. Reload the planner.":

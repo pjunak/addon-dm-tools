@@ -69,7 +69,7 @@ func Check(document, baseline []byte, now time.Time) (CheckReport, error) {
 	}
 	preview := response.(map[string]any)
 	counts := preview["summary"].(summary)
-	report := CheckReport{Mode: preview["mode"].(string), Creates: counts.Creates, Updates: counts.Updates, Unchanged: counts.Skips, Deletes: counts.Deletes, Warnings: warnings}
+	report := CheckReport{Mode: preview["mode"].(string), Creates: counts.Creates, Updates: counts.Updates, Unchanged: counts.Skips, Deletes: counts.Deletes, Warnings: append(warnings, preview["warnings"].([]string)...)}
 	for _, item := range preview["changes"].([]change) {
 		report.Changes = append(report.Changes, CheckChange(item))
 	}

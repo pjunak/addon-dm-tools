@@ -7,6 +7,7 @@ import {
   type DashboardLocale,
   type DashboardMessage,
 } from "./dashboard-model.js";
+import { planningIssues } from "./planning-model.js";
 import type { PlanningSnapshot } from "./planning-repository.js";
 import { runtimeFor } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
@@ -139,6 +140,9 @@ export function defineDashboardElement(generation: string): string {
         }
         overview.append(totals);
       }
+      // Problems never hide the overview, but they stay in view until repaired.
+      if (this.#snapshot && planningIssues(this.#snapshot).length)
+        overview.append(element("p", t("dashboard.problems"), "dm-dashboard-warning"));
       // Planning changes refresh the overview live; a manual retry is only for failures.
       if (this.#status === "error") {
         const retry = document.createElement("button");

@@ -186,6 +186,30 @@ For larger recovery needs, use the host's
 [Replacement imports](IMPORTING.md#merge-and-replacement) can delete the entire
 DM Tools planning dataset and all layouts; they are not a targeted delete tool.
 
+## Repair problems in saved planning
+
+Saved planning can break a planning rule, for example a consequence whose
+target item was deleted by an older version of DM Tools. The planner still
+opens with everything shown, and **Planning data problems** above the canvas
+lists each affected record with the rule it breaks. The DM overview shows a
+notice until the list is empty.
+
+| Problem | Repair |
+| --- | --- |
+| A consequence's planning target is missing | **Remove missing target** keeps the consequence and its text |
+| A note is linked to a missing item | **Remove missing links** keeps the note and its other links |
+| A reference's item or planning target is missing | **Delete reference**, after confirmation |
+| A consequence's item or flow is missing | **Delete consequence**, after confirmation |
+| A flow has a missing end, joins two canvases, makes a cycle or is an option outside a branch | **Remove flow**; consequences attached to it go too, after confirmation |
+| An item's parent is missing, a leaf or part of a cycle | Fix it in the editor |
+
+**Edit item** opens the item the problem belongs to, on its canvas, where you
+can also fix a problem without deleting anything, for example by choosing
+another target. A repair is an ordinary guarded save; **Undo last deletion**
+does not bring a repaired record back. Download the planning data from the
+Import Center first if you want a copy. While problems remain you can keep
+planning, but a save that would add a new problem is refused with the reason.
+
 ## Keep drafts and handle concurrent edits
 
 Existing-item, annotation and new-flow drafts survive selection changes,

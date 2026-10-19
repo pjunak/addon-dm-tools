@@ -7,8 +7,10 @@ import {
   newItem,
   notesDeletedWith,
   parseTags,
+  planningIssues,
   scopeViewId,
   subtreeIds,
+  validateChange,
   validateItemEdit,
   validatePlanning,
 } from "#web/planning-model";
@@ -261,6 +263,81 @@ void test("consequence planning targets must exist while optional and foreign ta
     "Consequence effect has a missing planning target.",
   ]);
   assert.deepEqual(invalid, before);
+});
+
+void test("a change is checked only for problems it adds, so a stored one never blocks other edits", () => {
+  const quest = item("quest", "quest");
+  const dataset = {
+    items: [quest, item("other", "quest")],
+    flows: [],
+    references: [],
+    consequences: [
+      consequence({
+        id: "effect",
+        anchor: { scope: "item", itemId: "quest" },
+        target: { scope: "planning", itemId: "gone" },
+      }),
+    ],
+    notes: [],
+    views: [],
+  };
+  const [stored, ...rest] = planningIssues(dataset);
+  assert.deepEqual(rest, []);
+  assert.deepEqual(
+    [stored?.key, stored?.collection, stored?.id, stored?.code],
+    [
+      "planning_consequences:effect:missing-target",
+      "planning_consequences",
+      "effect",
+      "missing-target",
+    ],
+  );
+  assert.deepEqual(validateItemEdit(dataset, { ...quest, title: "Renamed" }), []);
+  assert.deepEqual(validateChange(dataset, { ...dataset, consequences: [] }), []);
+  assert.deepEqual(
+    validateChange(dataset, {
+      ...dataset,
+      items: [...dataset.items, item("lost", "event", "gone")],
+    }),
+    ["lost has a missing parent."],
+  );
+  // A problem is named by record and rule, not wording: renaming keeps it.
+  const orphan = { ...dataset, items: [...dataset.items, item("lost", "event", "gone")] };
+  assert.deepEqual(
+    validateChange(orphan, {
+      ...orphan,
+      items: orphan.items.map((entry) =>
+        entry.id === "lost" ? { ...entry, title: "Found" } : entry,
+      ),
+    }),
+    [],
+  );
+});
+
+void test("each flow on a cycle is reported, so an unrelated flow is not a new problem", () => {
+  const cycle = [
+    flow({ id: "forward", sourceId: "a", targetId: "b" }),
+    flow({ id: "back", sourceId: "b", targetId: "a" }),
+  ];
+  const dataset = {
+    items: [item("a", "quest"), item("b", "quest"), item("c", "quest")],
+    flows: cycle,
+    references: [],
+    consequences: [],
+    notes: [],
+    views: [],
+  };
+  assert.deepEqual(
+    planningIssues(dataset).map((issue) => issue.key),
+    ["planning_flow_links:forward:flow-cycle", "planning_flow_links:back:flow-cycle"],
+  );
+  const entry = flow({ id: "entry", sourceId: "c", targetId: "b" });
+  assert.deepEqual(validateChange(dataset, { ...dataset, flows: [entry, ...cycle] }), []);
+  const closing = flow({ id: "closing", sourceId: "a", targetId: "c" });
+  assert.deepEqual(validateChange(dataset, { ...dataset, flows: [entry, closing, ...cycle] }), [
+    "Flow entry is part of a cycle.",
+    "Flow closing is part of a cycle.",
+  ]);
 });
 
 test("tags are unique ignoring case and keep the first spelling", () => {

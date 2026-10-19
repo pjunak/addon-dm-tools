@@ -1,4 +1,9 @@
-import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
+import {
+  type PlannerMessage,
+  type PlannerParameters,
+  type PlannerTranslator,
+  plannerTranslator,
+} from "./planner-catalogs.js";
 const planningKinds = ["plotline", "quest", "event", "branch"] as const;
 export type PlanningKind = (typeof planningKinds)[number];
 export type EventType = "story" | "encounter" | "puzzle";
@@ -78,6 +83,38 @@ export interface PlanningDataset {
   readonly notes: readonly DmNote[];
   readonly views: readonly PlanningView[];
 }
+
+export type PlanningIssueCollection =
+  | "planning_items"
+  | "planning_flow_links"
+  | "planning_references"
+  | "planning_consequences"
+  | "dm_notes";
+export type PlanningIssueCode =
+  | "duplicate"
+  | "missing-parent"
+  | "leaf-parent"
+  | "ownership-cycle"
+  | "missing-endpoint"
+  | "cross-scope"
+  | "option-source"
+  | "flow-cycle"
+  | "missing-owner"
+  | "missing-target"
+  | "missing-anchor"
+  | "invalid-anchor";
+/** A stored record that breaks a planning rule. */
+export interface PlanningIssue {
+  /** Names the problem, not its wording, so datasets can be compared. */
+  readonly key: string;
+  readonly collection: PlanningIssueCollection;
+  readonly id: string;
+  readonly code: PlanningIssueCode;
+  readonly message: PlannerMessage;
+  readonly parameters: PlannerParameters;
+}
+/** How the planner can fix a problem without an editor. */
+export type PlanningRepair = "detach" | "delete";
 
 /** A planning record ID as the worker stores it; never an object-prototype name. */
 export function validPlanningId(value: string): boolean {
@@ -174,97 +211,222 @@ export function validateItemEdit(
       ),
     ];
   }
-  return validatePlanning(
+  return validateChange(
+    dataset,
     { ...dataset, items: dataset.items.map((item) => (item.id === next.id ? next : item)) },
     t,
   );
 }
 
-export function validatePlanning(
-  dataset: PlanningDataset,
-  t: PlannerTranslator = plannerTranslator(),
-): readonly string[] {
-  const issues: string[] = [];
+/** Every rule a stored record breaks, matching the Go importer's dataset validation. */
+export function planningIssues(dataset: PlanningDataset): readonly PlanningIssue[] {
+  const issues = new Map<string, PlanningIssue>();
+  const add = (
+    collection: PlanningIssueCollection,
+    id: string,
+    code: PlanningIssueCode,
+    message: PlannerMessage,
+    parameters: PlannerParameters,
+    detail?: string,
+  ): void => {
+    const key = [collection, id, code, ...(detail === undefined ? [] : [detail])].join(":");
+    if (!issues.has(key)) issues.set(key, { key, collection, id, code, message, parameters });
+  };
   const byId = new Map<string, PlanningItem>();
   for (const item of dataset.items) {
-    if (byId.has(item.id)) issues.push(t("Duplicate planning item {0}.", { "0": item.id }));
+    if (byId.has(item.id))
+      add("planning_items", item.id, "duplicate", "Duplicate planning item {0}.", {
+        "0": item.id,
+      });
     byId.set(item.id, item);
   }
   for (const item of dataset.items) {
+    const name = item.title;
     if (item.parentId !== null) {
       const parent = byId.get(item.parentId);
-      if (parent === undefined) issues.push(t("{0} has a missing parent.", { "0": item.title }));
+      if (parent === undefined)
+        add(
+          "planning_items",
+          item.id,
+          "missing-parent",
+          "{0} has a missing parent.",
+          { "0": name },
+          item.parentId,
+        );
       else if (parent.kind !== "plotline" && parent.kind !== "quest")
-        issues.push(t("{0} has a leaf item as its parent.", { "0": item.title }));
+        add("planning_items", item.id, "leaf-parent", "{0} has a leaf item as its parent.", {
+          "0": name,
+        });
     }
     const seen = new Set([item.id]);
     let parentId = item.parentId;
     while (parentId !== null) {
       if (seen.has(parentId)) {
-        issues.push(t("Ownership cycle at {0}.", { "0": item.title }));
+        add("planning_items", item.id, "ownership-cycle", "Ownership cycle at {0}.", {
+          "0": name,
+        });
         break;
       }
       seen.add(parentId);
       parentId = byId.get(parentId)?.parentId ?? null;
     }
   }
-  const adjacency = new Map<string, string[]>();
+  const next = new Map<string, string[]>();
   for (const flow of dataset.flows) {
     const source = byId.get(flow.sourceId);
     const target = byId.get(flow.targetId);
     if (source === undefined || target === undefined) {
-      issues.push(t("Flow {0} has a missing endpoint.", { "0": flow.id }));
+      add("planning_flow_links", flow.id, "missing-endpoint", "Flow {0} has a missing endpoint.", {
+        "0": flow.id,
+      });
       continue;
     }
     if (source.parentId !== target.parentId)
-      issues.push(t("Flow {0} crosses canvas scopes.", { "0": flow.id }));
+      add("planning_flow_links", flow.id, "cross-scope", "Flow {0} crosses canvas scopes.", {
+        "0": flow.id,
+      });
     if (flow.kind === "option" && source.kind !== "branch")
-      issues.push(t("Option flow {0} does not start at a branch.", { "0": flow.id }));
-    const edges = adjacency.get(source.id) ?? [];
+      add(
+        "planning_flow_links",
+        flow.id,
+        "option-source",
+        "Option flow {0} does not start at a branch.",
+        { "0": flow.id },
+      );
+    const edges = next.get(source.id) ?? [];
     edges.push(target.id);
-    adjacency.set(source.id, edges);
+    next.set(source.id, edges);
   }
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visit = (id: string): void => {
-    if (visiting.has(id)) {
-      issues.push(t("Flow cycle reaches {0}.", { "0": id }));
-      return;
+  // Each flow on a cycle is reported, a flow to itself included, so the report
+  // does not depend on the order the flows are read in.
+  const reaches = (from: string, to: string): boolean => {
+    const queue = [from],
+      seen = new Set(queue);
+    for (const id of queue) {
+      if (id === to) return true;
+      for (const target of next.get(id) ?? [])
+        if (!seen.has(target)) {
+          seen.add(target);
+          queue.push(target);
+        }
     }
-    if (visited.has(id)) return;
-    visiting.add(id);
-    for (const target of adjacency.get(id) ?? []) visit(target);
-    visiting.delete(id);
-    visited.add(id);
+    return false;
   };
-  for (const id of adjacency.keys()) visit(id);
+  for (const flow of dataset.flows)
+    if (byId.has(flow.sourceId) && byId.has(flow.targetId) && reaches(flow.targetId, flow.sourceId))
+      add("planning_flow_links", flow.id, "flow-cycle", "Flow {0} is part of a cycle.", {
+        "0": flow.id,
+      });
   for (const reference of dataset.references) {
+    const id = reference.id;
     if (!byId.has(reference.itemId))
-      issues.push(t("Reference {0} has a missing item.", { "0": reference.id }));
+      add("planning_references", id, "missing-owner", "Reference {0} has a missing item.", {
+        "0": id,
+      });
     if (reference.target["scope"] === "planning" && !byId.has(String(reference.target["itemId"])))
-      issues.push(t("Reference {0} has a missing planning target.", { "0": reference.id }));
+      add(
+        "planning_references",
+        id,
+        "missing-target",
+        "Reference {0} has a missing planning target.",
+        { "0": id },
+      );
   }
   const flowIds = new Set(dataset.flows.map((flow) => flow.id));
   for (const consequence of dataset.consequences) {
+    const id = consequence.id;
     if (
       consequence.target?.["scope"] === "planning" &&
       !byId.has(String(consequence.target["itemId"]))
     )
-      issues.push(t("Consequence {0} has a missing planning target.", { "0": consequence.id }));
+      add(
+        "planning_consequences",
+        id,
+        "missing-target",
+        "Consequence {0} has a missing planning target.",
+        { "0": id },
+      );
     const anchor = consequence.anchor;
     if (anchor["scope"] === "item") {
       if (!byId.has(String(anchor["itemId"])))
-        issues.push(t("Consequence {0} has a missing item anchor.", { "0": consequence.id }));
+        add(
+          "planning_consequences",
+          id,
+          "missing-anchor",
+          "Consequence {0} has a missing item anchor.",
+          { "0": id },
+        );
     } else if (anchor["scope"] === "flow") {
       if (!flowIds.has(String(anchor["flowId"])))
-        issues.push(t("Consequence {0} has a missing flow anchor.", { "0": consequence.id }));
-    } else issues.push(t("Consequence {0} has an invalid anchor.", { "0": consequence.id }));
+        add(
+          "planning_consequences",
+          id,
+          "missing-anchor",
+          "Consequence {0} has a missing flow anchor.",
+          { "0": id },
+        );
+    } else
+      add("planning_consequences", id, "invalid-anchor", "Consequence {0} has an invalid anchor.", {
+        "0": id,
+      });
   }
-  for (const note of dataset.notes)
+  for (const note of dataset.notes) {
     for (const id of note.anchorIds)
       if (!byId.has(id))
-        issues.push(t("Note {0} has a missing anchor {1}.", { "0": note.id, "1": id }));
-  return [...new Set(issues)];
+        add(
+          "dm_notes",
+          note.id,
+          "missing-anchor",
+          "Note {0} has a missing anchor {1}.",
+          { "0": note.id, "1": id },
+          id,
+        );
+  }
+  return [...issues.values()];
+}
+
+/** Problems `next` has that `current` does not. A write may keep a stored problem but never add one. */
+export function introducedIssues(
+  current: PlanningDataset,
+  next: PlanningDataset,
+): readonly PlanningIssue[] {
+  const known = new Set(planningIssues(current).map((issue) => issue.key));
+  return planningIssues(next).filter((issue) => !known.has(issue.key));
+}
+
+export function validateChange(
+  current: PlanningDataset,
+  next: PlanningDataset,
+  t: PlannerTranslator = plannerTranslator(),
+): readonly string[] {
+  return introducedIssues(current, next).map((issue) => t(issue.message, issue.parameters));
+}
+
+export function validatePlanning(
+  dataset: PlanningDataset,
+  t: PlannerTranslator = plannerTranslator(),
+): readonly string[] {
+  return planningIssues(dataset).map((issue) => t(issue.message, issue.parameters));
+}
+
+/**
+ * Detach drops only the missing link and keeps the record's text; delete
+ * removes a link record that cannot exist without its target. Other problems
+ * are fixed in the item editor.
+ */
+export function planningRepair(issue: PlanningIssue): PlanningRepair | undefined {
+  switch (issue.collection) {
+    case "planning_flow_links":
+      return "delete";
+    case "planning_references":
+      return "delete";
+    case "planning_consequences":
+      return issue.code === "missing-target" ? "detach" : "delete";
+    case "dm_notes":
+      return issue.code === "missing-anchor" ? "detach" : undefined;
+    case "planning_items":
+      return undefined;
+  }
 }
 
 /** Counts the notes deleted with these items because they lose every anchor. */

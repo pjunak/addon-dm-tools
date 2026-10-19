@@ -16,7 +16,8 @@ planning record is an `update` carrying its stored timestamp as
 `expectedUpdatedAt`. Give it to whoever writes the next document: it supplies
 exact IDs, parents and update baselines, and it is the baseline for
 `go run ./cmd/check-plan`. Importing it unchanged reports every record as
-unchanged and writes nothing.
+unchanged and writes nothing. The export includes every stored record as it is,
+including records the planner [reports as problems](PLANNER.md#repair-problems-in-saved-planning).
 
 The export holds the DM's private planning text. It does not include saved
 canvas layouts, core campaign records or other add-ons' data. It is a working
@@ -122,6 +123,7 @@ observed timestamp. Example timestamps are fixtures, not values for a campaign.
 | More than one provider claims a format | Resolve the ambiguity; the page will not choose arbitrarily |
 | Some providers fail discovery | Healthy formats remain usable; refresh to retry the failed providers |
 | Stale record or collection conflict | Inspect current data, revise the candidate and request a fresh preview |
+| Preview warns that saved planning data breaks planning rules | The import can still be committed; repair those records in the [Story Planner](PLANNER.md#repair-problems-in-saved-planning) |
 | Preview expired or worker replaced | Request and review a new preview |
 | More than 256 planned writes/deletes | Use smaller coherent merge batches; every intermediate dataset must be valid |
 | Commit response lost or uncertain | Inspect saved planning data before another preview or submission |
@@ -151,10 +153,13 @@ transaction; it does not rebuild the plan or refresh its guards.
 A change anywhere in the planning dataset, including a layout changed in another
 canvas, can invalidate the preview. This protects against unseen children and
 new references as well as edits to listed records. An empty plan issues no
-transaction. Invalid stored planning data must be repaired explicitly; importing
-does not silently discard it. This includes dangling consequence targets: the
-planner and importer report the affected consequence IDs and leave their text
-intact. Fix those entries by hand; replacement import is not a repair procedure.
+transaction.
+
+Stored records that break a planning rule, such as a consequence whose target
+item no longer exists, never block a preview. Preview refuses only the problems
+the document would add; it lists the stored ones as warnings and leaves them
+unchanged. Repair them in the Story Planner, which offers a repair for each
+one. Replacement import is not a repair procedure.
 
 Leaving the page cancels local work and discards its visible review. Unchanged
 host context and language-only changes preserve it. Controls use English/Czech

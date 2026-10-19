@@ -49,6 +49,7 @@ internal imports are outside the contract.
 | [planner-drafts.ts](../src/planner-drafts.ts) | Named draft values and opening revisions |
 | [planner-recovery.ts](../src/planner-recovery.ts) | Bounded tab recovery format and storage validation |
 | [planner-recovery-view.ts](../src/planner-recovery-view.ts) | Shared recovery controls and plain-text download |
+| [planner-issues-view.ts](../src/planner-issues-view.ts) | Stored-problem list and its repair actions |
 | [planner-selection.ts](../src/planner-selection.ts) | Canvas selection and group geometry |
 | [planner-connections.ts](../src/planner-connections.ts) | Click, drag and keyboard connection gestures |
 | [planner-dialog.ts](../src/planner-dialog.ts) | Shared modal focus and dismissal behavior |
@@ -66,7 +67,13 @@ duplicate the import worker or move persistence into rendering helpers.
 
 Load all six collections with revision-pinned pagination. Every collection,
 including an empty one, carries a host revision; subsequent pages require the
-same revision. Validate stored data before allowing writes.
+same revision. Reading never validates: the planner, overview and export get
+every stored record, and stored problems are reported, not refused.
+
+Writes and import previews validate the complete resulting dataset and refuse
+only problems the stored dataset does not already have. A problem is identified
+by its record ID and rule, never by a title or the order records are read in,
+so renaming a record or adding an unrelated flow does not count as a new one.
 
 Every planner mutation checks all six observed collection revisions and exact
 document revisions in one host transaction. An unseen child, new annotation,
@@ -127,6 +134,18 @@ Core/external target existence is not established by an import preview. An
 optional consequence target may be omitted, but a planning target must identify
 an item in the complete resulting dataset. These checks do not establish the
 correctness of narrative relationships.
+
+## Stored problems and repairs
+
+The planner lists every stored problem above the canvas. A detach repair drops
+only the missing link and keeps the text: a consequence's planning target, or
+a note's anchors to missing items. A delete repair removes a reference or
+consequence that cannot exist without its item, anchor or target, and a broken
+flow together with the consequences anchored to it. Each repair is one
+transaction with exact document revisions and all six collection revisions,
+and is refused when the problem is no longer in the current snapshot. Item
+problems have no automatic repair; **Edit item** opens the owning item on its
+canvas.
 
 ## Deletion, undo and layout reset
 
@@ -257,7 +276,7 @@ Dispose fullscreen listeners with the stable planner element.
 
 ## Reading, navigation and lifecycle
 
-The reader projects saved prose and annotations from the same validated dataset.
+The reader projects saved prose and annotations from the same loaded dataset.
 There are no separate reader records or combat state. The public
 `codex-addon-markdown.source` property renders prose under the required
 `ui.markdown` capability. Do not insert untrusted HTML or import host internals;
@@ -280,8 +299,9 @@ and open the reader. Scope changes update browser history. Unchanged targets
 do not rebuild edited forms; invalid queries preserve an open view and its drafts.
 A missing saved target falls back to the campaign canvas with an explanation.
 
-Dashboard counts and recent links come from a validated snapshot; an empty
-campaign shows the invitation to create its first item instead of zero counts.
+Dashboard counts and recent links come from the loaded snapshot, with a notice
+while stored problems remain; an empty campaign shows the invitation to create
+its first item instead of zero counts.
 Each mounted
 view owns its request lifetime; disconnect cancels that view's reads without
 aborting the activation generation. Custom-element definitions include the

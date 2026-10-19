@@ -38,13 +38,15 @@ import {
   newItem,
   notesDeletedWith,
   parseTags,
+  planningIssues,
   scopeTrail,
+  validateChange,
   validateItemEdit,
-  validatePlanning,
   type DmNote,
   type PlanningConsequence,
   type PlanningDataset,
   type PlanningFlow,
+  type PlanningIssue,
   type PlanningItem,
   type PlanningKind,
   type PlanningReference,
@@ -66,6 +68,7 @@ import { mountCanvasSelection, type CanvasSelection } from "./planner-selection.
 import { mountCanvasConnections } from "./planner-connections.js";
 import { planningReader } from "./planning-reader.js";
 import { configurePlannerDialog, plannerShortcuts } from "./planner-dialog.js";
+import { issuesPanel, repairQuestion, type IssueEditorTab } from "./planner-issues-view.js";
 
 export const plannerElementTag = "dm-tools-planner-page";
 const cardWidth = 240;
@@ -114,6 +117,7 @@ export function definePlannerElement(generation?: string): string {
     #newItem: PlanningItem | undefined;
     #undoDelete: DeletionUndo | undefined;
     #helpOpen = false;
+    #issuesOpen = true;
     #connecting = false;
     #disposeConnection: (() => void) | undefined;
     #wakeLive = (): void => {
@@ -592,6 +596,18 @@ export function definePlannerElement(generation?: string): string {
             ),
             "alert",
           ),
+        );
+      const issues = planningIssues(snapshot);
+      if (issues.length)
+        root.append(
+          issuesPanel(document, snapshot, issues, this.#t, {
+            open: this.#issuesOpen,
+            toggle: (open) => {
+              this.#issuesOpen = open;
+            },
+            repair: (issue) => void this.#repair(issue),
+            edit: (id, tab) => this.#editFromIssue(id, tab),
+          }),
         );
       if (!this.#editorId) this.#removedDrafts(document, root, snapshot);
       const workspace = document.createElement("div");
@@ -1719,7 +1735,7 @@ export function definePlannerElement(generation?: string): string {
       }
       const isNew = item.id === this.#newItem?.id;
       const issues = isNew
-        ? validatePlanning({ ...snapshot, items: [...snapshot.items, next] }, this.#t)
+        ? validateChange(snapshot, { ...snapshot, items: [...snapshot.items, next] }, this.#t)
         : validateItemEdit(snapshot, next, this.#t);
       if (issues.length) {
         this.#invalid(issues[0]!);
@@ -1774,7 +1790,7 @@ export function definePlannerElement(generation?: string): string {
         updatedAt: Date.now(),
       };
       const candidate: PlanningDataset = { ...snapshot, flows: [...snapshot.flows, flow] };
-      const issues = validatePlanning(candidate, this.#t);
+      const issues = validateChange(snapshot, candidate, this.#t);
       if (issues.length > 0) {
         this.#message = issues[0] as string;
         this.#messageKind = "alert";
@@ -1802,7 +1818,11 @@ export function definePlannerElement(generation?: string): string {
         label: "",
         updatedAt: Date.now(),
       };
-      const issues = validatePlanning({ ...snapshot, flows: [...snapshot.flows, flow] }, this.#t);
+      const issues = validateChange(
+        snapshot,
+        { ...snapshot, flows: [...snapshot.flows, flow] },
+        this.#t,
+      );
       if (issues.length) {
         this.#invalid(issues[0]!);
         return;
@@ -1824,7 +1844,8 @@ export function definePlannerElement(generation?: string): string {
         label: formText(data, "label").trim(),
         updatedAt: Date.now(),
       };
-      const issues = validatePlanning(
+      const issues = validateChange(
+        snapshot,
         {
           ...snapshot,
           flows: snapshot.flows.map((value) => (value.id === flow.id ? next : value)),
@@ -2178,6 +2199,23 @@ export function definePlannerElement(generation?: string): string {
         selectedId,
         `${collection}:${id}`,
       );
+    }
+    async #repair(issue: PlanningIssue): Promise<void> {
+      const snapshot = this.#snapshot;
+      if (!snapshot || this.#busy || this.#needsReload) return;
+      const question = repairQuestion(snapshot, issue, this.#t);
+      if (question !== undefined && !confirm(question)) return;
+      await this.#mutate(
+        (runtime, current) => runtime.repository.repair(current, issue),
+        this.#t("Planning data repaired."),
+      );
+    }
+    /** Opens the item on its own canvas, where its links and flows are listed. */
+    #editFromIssue(id: string, tab: IssueEditorTab): void {
+      const item = this.#snapshot?.items.find((value) => value.id === id);
+      if (!item || this.#busy) return;
+      this.#revealItem(item);
+      this.#edit(item.id, tab);
     }
     #invalid(message: string): void {
       this.#message = message;

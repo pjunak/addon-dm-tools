@@ -12,7 +12,7 @@
   "scripts": {
     "build": "node tools/clean-web.ts && tsc -p tsconfig.json && node tools/copy-style.ts",
     "test": "node --test tests/*.mts",
-    "test:rendering": "node tools/browser-rendering-check.mts --root . --fixture tests/browser/planner.html",
+    "test:rendering": "node tools/browser-rendering-check.mts --root . --fixture tests/browser/planner.html && node tools/browser-rendering-check.mts --root . --fixture tests/browser/planner-problems.html",
     "typecheck:source": "tsc -p tsconfig.json --noEmit",
     "typecheck:node": "tsc -p tsconfig.node.json",
     "typecheck": "npm run typecheck:source && npm run typecheck:node",

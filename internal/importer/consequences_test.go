@@ -160,15 +160,37 @@ func TestConsequenceTargetDeletedAfterPreviewRejectsTheWholeCommit(t *testing.T)
 	}
 }
 
-func TestStoredDanglingConsequenceTargetFailsWithoutRepairingData(t *testing.T) {
+func TestStoredDanglingConsequenceTargetIsReportedWithoutBlockingOrRepairing(t *testing.T) {
 	data := &fakeData{documents: map[string][]workerrpc.AddonDataDocument{
 		"planning_items": {storeEntry(t, validItem("owner", nil))}, "planning_consequences": {storeEntry(t, consequenceEntry())},
 	}}
 	before := string(data.documents["planning_consequences"][0].Value)
 	handler, _ := New(data)
-	_, err := consequencePreview(t, handler, "merge", []any{}, []any{})
-	requireMissingConsequenceTarget(t, err)
-	if len(data.commits) != 0 || len(handler.plans) != 0 || string(data.documents["planning_consequences"][0].Value) != before {
-		t.Fatal("invalid stored annotation was modified or retained as a commit plan")
+	result, err := consequencePreview(t, handler, "merge", []any{validItem("unrelated", nil)}, []any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := result.(map[string]any)
+	if warnings := preview["warnings"].([]string); len(warnings) != 2 || warnings[1] != "consequence effect has a missing planning target" {
+		t.Fatalf("warnings = %#v", warnings)
+	}
+	plan := handler.plans[preview["token"].(string)]
+	if len(plan.mutations) != 1 || plan.mutations[0].Key != "unrelated" {
+		t.Fatalf("the reviewed plan holds more than the import: %+v", plan.mutations)
+	}
+	if len(data.commits) != 0 || string(data.documents["planning_consequences"][0].Value) != before {
+		t.Fatal("preview modified the stored annotation")
+	}
+
+	// A new problem is still refused, and only it is named as the reason.
+	second := consequenceEntry()
+	second["id"] = "second"
+	_, err = consequencePreview(t, handler, "merge", []any{}, []any{second})
+	var failure *workerrpc.RPCError
+	if !errors.As(err, &failure) || failure.Data.Kind != workerrpc.KindValidationFailed {
+		t.Fatalf("expected a validation failure, got %v", err)
+	}
+	if reason := string(mustJSON(t, failure)); !strings.Contains(reason, "consequence second has a missing planning target") || strings.Contains(reason, "consequence effect") {
+		t.Fatalf("reason = %s", reason)
 	}
 }

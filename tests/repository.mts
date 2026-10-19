@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PlanningRepository } from "#web/planning-repository";
 import type { PlanningRecord } from "#web/planning-repository";
-import { validatePlanning } from "#web/planning-model";
+import { introducedIssues, planningIssues, validatePlanning } from "#web/planning-model";
 import type {
   DmNote,
   PlanningConsequence,
@@ -838,33 +838,165 @@ void test("a stale consequence cleanup is rejected with all collection guards an
   assert.deepEqual(dataset, before);
 });
 
-void test("stored dangling consequence targets fail visibly without rewriting or hiding the annotation", async () => {
-  const { dataset, collections } = deletionFixture();
-  dataset.items = dataset.items.filter((item) => item.id !== "event-a");
-  dataset.references = [];
-  dataset.notes = [];
-  const before = structuredClone(dataset);
+/** Serves each query from the dataset `serve` picks for that call. */
+function servedRepository(
+  collections: Record<CollectionField, string>,
+  serve: (call: number, collection: string) => { dataset: CollectionFixtures; revision: number },
+) {
+  let calls = 0;
   const repository = new PlanningRepository({
     signal: new AbortController().signal,
     data: {
       collection: (collection: string) => ({
-        query: async () => ({
-          dataRevision: 1,
-          documents: dataset[collectionField(collections, collection)].map((value) => ({
-            key: value.id,
-            value,
-            revision: 1,
-          })),
-        }),
+        query: async () => {
+          const { dataset, revision } = serve(++calls, collection);
+          return {
+            dataRevision: revision,
+            documents: dataset[collectionField(collections, collection)].map((value) => ({
+              key: value.id,
+              value,
+              revision: 1,
+            })),
+          };
+        },
       }),
       transact: async () => assert.fail("load must not write"),
     },
   });
-  await assert.rejects(
-    repository.load(),
-    /Consequence item-consequence has a missing planning target/,
-  );
+  return { repository, calls: () => calls };
+}
+
+/** The fixture after event-a was removed without the cleanup of its links. */
+function brokenFixture() {
+  const fixture = deletionFixture();
+  fixture.dataset.items = fixture.dataset.items.filter((item) => item.id !== "event-a");
+  return fixture;
+}
+
+void test("stored records that break planning rules load as stored and are reported", async () => {
+  const { dataset, collections } = brokenFixture();
+  const before = structuredClone(dataset);
+  const { repository } = servedRepository(collections, () => ({ dataset, revision: 1 }));
+  const snapshot = await repository.load();
+  for (const field of Object.keys(collections) as CollectionField[])
+    assert.deepEqual(snapshot[field], dataset[field]);
+  assert.deepEqual(validatePlanning(snapshot), [
+    "Reference ref-a has a missing planning target.",
+    "Consequence item-consequence has a missing planning target.",
+    "Note shared-note has a missing anchor event-a.",
+  ]);
   assert.deepEqual(dataset, before);
+});
+
+void test("writes may keep a stored problem but never add one", async () => {
+  const { dataset, repository, writes } = brokenFixture();
+  const quest = requiredRecord(dataset.items, "quest-b");
+  await repository.saveItem(dataset, { ...quest, title: "Renamed" }, 2);
+  assert.equal(writes.length, 1);
+  // The refusal names only the new problem.
+  await assert.rejects(
+    repository.createItem(dataset, { ...validQuest(), id: "new", title: "New", parentId: "gone" }),
+    (error: Error) => error.message === "New has a missing parent.",
+  );
+  assert.equal(writes.length, 1);
+});
+
+void test("repairs detach a missing link or delete a link record, guarded by every revision", async () => {
+  const { dataset, collections } = brokenFixture();
+  dataset.flows.push({ ...dataset.flows[0]!, id: "flow-gone", targetId: "event-a" });
+  dataset.consequences.push(
+    validConsequence({ id: "flow-gone-effect", anchor: { scope: "flow", flowId: "flow-gone" } }),
+    validConsequence({ id: "orphan-effect", anchor: { scope: "item", itemId: "event-a" } }),
+  );
+  dataset.references.push(validReference({ id: "orphan-ref", itemId: "event-a" }));
+  for (const [collection, id] of [
+    ["planning_flow_links", "flow-gone"],
+    ["planning_consequences", "flow-gone-effect"],
+    ["planning_consequences", "orphan-effect"],
+    ["planning_references", "orphan-ref"],
+  ])
+    dataset.revisions.set(`${collection}:${id}`, 40);
+  const revision = (collection: string, id: string) => dataset.revisions.get(`${collection}:${id}`);
+  const writes: CapturedWrite[] = [];
+  const repository = new PlanningRepository({
+    signal: new AbortController().signal,
+    data: {
+      collection: unusedCollection,
+      transact: async (mutations, options) => {
+        assert.ok(options);
+        writes.push({ mutations: [...mutations], options });
+        return receipt(mutations);
+      },
+    },
+  });
+  const before = structuredClone(dataset);
+  const issues = planningIssues(dataset);
+  const repaired: Record<string, unknown[][]> = {};
+  for (const issue of issues) {
+    await repository.repair(dataset, issue);
+    const write = writes.at(-1)!;
+    assert.deepEqual(write.options.expectedDataSets, dataRevisions);
+    for (const mutation of write.mutations)
+      assert.equal(mutation.expectedRevision, revision(mutation.dataId, mutation.key));
+    // The repair removes its own problem and adds none.
+    const after = applyWrites(dataset, write.mutations, collections);
+    assert.ok(!planningIssues(after).some((value) => value.key === issue.key), issue.key);
+    assert.deepEqual(introducedIssues(dataset, after), []);
+    repaired[issue.key] = write.mutations.map((mutation) => [
+      mutation.operation,
+      mutation.dataId,
+      mutation.key,
+    ]);
+  }
+  assert.equal(writes.length, issues.length);
+  assert.deepEqual(repaired, {
+    "planning_flow_links:flow-gone:missing-endpoint": [
+      ["delete", "planning_flow_links", "flow-gone"],
+      ["delete", "planning_consequences", "flow-gone-effect"],
+    ],
+    "planning_references:ref-a:missing-target": [["delete", "planning_references", "ref-a"]],
+    "planning_references:orphan-ref:missing-owner": [
+      ["delete", "planning_references", "orphan-ref"],
+    ],
+    "planning_consequences:item-consequence:missing-target": [
+      ["put", "planning_consequences", "item-consequence"],
+    ],
+    "planning_consequences:orphan-effect:missing-anchor": [
+      ["delete", "planning_consequences", "orphan-effect"],
+    ],
+    "dm_notes:shared-note:missing-anchor:event-a": [["put", "dm_notes", "shared-note"]],
+  });
+  // Detaching keeps the record's text and drops only the missing link.
+  const mutations = writes.flatMap((write) => write.mutations);
+  const { updatedAt: detachedAt, ...detached } = mutationValue(
+    mutations,
+    "item-consequence",
+    isPlanningConsequence,
+  );
+  const {
+    target: _target,
+    updatedAt,
+    ...prose
+  } = requiredRecord(dataset.consequences, "item-consequence");
+  assert.deepEqual(detached, prose);
+  assert.ok(detachedAt > updatedAt);
+  const note = mutationValue(mutations, "shared-note", isDmNote);
+  assert.deepEqual([note.anchorIds, note.title, note.body], [["quest-b"], "Shared", "Keep me"]);
+  assert.deepEqual(dataset, before);
+});
+
+void test("a repair refuses a fixed problem and problems that need the editor", async () => {
+  const { dataset, repository, writes } = deletionFixture();
+  const broken = brokenFixture().dataset;
+  const stale = planningIssues(broken).find((issue) => issue.id === "ref-a");
+  assert.ok(stale);
+  await assert.rejects(repository.repair(dataset, stale), /no longer exists/);
+  broken.items.push({ ...validQuest(), id: "orphan", parentId: "gone" });
+  broken.revisions.set("planning_items:orphan", 3);
+  const orphan = planningIssues(broken).find((issue) => issue.id === "orphan");
+  assert.ok(orphan);
+  await assert.rejects(repository.repair(broken, orphan), /no automatic repair/);
+  assert.equal(writes.length, 0);
 });
 
 void test("single annotation deletes can be undone", async () => {

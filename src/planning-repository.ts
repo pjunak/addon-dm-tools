@@ -8,14 +8,17 @@ import type {
   DataSetRevision,
 } from "./sdk.js";
 import {
+  planningIssues,
+  planningRepair,
   scopeViewId,
   subtreeIds,
+  validateChange,
   validateItemEdit,
-  validatePlanning,
   type DmNote,
   type PlanningConsequence,
   type PlanningDataset,
   type PlanningFlow,
+  type PlanningIssue,
   type PlanningItem,
   type PlanningReference,
   type PlanningView,
@@ -73,6 +76,10 @@ export class PlanningRepository {
       ) ?? (() => undefined)
     );
   }
+  /**
+   * Reads the stored records without validating them, so a broken record never
+   * hides the rest; `planningIssues` reports the problems.
+   */
   async load(signal: AbortSignal = this.#context.signal): Promise<PlanningSnapshot> {
     signal = AbortSignal.any([this.#context.signal, signal]);
     signal.throwIfAborted();
@@ -103,13 +110,6 @@ export class PlanningRepository {
       revisions,
       dataRevisions,
     };
-    const issues = validatePlanning(snapshot);
-    if (issues.length > 0)
-      throw new PlannerError((t) =>
-        t("Stored planning data is inconsistent: {0}", {
-          "0": validatePlanning(snapshot, t).slice(0, 3).join(" "),
-        }),
-      );
     return snapshot;
   }
   async put(
@@ -130,11 +130,9 @@ export class PlanningRepository {
     ]);
   }
   async createItem(snapshot: PlanningSnapshot, item: PlanningItem): Promise<void> {
-    const issues = validatePlanning({ ...snapshot, items: [...snapshot.items, item] });
-    if (issues.length)
-      throw new PlannerError(
-        (t) => validatePlanning({ ...snapshot, items: [...snapshot.items, item] }, t)[0]!,
-      );
+    const next = { ...snapshot, items: [...snapshot.items, item] };
+    if (validateChange(snapshot, next).length)
+      throw new PlannerError((t) => validateChange(snapshot, next, t)[0]!);
     await this.put(snapshot, "planning_items", item, 0);
   }
   async saveItem(snapshot: PlanningSnapshot, item: PlanningItem, revision: number): Promise<void> {
@@ -278,12 +276,15 @@ export class PlanningRepository {
       notes: restored("notes"),
       views: restored("views"),
     };
-    const issues = validatePlanning(restoredDataset);
-    if (issues.length)
+    if (validateChange(snapshot, restoredDataset).length)
       throw new PlannerError((t) =>
-        t("Cannot undo deletion: {0}", { "0": validatePlanning(restoredDataset, t)[0] }),
+        t("Cannot undo deletion: {0}", { "0": validateChange(snapshot, restoredDataset, t)[0] }),
       );
     await this.transact(snapshot, mutations);
+  }
+  /** Fixes one stored problem by detaching the missing link or deleting the broken record. */
+  async repair(snapshot: PlanningSnapshot, issue: PlanningIssue): Promise<void> {
+    await this.transact(snapshot, repairMutations(snapshot, issue));
   }
   async resetLayout(snapshot: PlanningSnapshot, scopeId: string | null): Promise<void> {
     const view = snapshot.views.find((value) => value.scopeId === scopeId);
@@ -471,4 +472,43 @@ function deletionMutations(
       "This deletion affects more than 256 records. Delete smaller subtrees first.",
     );
   return mutations;
+}
+
+function repairMutations(
+  snapshot: PlanningSnapshot,
+  issue: PlanningIssue,
+): readonly DataMutation[] {
+  const repair = planningRepair(issue);
+  if (repair === undefined)
+    throw new PlannerError("This problem has no automatic repair. Edit the record instead.");
+  const expectedRevision = snapshot.revisions.get(`${issue.collection}:${issue.id}`);
+  // The problem may have been fixed since it was shown; never act on an old report.
+  if (
+    expectedRevision === undefined ||
+    !planningIssues(snapshot).some((current) => current.key === issue.key)
+  )
+    throw new PlannerError("This record changed or no longer exists. Reload the planner.");
+  // A flow takes the consequences anchored to it, like any flow deletion.
+  if (issue.collection === "planning_flow_links")
+    return deletionMutations(snapshot, new Set(), new Set([issue.id]));
+  const key = issue.id,
+    dataId = issue.collection;
+  if (repair === "delete")
+    return [{ operation: "delete", kind: "collection", dataId, key, expectedRevision }];
+  const now = Date.now();
+  let value: PlanningRecord;
+  if (dataId === "planning_consequences") {
+    const consequence = snapshot.consequences.find((entry) => entry.id === key)!;
+    const { target: _target, ...annotation } = consequence;
+    value = { ...annotation, updatedAt: Math.max(now, consequence.updatedAt + 1) };
+  } else {
+    const note = snapshot.notes.find((entry) => entry.id === key)!;
+    const items = new Set(snapshot.items.map((item) => item.id));
+    value = {
+      ...note,
+      anchorIds: note.anchorIds.filter((id) => items.has(id)),
+      updatedAt: Math.max(now, note.updatedAt + 1),
+    };
+  }
+  return [{ operation: "put", kind: "collection", dataId, key, expectedRevision, value }];
 }

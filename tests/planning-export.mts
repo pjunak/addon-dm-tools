@@ -31,6 +31,43 @@ void test("export matches the documented baseline the Go checker accepts", () =>
   assert.deepEqual(planningExport(dataset, 1785024030000), example("planning-export.json"));
 });
 
+void test("export keeps every stored record, including ones that break planning rules", () => {
+  const record = { schemaVersion: 3, summary: "", body: "", objective: "", setup: "" };
+  const quest = { ...record, id: "quest", kind: "quest", parentId: null, title: "Quest" };
+  const orphan = { ...record, id: "orphan", kind: "quest", parentId: "gone", title: "Orphan" };
+  const dataset = {
+    items: [orphan, quest].map((item) => ({ ...item, resolution: "", tags: [], updatedAt: 5 })),
+    flows: [],
+    references: [],
+    consequences: [
+      {
+        id: "effect",
+        schemaVersion: 3,
+        anchor: { scope: "item", itemId: "quest" },
+        kind: "world",
+        title: "Kept",
+        body: "Authored prose",
+        target: { scope: "planning", itemId: "gone" },
+        updatedAt: 7,
+      },
+    ],
+    notes: [],
+    views: [],
+  } as unknown as PlanningDataset;
+  const exported = planningExport(dataset, 9);
+  assert.deepEqual(
+    exported.items.map((item) => [item.id, item.parentId, item.expectedUpdatedAt]),
+    [
+      ["quest", null, 5],
+      ["orphan", "gone", 5],
+    ],
+  );
+  const { updatedAt: _updatedAt, ...consequence } = dataset.consequences[0]!;
+  assert.deepEqual(exported.consequences, [
+    { operation: "update", ...consequence, expectedUpdatedAt: 7 },
+  ]);
+});
+
 void test("export file name carries the UTC date", () => {
   assert.equal(
     planningExportName(new Date(Date.UTC(2026, 9, 11, 23, 30))),

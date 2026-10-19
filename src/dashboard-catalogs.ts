@@ -16,6 +16,8 @@ export const en = {
   "dashboard.forbidden": "The DM Tools dashboard is available only to the effective DM.",
   "dashboard.error.title": "Planning data is unavailable",
   "dashboard.error.body": "Planning data could not be read. Recovery links remain available.",
+  "dashboard.problems":
+    "Some saved planning records break planning rules. Open the Story Planner to review and repair them.",
   "dashboard.status.total": "Total",
   "dashboard.status.plotlines": "Plotlines",
   "dashboard.status.quests": "Quests",
@@ -57,6 +59,8 @@ export const cs = {
   "dashboard.error.title": "Plánovací data nejsou dostupná",
   "dashboard.error.body":
     "Plánovací data se nepodařilo načíst. Odkazy pro obnovu zůstávají dostupné.",
+  "dashboard.problems":
+    "Některé uložené plánovací záznamy porušují pravidla plánování. Zkontrolujte a opravte je v Plánovači příběhu.",
   "dashboard.status.total": "Celkem",
   "dashboard.status.plotlines": "Dějové linky",
   "dashboard.status.quests": "Úkoly",

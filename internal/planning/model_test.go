@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,6 +64,31 @@ func TestNormalizeRejectsSchemaDriftAndAmbiguousRecords(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 		})
+	}
+}
+
+// A cycle is reported for each of its flows, so adding an unrelated flow
+// that reaches the cycle from elsewhere does not look like a new problem.
+func TestFlowCyclesAreReportedPerFlow(t *testing.T) {
+	item := func(id string) Item { return Item{ID: id, SchemaVersion: 3, Kind: "quest", Title: id} }
+	dataset := Dataset{
+		Items: map[string]Item{"a": item("a"), "b": item("b"), "c": item("c")},
+		Flows: map[string]Flow{
+			"forward": {ID: "forward", SchemaVersion: 3, SourceID: "a", TargetID: "b", Kind: "continues"},
+			"back":    {ID: "back", SchemaVersion: 3, SourceID: "b", TargetID: "a", Kind: "continues"},
+		},
+	}
+	before := Validate(dataset)
+	if !slices.Equal(before, []string{"flow back is part of a cycle", "flow forward is part of a cycle"}) {
+		t.Fatalf("issues = %#v", before)
+	}
+	dataset.Flows["entry"] = Flow{ID: "entry", SchemaVersion: 3, SourceID: "c", TargetID: "b", Kind: "continues"}
+	if added := Introduced(before, Validate(dataset)); len(added) != 0 {
+		t.Fatalf("an unrelated flow was reported as a new problem: %#v", added)
+	}
+	dataset.Flows["closing"] = Flow{ID: "closing", SchemaVersion: 3, SourceID: "a", TargetID: "c", Kind: "continues"}
+	if added := Introduced(before, Validate(dataset)); !slices.Equal(added, []string{"flow closing is part of a cycle", "flow entry is part of a cycle"}) {
+		t.Fatalf("new cycle = %#v", added)
 	}
 }
 

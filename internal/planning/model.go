@@ -191,6 +191,8 @@ func DecodeStored(collection string, body json.RawMessage) (Normalized, error) {
 	return Normalize(collection, body, probe.UpdatedAt)
 }
 
+// Validate reports every dataset rule the records break. The issues name
+// records by ID, so two datasets can be compared.
 func Validate(dataset Dataset) []string {
 	issues := make([]string, 0)
 	for _, item := range dataset.Items {
@@ -220,7 +222,7 @@ func Validate(dataset Dataset) []string {
 			current = next
 		}
 	}
-	adjacency := make(map[string][]string)
+	next := make(map[string][]string)
 	for _, flow := range dataset.Flows {
 		source, sourceExists := dataset.Items[flow.SourceID]
 		target, targetExists := dataset.Items[flow.TargetID]
@@ -234,31 +236,16 @@ func Validate(dataset Dataset) []string {
 		if flow.Kind == "option" && source.Kind != "branch" {
 			issues = append(issues, fmt.Sprintf("option flow %s does not start at a branch", flow.ID))
 		}
-		adjacency[source.ID] = append(adjacency[source.ID], target.ID)
+		next[source.ID] = append(next[source.ID], target.ID)
 	}
-	state := make(map[string]int)
-	var visit func(string)
-	visit = func(id string) {
-		if state[id] == 1 {
-			issues = append(issues, fmt.Sprintf("flow cycle reaches %s", id))
-			return
+	// Each flow on a cycle is reported, a flow to itself included, so the
+	// report does not depend on the order the flows are read in.
+	for _, flow := range dataset.Flows {
+		_, sourceExists := dataset.Items[flow.SourceID]
+		_, targetExists := dataset.Items[flow.TargetID]
+		if sourceExists && targetExists && reaches(next, flow.TargetID, flow.SourceID) {
+			issues = append(issues, fmt.Sprintf("flow %s is part of a cycle", flow.ID))
 		}
-		if state[id] == 2 {
-			return
-		}
-		state[id] = 1
-		for _, target := range adjacency[id] {
-			visit(target)
-		}
-		state[id] = 2
-	}
-	keys := make([]string, 0, len(adjacency))
-	for id := range adjacency {
-		keys = append(keys, id)
-	}
-	sort.Strings(keys)
-	for _, id := range keys {
-		visit(id)
 	}
 	for _, reference := range dataset.References {
 		if _, ok := dataset.Items[reference.ItemID]; !ok {
@@ -298,6 +285,41 @@ func Validate(dataset Dataset) []string {
 		}
 	}
 	return unique(issues)
+}
+
+// Introduced returns the issues of after that before does not have. A write
+// may keep a stored problem but must not add one.
+func Introduced(before, after []string) []string {
+	known := make(map[string]bool, len(before))
+	for _, issue := range before {
+		known[issue] = true
+	}
+	added := make([]string, 0)
+	for _, issue := range after {
+		if !known[issue] {
+			added = append(added, issue)
+		}
+	}
+	return added
+}
+
+func reaches(next map[string][]string, from, to string) bool {
+	seen := map[string]bool{from: true}
+	queue := []string{from}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if id == to {
+			return true
+		}
+		for _, target := range next[id] {
+			if !seen[target] {
+				seen[target] = true
+				queue = append(queue, target)
+			}
+		}
+	}
+	return false
 }
 
 func validateItem(item Item) error {

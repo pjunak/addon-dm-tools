@@ -78,8 +78,10 @@ JSON schemas under `contracts/` define activation and write boundaries.
 - Preview is read-only and bounded to 256 mutations. Commit consumes the token
   and publishes the retained plan; it must not reconstruct it from the source.
 - Unknown fields, old schemas, stale update timestamps and invalid stored data
-  fail visibly. Report differences between intended and implemented validation
-  instead of silently treating a defect as the intended contract.
+  fail visibly. Stored planning that breaks a rule is listed with repairs, never
+  hidden; it must not block reading, export or changes that add no new problem.
+  Report differences between intended and implemented validation instead of
+  silently treating a defect as the intended contract.
 - Services exchange serializable, schema-validated values, never DOM, functions,
   host facades or raw HTML.
 
