@@ -11,6 +11,7 @@ import {
   parseAdapterDescription,
   parseImportPreview,
   parseImportSource,
+  parseSavedReceipt,
   selectAdapter,
   type Adapter,
   type ImportPreview,
@@ -141,23 +142,17 @@ export function defineImportElement(generation?: string): string {
       this.#adapters = adapters;
       this.#failedProviders = failed;
       try {
-        const saved: unknown = JSON.parse(
-          sessionStorage.getItem("dm-tools.import-receipt") ?? "null",
-        );
-        if (
-          isRecord(saved) &&
-          typeof saved["token"] === "string" &&
-          /^[a-f0-9]{48}$/.test(saved["token"])
-        ) {
-          const adapter = adapters.find(
+        const saved = parseSavedReceipt(sessionStorage.getItem("dm-tools.import-receipt"));
+        const adapter =
+          saved &&
+          adapters.find(
             (adapter) =>
-              adapter.provider.addonId === saved["providerAddonId"] &&
+              adapter.provider.addonId === saved.providerAddonId &&
               adapter.description.features?.includes("receipt-status"),
           );
-          if (adapter) {
-            this.#outcome = { token: saved["token"], adapter };
-            await this.#readResult(runtime, request);
-          }
+        if (saved && adapter) {
+          this.#outcome = { token: saved.token, adapter };
+          await this.#readResult(runtime, request);
         }
       } catch {
         /* Receipt storage is optional; never block import discovery. */

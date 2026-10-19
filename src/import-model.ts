@@ -64,6 +64,26 @@ export class ImportProblem extends Error {
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+/** The import-adapter contract allows any token of 20 to 200 characters. */
+export function validImportToken(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 20 && value.length <= 200;
+}
+/** The commit receipt kept in this tab, when one is stored and well formed. */
+export function parseSavedReceipt(
+  stored: string | null,
+): { readonly token: string; readonly providerAddonId: string } | undefined {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(stored ?? "null");
+  } catch {
+    return undefined;
+  }
+  return isRecord(saved) &&
+    validImportToken(saved["token"]) &&
+    typeof saved["providerAddonId"] === "string"
+    ? { token: saved["token"], providerAddonId: saved["providerAddonId"] }
+    : undefined;
+}
 export function parseImportSource(source: string): {
   format: string;
   document: Record<string, unknown>;
@@ -127,8 +147,7 @@ export function parseImportPreview(value: unknown, format: string): ImportPrevie
     !isRecord(value) ||
     value["contractVersion"] !== "import-preview-result.v1" ||
     value["format"] !== format ||
-    !text(value["token"], 200) ||
-    value["token"].length < 20 ||
+    !validImportToken(value["token"]) ||
     !["merge", "replace"].includes(String(value["mode"])) ||
     !isRecord(summary) ||
     !["creates", "updates", "skips", "deletes"].every((key) => count(summary[key])) ||

@@ -6,6 +6,7 @@ import {
   parseAdapterDescription,
   parseImportPreview,
   parseImportSource,
+  parseSavedReceipt,
   selectAdapter,
 } from "#web/import-model";
 import type { AdapterDescription } from "../src/import-model.ts";
@@ -81,6 +82,26 @@ void test("broken descriptions and inconsistent reviews cannot offer a commit", 
     { changes: [{ ...preview.changes[0], operation: "execute" }] },
   ])
     assert.throws(() => parseImportPreview({ ...preview, ...patch }, "story-json"));
+});
+void test("a saved commit receipt keeps any token the import contract allows", () => {
+  const receipt = (token: unknown, providerAddonId: unknown = "codex-core") =>
+    parseSavedReceipt(JSON.stringify({ token, providerAddonId }));
+  // The host issues 24 random bytes as hex; the planning worker as base64url.
+  const bytes = Buffer.from(Array.from({ length: 24 }, (_, index) => 250 - index * 9));
+  for (const token of [
+    bytes.toString("hex"),
+    bytes.toString("base64url"),
+    "t".repeat(20),
+    "t".repeat(200),
+  ]) {
+    assert.deepEqual(receipt(token), { token, providerAddonId: "codex-core" });
+    assert.equal(parseImportPreview({ ...preview, token }, "story-json").token, token);
+  }
+  for (const token of ["t".repeat(19), "t".repeat(201), 48, null])
+    assert.equal(receipt(token), undefined);
+  assert.equal(receipt("t".repeat(32), 7), undefined);
+  for (const stored of [null, "", "{", "[]", '"token"'])
+    assert.equal(parseSavedReceipt(stored), undefined);
 });
 void test("English and Czech catalogs retain placeholders and literal imported labels", () => {
   assert.deepEqual(Object.keys(en), Object.keys(cs));
