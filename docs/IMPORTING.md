@@ -159,7 +159,10 @@ Stored records that break a planning rule, such as a consequence whose target
 item no longer exists, never block a preview. Preview refuses only the problems
 the document would add; it lists the stored ones as warnings and leaves them
 unchanged. Repair them in the Story Planner, which offers a repair for each
-one. Replacement import is not a repair procedure.
+one. Replacement import is not a repair procedure. Each collection is read at
+its own revision, so a write landing during the read can look like a problem;
+when a revision has moved since, the worker reads once more before reporting
+one.
 
 Leaving the page cancels local work and discards its visible review. Unchanged
 host context and language-only changes preserve it. Controls use English/Czech

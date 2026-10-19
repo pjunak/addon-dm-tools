@@ -68,7 +68,10 @@ duplicate the import worker or move persistence into rendering helpers.
 Load all six collections with revision-pinned pagination. Every collection,
 including an empty one, carries a host revision; subsequent pages require the
 same revision. Reading never validates: the planner, overview and export get
-every stored record, and stored problems are reported, not refused.
+every stored record, and stored problems are reported, not refused. Each
+collection is pinned only to its own revision, so a write landing between the
+reads can look like a problem; when a read shows one and a collection revision
+has moved since, the browser and the worker read once more before reporting it.
 
 Writes and import previews validate the complete resulting dataset and refuse
 only problems the stored dataset does not already have. A problem is identified

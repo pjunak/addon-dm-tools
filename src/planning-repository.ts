@@ -78,10 +78,19 @@ export class PlanningRepository {
   }
   /**
    * Reads the stored records without validating them, so a broken record never
-   * hides the rest; `planningIssues` reports the problems.
+   * hides the rest; `planningIssues` reports the problems. Each collection is
+   * pinned only to its own revision, so a write landing between the reads can
+   * look like a broken link: a read that shows a problem is repeated once when
+   * a revision has moved since.
    */
   async load(signal: AbortSignal = this.#context.signal): Promise<PlanningSnapshot> {
     signal = AbortSignal.any([this.#context.signal, signal]);
+    const snapshot = await this.#read(signal);
+    if (planningIssues(snapshot).length === 0 || !(await this.#moved(snapshot, signal)))
+      return snapshot;
+    return this.#read(signal);
+  }
+  async #read(signal: AbortSignal): Promise<PlanningSnapshot> {
     signal.throwIfAborted();
     const reads = await Promise.all(collections.map((id) => this.#all(id, signal)));
     const pages = reads.map((read) => read.documents);
@@ -111,6 +120,18 @@ export class PlanningRepository {
       dataRevisions,
     };
     return snapshot;
+  }
+  /** Whether a collection has changed since the snapshot was read. */
+  async #moved(snapshot: PlanningSnapshot, signal: AbortSignal): Promise<boolean> {
+    const pages = await Promise.all(
+      collections.map((id) =>
+        this.#handles[id].query({ limit: 1, signal, includeDataRevision: true }),
+      ),
+    );
+    signal.throwIfAborted();
+    return pages.some(
+      (page, index) => page.dataRevision !== snapshot.dataRevisions[index]?.revision,
+    );
   }
   async put(
     snapshot: PlanningSnapshot,

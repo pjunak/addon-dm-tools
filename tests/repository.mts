@@ -876,7 +876,7 @@ function brokenFixture() {
 void test("stored records that break planning rules load as stored and are reported", async () => {
   const { dataset, collections } = brokenFixture();
   const before = structuredClone(dataset);
-  const { repository } = servedRepository(collections, () => ({ dataset, revision: 1 }));
+  const { repository, calls } = servedRepository(collections, () => ({ dataset, revision: 1 }));
   const snapshot = await repository.load();
   for (const field of Object.keys(collections) as CollectionField[])
     assert.deepEqual(snapshot[field], dataset[field]);
@@ -885,7 +885,43 @@ void test("stored records that break planning rules load as stored and are repor
     "Consequence item-consequence has a missing planning target.",
     "Note shared-note has a missing anchor event-a.",
   ]);
+  // Six reads, then six revision checks that find nothing changed.
+  assert.equal(calls(), 12);
   assert.deepEqual(dataset, before);
+});
+
+void test("a torn read is read once more before a problem is reported", async () => {
+  // A subtree deletion and its link cleanup land while the collections are
+  // read: the items read sees it, the other reads ran before it.
+  const { dataset, repository: writer, writes, collections } = deletionFixture();
+  await writer.deleteSubtree(dataset, "event-a");
+  const after = applyWrites(dataset, writes[0]!, collections),
+    changed = new Set(writes[0]!.map((mutation) => mutation.dataId));
+  const state = (torn: boolean, collection: string) =>
+    torn && collection !== "planning_items"
+      ? { dataset, revision: 1 }
+      : { dataset: after, revision: changed.has(collection) ? 2 : 1 };
+
+  const once = servedRepository(collections, (call, collection) => state(call <= 6, collection));
+  const snapshot = await once.repository.load();
+  assert.deepEqual(validatePlanning(snapshot), []);
+  assert.deepEqual(snapshot.references, after.references);
+  assert.deepEqual(
+    snapshot.dataRevisions.map((guard) => guard.revision),
+    collectionIds.map((id) => (changed.has(id) ? 2 : 1)),
+  );
+  // Six reads, a revision check that finds the change, six reads again.
+  assert.equal(once.calls(), 18);
+
+  // A second torn read is reported as read: there is no third attempt.
+  const twice = servedRepository(collections, (call, collection) =>
+    state(call <= 6 || call > 12, collection),
+  );
+  assert.match(
+    validatePlanning(await twice.repository.load()).join(" "),
+    /missing planning target/,
+  );
+  assert.equal(twice.calls(), 18);
 });
 
 void test("writes may keep a stored problem but never add one", async () => {

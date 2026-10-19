@@ -390,8 +390,23 @@ func decodeEntry(collection string, body json.RawMessage, generatedAt int64) (im
 }
 
 // load reads the stored planning and the dataset rules it already breaks;
-// those never block a preview.
+// those never block a preview. Collections are read one after another, each
+// pinned only to its own revision, so a write landing between two reads can
+// look like a broken link: a read that shows a problem is repeated once when
+// a revision has moved since.
 func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (storedPlanning, error) {
+	current, err := handler.read(ctx, meta)
+	if err != nil || len(current.issues) == 0 {
+		return current, err
+	}
+	moved, err := handler.moved(ctx, meta, current.revisions)
+	if err != nil || !moved {
+		return current, err
+	}
+	return handler.read(ctx, meta)
+}
+
+func (handler *Handler) read(ctx context.Context, meta *workerrpc.Meta) (storedPlanning, error) {
 	dataRevisions := make([]workerrpc.AddonDataSetRevision, 0, 6)
 	stored := make(map[string]map[string]storedDocument)
 	dataset := planning.Dataset{Items: map[string]planning.Item{}, Flows: map[string]planning.Flow{}, References: map[string]planning.Reference{}, Consequences: map[string]planning.Consequence{}, Notes: map[string]planning.Note{}, Views: map[string]planning.View{}}
@@ -434,6 +449,20 @@ func (handler *Handler) load(ctx context.Context, meta *workerrpc.Meta) (storedP
 		dataRevisions = append(dataRevisions, workerrpc.AddonDataSetRevision{Kind: workerrpc.AddonDataCollection, DataID: collection, Revision: *revision})
 	}
 	return storedPlanning{documents: stored, dataset: dataset, revisions: dataRevisions, issues: planning.Validate(dataset)}, nil
+}
+
+// moved reports whether a collection has changed since it was read at revisions.
+func (handler *Handler) moved(ctx context.Context, meta *workerrpc.Meta, revisions []workerrpc.AddonDataSetRevision) (bool, error) {
+	for _, read := range revisions {
+		page, err := handler.data.Query(ctx, meta, workerrpc.AddonDataQuery{Reference: workerrpc.AddonDataReference{Kind: read.Kind, DataID: read.DataID}, Limit: 1, IncludeDataRevision: true})
+		if err != nil {
+			return false, err
+		}
+		if page.DataRevision == nil || *page.DataRevision != read.Revision {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func apply(dataset planning.Dataset, record planning.Normalized) {
