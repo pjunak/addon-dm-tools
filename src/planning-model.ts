@@ -92,6 +92,8 @@ export type PlanningIssueCollection =
   | "dm_notes";
 export type PlanningIssueCode =
   | "duplicate"
+  | "blank"
+  | "tags"
   | "missing-parent"
   | "leaf-parent"
   | "ownership-cycle"
@@ -241,7 +243,14 @@ export function planningIssues(dataset: PlanningDataset): readonly PlanningIssue
     byId.set(item.id, item);
   }
   for (const item of dataset.items) {
-    const name = item.title;
+    const name = item.title.trim() || item.id;
+    if (!item.title.trim())
+      add("planning_items", item.id, "blank", "Planning item {0} has a blank title.", {
+        "0": item.id,
+      });
+    const tags = new Set(item.tags.map((tag) => tag.toLowerCase()));
+    if (tags.size !== item.tags.length || item.tags.some((tag) => !tag.trim()))
+      add("planning_items", item.id, "tags", "{0} has blank or repeated tags.", { "0": name });
     if (item.parentId !== null) {
       const parent = byId.get(item.parentId);
       if (parent === undefined)
@@ -319,6 +328,8 @@ export function planningIssues(dataset: PlanningDataset): readonly PlanningIssue
       });
   for (const reference of dataset.references) {
     const id = reference.id;
+    if (!reference.name.trim())
+      add("planning_references", id, "blank", "Reference {0} has a blank name.", { "0": id });
     if (!byId.has(reference.itemId))
       add("planning_references", id, "missing-owner", "Reference {0} has a missing item.", {
         "0": id,
@@ -335,6 +346,8 @@ export function planningIssues(dataset: PlanningDataset): readonly PlanningIssue
   const flowIds = new Set(dataset.flows.map((flow) => flow.id));
   for (const consequence of dataset.consequences) {
     const id = consequence.id;
+    if (!consequence.title.trim())
+      add("planning_consequences", id, "blank", "Consequence {0} has a blank title.", { "0": id });
     if (
       consequence.target?.["scope"] === "planning" &&
       !byId.has(String(consequence.target["itemId"]))
@@ -371,6 +384,8 @@ export function planningIssues(dataset: PlanningDataset): readonly PlanningIssue
       });
   }
   for (const note of dataset.notes) {
+    if (!note.title.trim())
+      add("dm_notes", note.id, "blank", "Note {0} has a blank title.", { "0": note.id });
     for (const id of note.anchorIds)
       if (!byId.has(id))
         add(
@@ -419,9 +434,13 @@ export function planningRepair(issue: PlanningIssue): PlanningRepair | undefined
     case "planning_flow_links":
       return "delete";
     case "planning_references":
-      return "delete";
+      return issue.code === "blank" ? undefined : "delete";
     case "planning_consequences":
-      return issue.code === "missing-target" ? "detach" : "delete";
+      return issue.code === "missing-target"
+        ? "detach"
+        : issue.code === "blank"
+          ? undefined
+          : "delete";
     case "dm_notes":
       return issue.code === "missing-anchor" ? "detach" : undefined;
     case "planning_items":

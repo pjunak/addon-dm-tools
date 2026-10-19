@@ -2,6 +2,8 @@ package importer
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/pjunak/ttrpg-codex/sdk/go/workerrpc"
@@ -105,5 +107,41 @@ func TestStableStoredProblemIsReportedWithoutReadingAgain(t *testing.T) {
 	// Six reads and six revision checks that find nothing changed.
 	if data.queries != 12 {
 		t.Fatalf("queries = %d", data.queries)
+	}
+}
+
+// The collection schemas accept blank titles, tags that differ only by case
+// and a flow to itself. Such stored records are reported, not refused, while
+// an import still may not add them.
+func TestRecordsBreakingPlannerRulesAreReportedWhenStoredAndRefusedWhenImported(t *testing.T) {
+	blank := validItem("blank", nil)
+	blank["title"] = "  "
+	tagged := validItem("tagged", nil)
+	tagged["tags"] = []any{"Villain", "villain"}
+	loop := map[string]any{"operation": "create", "id": "loop", "schemaVersion": 3, "sourceId": "tagged", "targetId": "tagged", "kind": "continues", "label": ""}
+	problems := []string{"flow loop is part of a cycle", "item blank has a blank title", "item tagged has blank or repeated tags"}
+
+	data := &fakeData{documents: map[string][]workerrpc.AddonDataDocument{
+		"planning_items":      {storeEntry(t, blank), storeEntry(t, tagged)},
+		"planning_flow_links": {storeEntry(t, loop)},
+	}}
+	handler, _ := New(data)
+	preview, err := previewPlanning(t, handler, planningImport([]any{validItem("quest", nil)}, []any{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warnings := preview["warnings"].([]string); len(warnings) != 4 || !slices.Equal(warnings[1:], problems) {
+		t.Fatalf("warnings = %#v", warnings)
+	}
+
+	handler, _ = New(&fakeData{documents: map[string][]workerrpc.AddonDataDocument{}})
+	_, err = previewPlanning(t, handler, planningImport([]any{blank, tagged}, []any{loop}))
+	if err == nil {
+		t.Fatal("an import added records that break planner rules")
+	}
+	for _, problem := range problems {
+		if !strings.Contains(string(mustJSON(t, err)), problem) {
+			t.Fatalf("refusal does not name %q: %v", problem, err)
+		}
 	}
 }

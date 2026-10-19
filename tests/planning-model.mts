@@ -314,6 +314,32 @@ void test("a change is checked only for problems it adds, so a stored one never 
   );
 });
 
+void test("records the schemas accept but planner rules forbid are reported, not refused", () => {
+  const dataset = {
+    items: [
+      { ...item("blank", "quest"), title: "  " },
+      { ...item("tagged", "quest"), tags: ["Villain", "villain"] },
+      { ...item("spaced", "quest"), tags: [" "] },
+    ],
+    flows: [flow({ id: "loop", sourceId: "tagged", targetId: "tagged" })],
+    references: [reference({ id: "ref", itemId: "tagged", name: " " })],
+    consequences: [
+      consequence({ id: "effect", anchor: { scope: "item", itemId: "tagged" }, title: "\t" }),
+    ],
+    notes: [note({ id: "note", title: " " })],
+    views: [],
+  };
+  assert.deepEqual(validatePlanning(dataset), [
+    "Planning item blank has a blank title.",
+    "tagged has blank or repeated tags.",
+    "spaced has blank or repeated tags.",
+    "Flow loop is part of a cycle.",
+    "Reference ref has a blank name.",
+    "Consequence effect has a blank title.",
+    "Note note has a blank title.",
+  ]);
+});
+
 void test("each flow on a cycle is reported, so an unrelated flow is not a new problem", () => {
   const cycle = [
     flow({ id: "forward", sourceId: "a", targetId: "b" }),

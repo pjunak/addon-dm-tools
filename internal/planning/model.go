@@ -191,11 +191,18 @@ func DecodeStored(collection string, body json.RawMessage) (Normalized, error) {
 	return Normalize(collection, body, probe.UpdatedAt)
 }
 
-// Validate reports every dataset rule the records break. The issues name
-// records by ID, so two datasets can be compared.
+// Validate reports every dataset rule the records break. Records that only
+// break these rules still decode, so stored data is reported rather than
+// refused; the issues name records by ID, so two datasets can be compared.
 func Validate(dataset Dataset) []string {
 	issues := make([]string, 0)
 	for _, item := range dataset.Items {
+		if strings.TrimSpace(item.Title) == "" {
+			issues = append(issues, fmt.Sprintf("item %s has a blank title", item.ID))
+		}
+		if !distinctTags(item.Tags) {
+			issues = append(issues, fmt.Sprintf("item %s has blank or repeated tags", item.ID))
+		}
 		if item.ParentID == nil {
 			continue
 		}
@@ -248,6 +255,9 @@ func Validate(dataset Dataset) []string {
 		}
 	}
 	for _, reference := range dataset.References {
+		if strings.TrimSpace(reference.Name) == "" {
+			issues = append(issues, fmt.Sprintf("reference %s has a blank name", reference.ID))
+		}
 		if _, ok := dataset.Items[reference.ItemID]; !ok {
 			issues = append(issues, fmt.Sprintf("reference %s has a missing item", reference.ID))
 		}
@@ -259,6 +269,9 @@ func Validate(dataset Dataset) []string {
 		}
 	}
 	for _, note := range dataset.Notes {
+		if strings.TrimSpace(note.Title) == "" {
+			issues = append(issues, fmt.Sprintf("note %s has a blank title", note.ID))
+		}
 		for _, id := range note.AnchorIDs {
 			if _, ok := dataset.Items[id]; !ok {
 				issues = append(issues, fmt.Sprintf("note %s has missing anchor %s", note.ID, id))
@@ -266,6 +279,9 @@ func Validate(dataset Dataset) []string {
 		}
 	}
 	for _, consequence := range dataset.Consequences {
+		if strings.TrimSpace(consequence.Title) == "" {
+			issues = append(issues, fmt.Sprintf("consequence %s has a blank title", consequence.ID))
+		}
 		if targetScope(consequence.Target) == "planning" {
 			if _, ok := dataset.Items[targetField(consequence.Target, "itemId")]; !ok {
 				issues = append(issues, fmt.Sprintf("consequence %s has a missing planning target", consequence.ID))
@@ -322,11 +338,25 @@ func reaches(next map[string][]string, from, to string) bool {
 	return false
 }
 
+// distinctTags is the planner's rule for tags: none blank, none repeated
+// ignoring case. The schema checks only exact repeats.
+func distinctTags(tags []string) bool {
+	for _, tag := range tags {
+		if strings.TrimSpace(tag) == "" {
+			return false
+		}
+	}
+	return uniqueStrings(tags, true)
+}
+
+// The record checks below go no further than the collection schemas, so every
+// record the host stores decodes; the planner's stricter rules are dataset
+// issues reported by Validate.
 func validateItem(item Item) error {
 	if err := common(item.ID, item.SchemaVersion, item.UpdatedAt); err != nil {
 		return err
 	}
-	if !oneOf(item.Kind, "plotline", "quest", "event", "branch") || strings.TrimSpace(item.Title) == "" || tooLong(item.Title, 160) || tooLong(item.Summary, 2000) || tooLong(item.Body, 80000) || tooLong(item.Objective, 10000) || tooLong(item.Setup, 30000) || tooLong(item.Resolution, 30000) || len(item.Tags) > 40 {
+	if !oneOf(item.Kind, "plotline", "quest", "event", "branch") || item.Title == "" || tooLong(item.Title, 160) || tooLong(item.Summary, 2000) || tooLong(item.Body, 80000) || tooLong(item.Objective, 10000) || tooLong(item.Setup, 30000) || tooLong(item.Resolution, 30000) || len(item.Tags) > 40 {
 		return errors.New("planning item fields are invalid")
 	}
 	if item.ParentID != nil && !validID(*item.ParentID) {
@@ -339,12 +369,12 @@ func validateItem(item Item) error {
 		return errors.New("planning item branchType is invalid")
 	}
 	for _, tag := range item.Tags {
-		if strings.TrimSpace(tag) == "" || tooLong(tag, 60) {
+		if tag == "" || tooLong(tag, 60) {
 			return errors.New("planning item tag is invalid")
 		}
 	}
-	if !uniqueStrings(item.Tags, true) {
-		return errors.New("planning item tags must be unique ignoring case")
+	if !uniqueStrings(item.Tags, false) {
+		return errors.New("planning item tags must be unique")
 	}
 	return nil
 }
@@ -352,7 +382,7 @@ func validateFlow(flow Flow) error {
 	if err := common(flow.ID, flow.SchemaVersion, flow.UpdatedAt); err != nil {
 		return err
 	}
-	if !validID(flow.SourceID) || !validID(flow.TargetID) || flow.SourceID == flow.TargetID || !oneOf(flow.Kind, "continues", "option") || tooLong(flow.Label, 200) {
+	if !validID(flow.SourceID) || !validID(flow.TargetID) || !oneOf(flow.Kind, "continues", "option") || tooLong(flow.Label, 200) {
 		return errors.New("planning flow fields are invalid")
 	}
 	return nil
@@ -361,7 +391,7 @@ func validateReference(value Reference) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if !validID(value.ItemID) || strings.TrimSpace(value.Name) == "" || tooLong(value.Name, 200) ||
+	if !validID(value.ItemID) || value.Name == "" || tooLong(value.Name, 200) ||
 		!oneOf(value.Relation, "related", "involves", "features", "located-at", "opposes", "supports", "reveals", "requires", "rewards") ||
 		value.Quantity < 1 || value.Quantity > 1000 || tooLong(value.Notes, 2000) || !validTarget(value.Target) {
 		return errors.New("planning reference fields are invalid")
@@ -372,7 +402,7 @@ func validateConsequence(value Consequence) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if !oneOf(value.Kind, "world", "reward", "information", "complication") || strings.TrimSpace(value.Title) == "" || tooLong(value.Title, 200) || tooLong(value.Body, 10000) || !validAnchor(value.Anchor) || len(value.Target) > 0 && !validTarget(value.Target) {
+	if !oneOf(value.Kind, "world", "reward", "information", "complication") || value.Title == "" || tooLong(value.Title, 200) || tooLong(value.Body, 10000) || !validAnchor(value.Anchor) || len(value.Target) > 0 && !validTarget(value.Target) {
 		return errors.New("planning consequence fields are invalid")
 	}
 	return nil
@@ -381,7 +411,7 @@ func validateNote(value Note) error {
 	if err := common(value.ID, value.SchemaVersion, value.UpdatedAt); err != nil {
 		return err
 	}
-	if strings.TrimSpace(value.Title) == "" || tooLong(value.Title, 200) || tooLong(value.Body, 30000) || len(value.AnchorIDs) > 100 {
+	if value.Title == "" || tooLong(value.Title, 200) || tooLong(value.Body, 30000) || len(value.AnchorIDs) > 100 {
 		return errors.New("DM note fields are invalid")
 	}
 	for _, id := range value.AnchorIDs {

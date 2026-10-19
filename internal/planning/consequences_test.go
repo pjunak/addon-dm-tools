@@ -18,7 +18,7 @@ func TestConsequenceTargetsRequireExistingPlanningItems(t *testing.T) {
 		{"external annotation", `{"scope":"external","addonId":"rules","kind":"spell","id":"missing","label":"Spell"}`, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			dataset := Dataset{Items: map[string]Item{"owner": {ID: "owner", Kind: "quest"}, "destination": {ID: "destination", Kind: "quest"}},
+			dataset := Dataset{Items: map[string]Item{"owner": {ID: "owner", Kind: "quest", Title: "Owner"}, "destination": {ID: "destination", Kind: "quest", Title: "Destination"}},
 				Consequences: map[string]Consequence{"effect": {ID: "effect", Anchor: json.RawMessage(`{"scope":"item","itemId":"owner"}`), Target: json.RawMessage(test.target), Title: "Retain this", Body: "Authored prose"}},
 			}
 			var want []string

@@ -201,7 +201,7 @@ notice until the list is empty.
 | A reference's item or planning target is missing | **Delete reference**, after confirmation |
 | A consequence's item or flow is missing | **Delete consequence**, after confirmation |
 | A flow has a missing end, joins two canvases, makes a cycle or is an option outside a branch | **Remove flow**; consequences attached to it go too, after confirmation |
-| An item's parent is missing, a leaf or part of a cycle | Fix it in the editor |
+| A title is blank, tags repeat, or an item's parent is missing, a leaf or part of a cycle | Fix it in the editor |
 
 **Edit item** opens the item the problem belongs to, on its canvas, where you
 can also fix a problem without deleting anything, for example by choosing

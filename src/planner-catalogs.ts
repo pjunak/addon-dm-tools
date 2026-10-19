@@ -285,6 +285,8 @@ export const plannerCs = {
   "Option flows must start at a branch. Review those flows before changing this item's kind.":
     "Volitelné návaznosti musí začínat ve větvení. Před změnou typu položky je zkontrolujte.",
   "Duplicate planning item {0}.": "Duplicitní plánovací položka {0}.",
+  "Planning item {0} has a blank title.": "Plánovací položka {0} má prázdný název.",
+  "{0} has blank or repeated tags.": "Položka „{0}“ má prázdné nebo opakované štítky.",
   "{0} has a missing parent.": "Položce „{0}“ chybí nadřazená položka.",
   "{0} has a leaf item as its parent.":
     "Položka „{0}“ má jako nadřazenou položku, která nemůže obsahovat další položky.",
@@ -293,12 +295,15 @@ export const plannerCs = {
   "Flow {0} crosses canvas scopes.": "Návaznost {0} propojuje různá plátna.",
   "Option flow {0} does not start at a branch.": "Volitelná návaznost {0} nezačíná ve větvení.",
   "Flow {0} is part of a cycle.": "Návaznost {0} je součástí cyklu.",
+  "Reference {0} has a blank name.": "Odkaz {0} má prázdný název.",
   "Reference {0} has a missing item.": "Odkazu {0} chybí položka.",
   "Reference {0} has a missing planning target.": "Odkazu {0} chybí plánovací cíl.",
+  "Consequence {0} has a blank title.": "Následek {0} má prázdný název.",
   "Consequence {0} has a missing item anchor.": "Následku {0} chybí navázaná položka.",
   "Consequence {0} has a missing flow anchor.": "Následku {0} chybí navázaná návaznost.",
   "Consequence {0} has a missing planning target.": "Následku {0} chybí plánovací cíl.",
   "Consequence {0} has an invalid anchor.": "Následek {0} má neplatné přiřazení.",
+  "Note {0} has a blank title.": "Poznámka {0} má prázdný název.",
   "Note {0} has a missing anchor {1}.": "Poznámce {0} chybí navázaná položka {1}.",
   "Planning data problems: {0}": "Problémy v plánovacích datech: {0}",
   "Some saved planning records break planning rules. Repair them here or in the item editor. Other changes stay available while they add no new problems.":

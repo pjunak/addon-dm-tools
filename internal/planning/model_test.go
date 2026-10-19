@@ -53,7 +53,8 @@ func TestNormalizeRejectsSchemaDriftAndAmbiguousRecords(t *testing.T) {
 		body       string
 	}{
 		{"missing required field", "planning_items", `{"id":"quest-a","schemaVersion":3,"kind":"quest","parentId":null,"title":"A","summary":"","body":"","objective":"","setup":"","resolution":"","updatedAt":1}`},
-		{"duplicate tags ignoring case", "planning_items", `{"id":"quest-a","schemaVersion":3,"kind":"quest","parentId":null,"title":"A","summary":"","body":"","objective":"","setup":"","resolution":"","tags":["Villain","villain"],"updatedAt":1}`},
+		{"duplicate tags", "planning_items", `{"id":"quest-a","schemaVersion":3,"kind":"quest","parentId":null,"title":"A","summary":"","body":"","objective":"","setup":"","resolution":"","tags":["Villain","Villain"],"updatedAt":1}`},
+		{"empty title", "planning_items", `{"id":"quest-a","schemaVersion":3,"kind":"quest","parentId":null,"title":"","summary":"","body":"","objective":"","setup":"","resolution":"","tags":[],"updatedAt":1}`},
 		{"unsupported relation", "planning_references", `{"id":"reference-a","schemaVersion":3,"itemId":"quest-a","name":"A","relation":"invented","target":{"scope":"planning","itemId":"quest-b"},"quantity":1,"notes":"","updatedAt":1}`},
 		{"duplicate note anchor", "dm_notes", `{"id":"note-a","schemaVersion":3,"title":"A","body":"","anchorIds":["quest-a","quest-a"],"updatedAt":1}`},
 		{"target with hidden extra field", "planning_references", `{"id":"reference-a","schemaVersion":3,"itemId":"quest-a","name":"A","relation":"related","target":{"scope":"planning","itemId":"quest-b","extra":true},"quantity":1,"notes":"","updatedAt":1}`},
@@ -64,6 +65,52 @@ func TestNormalizeRejectsSchemaDriftAndAmbiguousRecords(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 		})
+	}
+}
+
+// The collection schemas accept blank titles, tags that differ only by case
+// and a flow to itself. Stored records like that must still load, so the
+// planner's stricter rules are dataset issues rather than decoding failures.
+func TestSchemaValidRecordsBreakingPlannerRulesDecodeAndAreReported(t *testing.T) {
+	records := []struct{ collection, body string }{
+		{"planning_items", `{"id":"blank","schemaVersion":3,"kind":"quest","parentId":null,"title":"  ","summary":"","body":"","objective":"","setup":"","resolution":"","tags":[],"updatedAt":1}`},
+		{"planning_items", `{"id":"tagged","schemaVersion":3,"kind":"quest","parentId":null,"title":"Tagged","summary":"","body":"","objective":"","setup":"","resolution":"","tags":["Villain","villain"],"updatedAt":1}`},
+		{"planning_items", `{"id":"spaced","schemaVersion":3,"kind":"quest","parentId":null,"title":"Spaced","summary":"","body":"","objective":"","setup":"","resolution":"","tags":[" "],"updatedAt":1}`},
+		{"planning_flow_links", `{"id":"loop","schemaVersion":3,"sourceId":"tagged","targetId":"tagged","kind":"continues","label":"","updatedAt":1}`},
+		{"planning_references", `{"id":"reference","schemaVersion":3,"itemId":"tagged","name":" ","relation":"related","target":{"scope":"planning","itemId":"spaced"},"quantity":1,"notes":"","updatedAt":1}`},
+		{"planning_consequences", `{"id":"effect","schemaVersion":3,"anchor":{"scope":"item","itemId":"tagged"},"kind":"world","title":"\t","body":"","updatedAt":1}`},
+		{"dm_notes", `{"id":"note","schemaVersion":3,"title":" ","body":"","anchorIds":[],"updatedAt":1}`},
+	}
+	dataset := Dataset{Items: map[string]Item{}, Flows: map[string]Flow{}, References: map[string]Reference{}, Consequences: map[string]Consequence{}, Notes: map[string]Note{}}
+	for _, record := range records {
+		normalized, err := DecodeStored(record.collection, []byte(record.body))
+		if err != nil {
+			t.Fatalf("%s did not decode: %v", record.body, err)
+		}
+		switch value := normalized.Value.(type) {
+		case *Item:
+			dataset.Items[value.ID] = *value
+		case *Flow:
+			dataset.Flows[value.ID] = *value
+		case *Reference:
+			dataset.References[value.ID] = *value
+		case *Consequence:
+			dataset.Consequences[value.ID] = *value
+		case *Note:
+			dataset.Notes[value.ID] = *value
+		}
+	}
+	want := []string{
+		"consequence effect has a blank title",
+		"flow loop is part of a cycle",
+		"item blank has a blank title",
+		"item spaced has blank or repeated tags",
+		"item tagged has blank or repeated tags",
+		"note note has a blank title",
+		"reference reference has a blank name",
+	}
+	if issues := Validate(dataset); !slices.Equal(issues, want) {
+		t.Fatalf("issues = %#v", issues)
 	}
 }
 

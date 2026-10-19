@@ -138,6 +138,13 @@ optional consequence target may be omitted, but a planning target must identify
 an item in the complete resulting dataset. These checks do not establish the
 correctness of narrative relationships.
 
+They also check the planner rules the schemas cannot express: titles and
+reference names with visible text, tags that are neither blank nor repeated
+ignoring case, and flows outside any cycle, including a flow to its own source.
+Records that break only these rules still decode, so a stored one is a reported
+problem rather than an unreadable record. Changing the schemas would change the
+stored schema identity.
+
 ## Stored problems and repairs
 
 The planner lists every stored problem above the canvas. A detach repair drops
@@ -147,8 +154,8 @@ consequence that cannot exist without its item, anchor or target, and a broken
 flow together with the consequences anchored to it. Each repair is one
 transaction with exact document revisions and all six collection revisions,
 and is refused when the problem is no longer in the current snapshot. Item
-problems have no automatic repair; **Edit item** opens the owning item on its
-canvas.
+problems, blank names and repeated tags have no automatic repair; **Edit item**
+opens the owning item on its canvas.
 
 ## Deletion, undo and layout reset
 
