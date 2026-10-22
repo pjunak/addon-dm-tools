@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { en, cs } from "#web/import-catalogs";
 import {
+  ImportProblem,
   importText,
   parseAdapterDescription,
   parseImportPreview,
   parseImportSource,
   parseSavedReceipt,
+  previewFailure,
   selectAdapter,
 } from "#web/import-model";
 import type { AdapterDescription } from "../src/import-model.ts";
@@ -114,4 +116,30 @@ void test("English and Czech catalogs retain placeholders and literal imported l
     importText("en", "previewTitle", { label: "<b>{format}</b>" }),
     "<b>{format}</b> preview",
   );
+});
+void test("a rejected preview shows the importer's own problem as plain text", () => {
+  const issue = 'items[3]: effect 1: target "<img src=x onerror=alert(1)>" is not supported';
+  const failure = previewFailure({ name: "AddonServiceHTTPError", code: "INVALID_REQUEST", issue });
+  assert.deepEqual(failure, { key: "previewRejected", params: { issue } });
+  assert.equal(
+    importText("en", failure.key, failure.params),
+    `Fix this problem in the file, then choose it again: ${issue}`,
+  );
+  assert.equal(
+    importText("cs", "previewRejected", { issue: "{issue} {count}" }),
+    "Opravte v souboru tento problém a vyberte ho znovu: {issue} {count}",
+  );
+  for (const error of [
+    { code: "INVALID_REQUEST" },
+    { code: "INVALID_REQUEST", issue: "" },
+    { code: "INVALID_REQUEST", issue: 42 },
+    { code: "CONFLICT", issue },
+    new Error(issue),
+    undefined,
+  ])
+    assert.deepEqual(previewFailure(error), { key: "previewFailed", params: {} });
+  assert.deepEqual(previewFailure(new ImportProblem("tooLarge")), {
+    key: "tooLarge",
+    params: {},
+  });
 });

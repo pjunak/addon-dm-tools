@@ -117,7 +117,8 @@ observed timestamp. Example timestamps are fixtures, not values for a campaign.
 
 | Situation | Next step |
 | --- | --- |
-| Preview fails without saying why | Run `go run ./cmd/check-plan file.json export.json` against a fresh export; it prints the importer's reason |
+| Preview is rejected | The notice names the problem the importer found, such as the record to fix; correct the file and choose it again. Offline, `go run ./cmd/check-plan file.json export.json` against a fresh export prints the same reason |
+| Preview fails without saying why | The importer gave no reason or was unavailable; run `check-plan` as above, or refresh and try again |
 | Invalid JSON, unknown field or unsupported schema | Correct the document; do not remove `format` or guess another version |
 | Unsupported format | Enable the intended provider and refresh discovery |
 | More than one provider claims a format | Resolve the ambiguity; the page will not choose arbitrarily |

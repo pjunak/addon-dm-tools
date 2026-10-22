@@ -12,6 +12,7 @@ import {
   parseImportPreview,
   parseImportSource,
   parseSavedReceipt,
+  previewFailure,
   selectAdapter,
   type Adapter,
   type ImportPreview,
@@ -557,12 +558,9 @@ export function defineImportElement(generation?: string): string {
         this.#notice("ready");
       } catch (error) {
         if (this.#current(runtime, request)) {
+          const failure = previewFailure(error);
           this.#selected = undefined;
-          this.#notice(
-            error instanceof ImportProblem ? error.key : "previewFailed",
-            "alert",
-            error instanceof ImportProblem ? error.params : {},
-          );
+          this.#notice(failure.key, "alert", failure.params);
         }
       } finally {
         if (this.#current(runtime, request)) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,6 +84,48 @@ func TestPreviewRejectsCrossScopeFlow(t *testing.T) {
 	params := mustJSON(t, map[string]any{"contractVersion": "import-preview.v1", "format": "dm-tools-planning", "document": document})
 	if _, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "preview", Params: params, Meta: testMeta()}); err == nil {
 		t.Fatal("expected cross-scope flow rejection")
+	}
+}
+
+// The Import Center shows details.issue to the DM, so every rejection names
+// what to fix.
+func TestPreviewRejectionsCarryAnIssue(t *testing.T) {
+	stale := validItem("quest-a", nil)
+	stale["operation"] = "update"
+	stale["expectedUpdatedAt"] = 1
+	parentA, parentB := "quest-a", "quest-b"
+	many := make([]any, 0, 257)
+	for index := range 257 {
+		many = append(many, validItem(fmt.Sprintf("quest-%03d", index), nil))
+	}
+	for _, check := range []struct {
+		name         string
+		items, flows []any
+		issue        string
+	}{
+		{"unparsable", []any{map[string]any{"operation": "create"}}, nil, "planning_items"},
+		{"record", []any{stale}, nil, "planning_items/quest-a: update has a missing or stale expectedUpdatedAt"},
+		{"invariants", []any{validItem(parentA, nil), validItem(parentB, nil), validEvent("event-a", parentA), validEvent("event-b", parentB)},
+			[]any{map[string]any{"operation": "create", "id": "cross", "schemaVersion": 3, "sourceId": "event-a", "targetId": "event-b", "kind": "continues", "label": ""}}, "cross"},
+		{"operation limit", many, nil, "the import has 257 operations; the limit is 256"},
+	} {
+		t.Run(check.name, func(t *testing.T) {
+			handler, _ := New(&fakeData{documents: map[string][]workerrpc.AddonDataDocument{}})
+			flows := check.flows
+			if flows == nil {
+				flows = []any{}
+			}
+			params := mustJSON(t, map[string]any{"contractVersion": "import-preview.v1", "format": "dm-tools-planning", "document": map[string]any{
+				"format": "dm-tools-planning", "schemaVersion": 3, "generatedAt": 100, "items": check.items,
+				"flowLinks": flows, "references": []any{}, "consequences": []any{}, "notes": []any{},
+			}})
+			_, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "preview", Params: params, Meta: testMeta()})
+			var failure *workerrpc.RPCError
+			var details struct{ Issue string }
+			if !errors.As(err, &failure) || failure.Data == nil || json.Unmarshal(failure.Data.Details, &details) != nil || !strings.Contains(details.Issue, check.issue) {
+				t.Fatalf("error = %v, details = %s", err, failure.Data.Details)
+			}
+		})
 	}
 }
 

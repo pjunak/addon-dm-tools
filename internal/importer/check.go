@@ -183,18 +183,22 @@ func describeFailure(err error) error {
 		return errors.New(message)
 	}
 	lines := []string{message}
-	if issue, ok := details["issue"].(string); ok {
-		lines = append(lines, issue)
-	}
-	if issues, ok := details["issues"].([]any); ok {
+	// issue summarizes the rest for the Import Center, so print the most
+	// complete form only once.
+	issues, _ := details["issues"].([]any)
+	issue, hasIssue := details["issue"].(string)
+	collection, hasCollection := details["collection"].(string)
+	operations, hasOperations := details["operations"]
+	switch {
+	case len(issues) > 0:
 		for _, issue := range issues {
 			lines = append(lines, fmt.Sprint(issue))
 		}
-	}
-	if collection, ok := details["collection"].(string); ok {
+	case hasIssue:
+		lines = append(lines, issue)
+	case hasCollection:
 		lines = append(lines, fmt.Sprintf("record: %s %v", collection, details["id"]))
-	}
-	if operations, ok := details["operations"]; ok {
+	case hasOperations:
 		lines = append(lines, fmt.Sprintf("operations: %v", operations))
 	}
 	return errors.New(strings.Join(lines, "\n  "))

@@ -49,6 +49,7 @@ export const en = {
   oneFile: "Choose one JSON document at a time.",
   previewFailed:
     "The importer could not preview this document. Check its format and contents, then try again.",
+  previewRejected: "Fix this problem in the file, then choose it again: {issue}",
   invalidResponse: "The importer returned an invalid review. No import was submitted.",
   missingGeneration: "The host did not provide an active Import Center generation.",
   creates: "Create",
@@ -123,6 +124,7 @@ export const cs: Record<keyof typeof en, string> = {
   oneFile: "Vyberte vždy jeden dokument JSON.",
   previewFailed:
     "Importér nemohl připravit náhled. Zkontrolujte formát a obsah dokumentu a zkuste to znovu.",
+  previewRejected: "Opravte v souboru tento problém a vyberte ho znovu: {issue}",
   invalidResponse: "Importér vrátil neplatný náhled. Import nebyl odeslán.",
   missingGeneration: "Hostitel neposkytl aktivní generaci Centra importu.",
   creates: "Vytvořit",

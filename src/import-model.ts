@@ -61,6 +61,26 @@ export class ImportProblem extends Error {
     this.params = params;
   }
 }
+/**
+ * The notice for a failed preview. An importer that rejects the document may
+ * name the problem (the host's ServiceError.issue); it is plain text from the
+ * provider and must only ever be shown as text.
+ */
+export function previewFailure(error: unknown): {
+  readonly key: ImportMessage;
+  readonly params: ImportParams;
+} {
+  if (error instanceof ImportProblem) return { key: error.key, params: error.params };
+  if (
+    isRecord(error) &&
+    error["code"] === "INVALID_REQUEST" &&
+    typeof error["issue"] === "string" &&
+    error["issue"] !== ""
+  ) {
+    return { key: "previewRejected", params: { issue: error["issue"] } };
+  }
+  return { key: "previewFailed", params: {} };
+}
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

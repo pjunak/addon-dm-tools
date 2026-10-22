@@ -175,7 +175,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 		existing, exists := stored[collection][entry.Record.ID]
 		if document.Mode == "replace" {
 			if entry.Operation != "create" {
-				return nil, invalid("replacement records must use create", map[string]any{"collection": collection, "id": entry.Record.ID})
+				return nil, recordInvalid("replacement records must use create", collection, entry.Record.ID)
 			}
 			if exists && equivalent(existing.normalized.Body, entry.Record.Body) {
 				result.Skips++
@@ -202,7 +202,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 					result.Skips++
 					continue
 				}
-				return nil, invalid("create conflicts with an existing planning record", map[string]any{"collection": collection, "id": entry.Record.ID})
+				return nil, recordInvalid("create conflicts with an existing planning record", collection, entry.Record.ID)
 			}
 			result.Creates++
 			mutations = append(mutations, putMutation(collection, entry.Record, 0))
@@ -210,21 +210,21 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 			apply(dataset, entry.Record)
 		case "update":
 			if !exists || entry.ExpectedUpdatedAt == nil || *entry.ExpectedUpdatedAt != existing.normalized.UpdatedAt {
-				return nil, invalid("update has a missing or stale expectedUpdatedAt", map[string]any{"collection": collection, "id": entry.Record.ID})
+				return nil, recordInvalid("update has a missing or stale expectedUpdatedAt", collection, entry.Record.ID)
 			}
 			if equivalent(existing.normalized.Body, entry.Record.Body) {
 				result.Skips++
 				continue
 			}
 			if entry.Record.UpdatedAt <= existing.normalized.UpdatedAt {
-				return nil, invalid("generatedAt must be later than the changed local record", map[string]any{"collection": collection, "id": entry.Record.ID})
+				return nil, recordInvalid("generatedAt must be later than the changed local record", collection, entry.Record.ID)
 			}
 			result.Updates++
 			mutations = append(mutations, putMutation(collection, entry.Record, existing.revision))
 			changes = append(changes, change{collection, entry.Record.ID, "update", label(entry.Record)})
 			apply(dataset, entry.Record)
 		default:
-			return nil, invalid("operation must be create or update", map[string]any{"collection": collection, "id": entry.Record.ID})
+			return nil, recordInvalid("operation must be create or update", collection, entry.Record.ID)
 		}
 	}
 	if document.Mode == "replace" {
@@ -249,10 +249,14 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 	// may leave them in place but never add one.
 	remaining := planning.Validate(dataset)
 	if issues := planning.Introduced(current.issues, remaining); len(issues) > 0 {
-		return nil, invalid("planning import violates dataset invariants", map[string]any{"issues": issues[:min(20, len(issues))]})
+		issue := issues[0]
+		if len(issues) > 1 {
+			issue += fmt.Sprintf(" (and %d more)", len(issues)-1)
+		}
+		return nil, invalid("planning import violates dataset invariants", map[string]any{"issue": issue, "issues": issues[:min(20, len(issues))]})
 	}
 	if len(mutations) > 256 {
-		return nil, invalid("planning import exceeds the 256-operation limit", map[string]any{"operations": len(mutations)})
+		return nil, invalid("planning import exceeds the 256-operation limit", map[string]any{"operations": len(mutations), "issue": fmt.Sprintf("the import has %d operations; the limit is 256", len(mutations))})
 	}
 	sort.Slice(changes, func(i, j int) bool {
 		if changes[i].Collection == changes[j].Collection {
@@ -420,14 +424,15 @@ func (handler *Handler) read(ctx context.Context, meta *workerrpc.Meta) (storedP
 				return storedPlanning{}, err
 			}
 			if page.DataRevision == nil || *page.DataRevision < 0 || (revision != nil && *revision != *page.DataRevision) {
-				return storedPlanning{}, invalid("planning collection revision is missing or changed; update the host and preview again", nil)
+				message := "planning collection revision is missing or changed; update the host and preview again"
+				return storedPlanning{}, invalid(message, map[string]any{"issue": message})
 			}
 			revision = page.DataRevision
 			for _, document := range page.Documents {
 				if collection == "planning_views" {
 					var view planning.View
 					if jsonexact.Decode(document.Value, &view) != nil || view.SchemaVersion != planning.SchemaVersion {
-						return storedPlanning{}, invalid("stored planning view is invalid", map[string]any{"id": document.Key})
+						return storedPlanning{}, recordInvalid("stored planning view is invalid", collection, document.Key)
 					}
 					normalized := planning.Normalized{Collection: collection, ID: view.ID, Label: "Saved canvas layout", UpdatedAt: view.UpdatedAt, Value: &view, Body: document.Value}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
@@ -435,7 +440,7 @@ func (handler *Handler) read(ctx context.Context, meta *workerrpc.Meta) (storedP
 				} else {
 					normalized, err := planning.DecodeStored(collection, document.Value)
 					if err != nil {
-						return storedPlanning{}, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key, "issue": err.Error()})
+						return storedPlanning{}, invalid("stored planning data is invalid", map[string]any{"collection": collection, "id": document.Key, "issue": collection + "/" + document.Key + ": " + err.Error()})
 					}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
 					apply(dataset, normalized)
@@ -542,6 +547,12 @@ func (handler *Handler) purgeExpiredLocked() {
 }
 func invalid(message string, details any) error {
 	return workerrpc.NewRPCError(workerrpc.JSONRPCInvalidParams, workerrpc.KindValidationFailed, message, false, details)
+}
+
+// recordInvalid names the record in details.issue, the text the Import Center
+// shows the DM.
+func recordInvalid(message, collection, id string) error {
+	return invalid(message, map[string]any{"collection": collection, "id": id, "issue": collection + "/" + id + ": " + message})
 }
 func unavailable(message string) error {
 	return workerrpc.NewRPCError(workerrpc.JSONRPCApplication, workerrpc.KindUnavailable, message, true, nil)

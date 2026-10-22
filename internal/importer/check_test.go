@@ -46,7 +46,7 @@ func TestCheckReportsTheImporterReason(t *testing.T) {
 	}
 
 	_, err = Check(readExample(t, "planning-update.json"), nil, checkTime)
-	if err == nil || !strings.Contains(err.Error(), "record: planning_items example-find-courier") {
+	if err == nil || !strings.Contains(err.Error(), "planning_items/example-find-courier: update has a missing or stale expectedUpdatedAt") {
 		t.Fatalf("update without a baseline: %v", err)
 	}
 
