@@ -84,6 +84,8 @@ JSON schemas under `contracts/` define activation and write boundaries.
   silently treating a defect as the intended contract.
 - Services exchange serializable, schema-validated values, never DOM, functions,
   host facades or raw HTML.
+- Styles use the host's design tokens by name. `check:source` runs the host's
+  style check from `tools/codex/` (`npm run sync:codex-sdk` refreshes it).
 
 ## Working loop
 

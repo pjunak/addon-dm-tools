@@ -26,6 +26,8 @@ github.com/mattn/go-shellwords v1.0.12 h1:M2zGm7EW6UQJvDeQxo4T51eKPurbeFbe8WtebG
 github.com/mattn/go-shellwords v1.0.12/go.mod h1:EZzvwXDESEeg03EKmM+RmDnNOPKG4lLtQsUlTZDWQ8Y=
 github.com/pjunak/ttrpg-codex v0.0.0-20261011124025-639dab299e92 h1:WRpyHl1PAJ2d9b7CbeKyh0oDlin3N26OI99A3zUigFs=
 github.com/pjunak/ttrpg-codex v0.0.0-20261011124025-639dab299e92/go.mod h1:Pv/KUDe4ZI7KScmD/RkIoHUi4TTJyRcsMC0mq58L38A=
+github.com/pjunak/ttrpg-codex v0.0.0-20261102202637-0878bcc86853 h1:XDWdpwEea4KDQPrRyGFbc61Pz5iJEu0OsOII8vtx/PM=
+github.com/pjunak/ttrpg-codex v0.0.0-20261102202637-0878bcc86853/go.mod h1:2vf90hEeTUf3i085FgoLpsNX8U4h8P2pcDIZgvQj2Lk=
 github.com/rhysd/actionlint v1.7.12 h1:vQ4GeJN86C0QH+gTUQcs8McmK62OLT3kmakPMtEWYnY=
 github.com/rhysd/actionlint v1.7.12/go.mod h1:krOUhujIsJusovkaYzQ/VNH8PFexjNKqU0q5XI/4w+g=
 github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=

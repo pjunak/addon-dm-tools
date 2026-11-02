@@ -16,7 +16,7 @@
     "typecheck:source": "tsc -p tsconfig.json --noEmit",
     "typecheck:node": "tsc -p tsconfig.node.json",
     "typecheck": "npm run typecheck:source && npm run typecheck:node",
-    "check:source": "node tools/check-source.mts && node tools/codex-sdk.mts check",
+    "check:source": "node tools/check-source.mts && node tools/codex-sdk.mts check && node tools/codex/style-check.mts src",
     "sync:codex-sdk": "node tools/codex-sdk.mts sync",
     "check:go": "go run ./tools/check.go",
     "check:workflows": "go run ./tools/check.go workflows",

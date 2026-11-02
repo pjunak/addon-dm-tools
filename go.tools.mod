@@ -1,6 +1,6 @@
 module github.com/pjunak/addon-dm-tools/tools
 
-go 1.27.2
+go 1.27.3
 
 tool (
 	github.com/pjunak/ttrpg-codex/cmd/codex-addon-inspect
@@ -19,7 +19,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
-	github.com/pjunak/ttrpg-codex v0.0.0-20261011124025-639dab299e92 // indirect
+	github.com/pjunak/ttrpg-codex v0.0.0-20261102202637-0878bcc86853 // indirect
 	github.com/rhysd/actionlint v1.7.12 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
