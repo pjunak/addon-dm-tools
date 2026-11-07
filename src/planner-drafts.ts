@@ -28,6 +28,10 @@ export class PlannerDrafts {
       for (const control of controlsOf(form)) {
         if (!Object.hasOwn(existing.values, control.name)) continue;
         const value = existing.values[control.name]!;
+        if (isRadio(control)) {
+          control.checked = control.value === value;
+          continue;
+        }
         // A removed destination must not silently turn into an empty/root choice.
         if (
           control.tagName === "SELECT" &&
@@ -94,6 +98,19 @@ function controlsOf(
   );
 }
 
+function isRadio(
+  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): control is HTMLInputElement {
+  return control.tagName === "INPUT" && (control as HTMLInputElement).type === "radio";
+}
+
+/** Named values; a radio group contributes its checked value, or "" when none is checked. */
 function valuesOf(form: HTMLFormElement): Record<string, string> {
-  return Object.fromEntries(controlsOf(form).map((control) => [control.name, control.value]));
+  const values: Record<string, string> = {};
+  for (const control of controlsOf(form)) {
+    if (!isRadio(control)) values[control.name] = control.value;
+    else if (control.checked) values[control.name] = control.value;
+    else values[control.name] ??= "";
+  }
+  return values;
 }

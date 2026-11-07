@@ -284,6 +284,71 @@ globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
   }
 
   firstCard.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  const editor = requiredElement(planner, "dialog.dm-planner-editor", HTMLDialogElement);
+  const sectionLabels = [...editor.querySelectorAll(".dm-form-nav button")].map(
+    (button) => button.textContent,
+  );
+  const expectedSections = ["Basics", "Story", "Setup and resolution", "Links", "Notes"];
+  check(
+    "editor is one page with a section bar instead of tabs",
+    JSON.stringify(sectionLabels) === JSON.stringify(expectedSections) &&
+      editor.querySelector('[role="tab"]') === null,
+    sectionLabels,
+    expectedSections,
+  );
+  const basics = requiredElement(editor, '[data-form-section="basics"]', HTMLElement);
+  const settings = requiredElement(editor, ".dm-form-settings", HTMLElement);
+  check(
+    "Settings sit beside the sections in a wide dialog",
+    settings.getBoundingClientRect().left >= basics.getBoundingClientRect().right &&
+      closeTo(settings.getBoundingClientRect().top, basics.getBoundingClientRect().top, 1),
+    {
+      basics: basics.getBoundingClientRect().right,
+      settings: settings.getBoundingClientRect().left,
+    },
+    "Settings to the right of Basics, top-aligned",
+  );
+  const kinds = [...editor.querySelectorAll<HTMLInputElement>('input[name="kind"]')];
+  check(
+    "Kind is a set of joined button choices",
+    editor.querySelector('fieldset[data-ui="choices"] input[name="kind"]') !== null &&
+      kinds.map((input) => `${input.value}${input.checked ? "*" : ""}`).join() ===
+        "plotline,quest*,event,branch",
+    kinds.map((input) => `${input.value}${input.checked ? "*" : ""}`),
+    ["plotline", "quest*", "event", "branch"],
+  );
+  const eventGroup = requiredElement(
+    editor,
+    'input[name="eventType"]',
+    HTMLInputElement,
+  ).closest<HTMLElement>(".dm-form-depends")!;
+  const movedGroup = [...editor.querySelectorAll<HTMLElement>(".dm-form-depends")].at(-1)!;
+  check(
+    "a quest hides the event type and the move explanation",
+    eventGroup.hidden === true && movedGroup.hidden === true,
+    { event: eventGroup.hidden, moved: movedGroup.hidden },
+    { event: true, moved: true },
+  );
+  kinds.find((input) => input.value === "event")!.click();
+  const parent = requiredElement(editor, 'select[name="parentId"]', HTMLSelectElement);
+  parent.value = "quest-b";
+  parent.dispatchEvent(new Event("change", { bubbles: true }));
+  check(
+    "choosing Event and a new parent shows why each group appeared",
+    eventGroup.hidden === false &&
+      eventGroup.querySelector(".dm-form-depends-why")?.textContent ===
+        "↳ Because it is an event" &&
+      movedGroup.hidden === false,
+    eventGroup.querySelector(".dm-form-depends-why")?.textContent,
+    "↳ Because it is an event",
+  );
+  const chips = [...editor.querySelectorAll(".dm-form-chip")].map((chip) => chip.textContent);
+  check(
+    "status chips follow the kind and report unsaved changes",
+    JSON.stringify(chips) === JSON.stringify(["Event", "Unsaved changes"]),
+    chips,
+    ["Event", "Unsaved changes"],
+  );
   const titleInput = requiredElement(planner, 'dialog input[name="title"]', HTMLInputElement);
   titleInput.value = "Title {0} $&";
   titleInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -302,6 +367,10 @@ globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
     localizedInput.value,
     "Title {0} $&",
   );
+  const localizedKind = planner.querySelector<HTMLInputElement>(
+    'dialog input[name="kind"]:checked',
+  )?.value;
+  check("locale refresh retains a chosen kind", localizedKind === "event", localizedKind, "event");
   const localizedDialog = requiredElement(planner, "dialog", HTMLDialogElement);
   check(
     "locale refresh translates the open dialog",

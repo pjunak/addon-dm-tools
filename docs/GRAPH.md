@@ -194,10 +194,10 @@ deliberate overlaps, remain unchanged.
 
 Drafts are add-on-owned editor state, never campaign records or an automatic
 merge. Keep each form's named values and opening revisions through selection,
-tab and scope changes, reload and other saves. Clear only the confirmed submitted
+editor and scope changes, reload and other saves. Clear only the confirmed submitted
 draft; unrelated drafts survive. Preserve removed-record text for copying.
 
-New items stay provisional until valid Details commit at revision zero.
+New items stay provisional until their valid details commit at revision zero.
 Cancel and Escape discard that provisional item; links and notes require a saved
 record. Scope navigation retains the provisional parent. A confirmed successful
 write followed by a failed read cannot be submitted again. If the write outcome

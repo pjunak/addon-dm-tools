@@ -25,6 +25,12 @@ import { appendNoteAnchors, noteAnchors, type NoteAnchorFilter } from "./planner
 import { planningChoices } from "./planner-choices.js";
 import {
   actionButton,
+  choiceField,
+  choiceValue,
+  dependentGroup,
+  fieldHelp,
+  formChip,
+  formSection,
   formText,
   messageBlock,
   scalarText,
@@ -471,9 +477,7 @@ export function definePlannerElement(generation?: string): string {
       this.#editorId = id;
       this.#dialogTab = tab;
       this.#render();
-      this.querySelector<HTMLElement>(
-        tab === "details" ? 'dialog input[name="title"]' : `dialog [data-tab="${tab}"]`,
-      )?.focus();
+      this.#showEditorTab(tab);
     }
     #closeEditor(): void {
       if (this.#busy) return;
@@ -661,8 +665,11 @@ export function definePlannerElement(generation?: string): string {
       for (const control of root.querySelectorAll<
         HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
       >("input,textarea,select")) {
-        control.disabled = this.#busy || (this.#needsReload && control.tagName === "SELECT");
-        if (control.tagName !== "SELECT")
+        // A select or radio cannot be read-only, so it is disabled while a reload is needed.
+        const choice =
+          control.tagName === "SELECT" || (control as HTMLInputElement).type === "radio";
+        control.disabled = this.#busy || (this.#needsReload && choice);
+        if (!choice)
           (control as HTMLInputElement | HTMLTextAreaElement).readOnly = this.#needsReload;
       }
       for (const button of root.querySelectorAll("button"))
@@ -681,8 +688,10 @@ export function definePlannerElement(generation?: string): string {
         const sameView = wasReader === dialog.classList.contains("dm-planning-reader");
         dialog.scrollTop = sameView ? dialogScroll : 0;
         body.scrollTop = sameView ? bodyScroll : 0;
-        const control = focusName
-          ? dialog.querySelector<HTMLElement>(`[name="${CSS.escape(focusName)}"]`)
+        const name = focusName ? CSS.escape(focusName) : undefined;
+        const control = name
+          ? (dialog.querySelector<HTMLElement>(`input[type="radio"][name="${name}"]:checked`) ??
+            dialog.querySelector<HTMLElement>(`[name="${name}"]`))
           : undefined;
         control?.focus({ preventScroll: true });
       }
@@ -1140,163 +1149,250 @@ export function definePlannerElement(generation?: string): string {
     }
 
     #editor(document: Document, snapshot: PlanningSnapshot): HTMLDialogElement {
+      const t = this.#t;
       const dialog = document.createElement("dialog");
-      dialog.className = "dm-planner-dialog dm-planner-inspector";
-      dialog.setAttribute("aria-label", this.#t("Edit planning item"));
+      dialog.className = "dm-planner-dialog dm-planner-inspector dm-planner-editor";
+      dialog.setAttribute("aria-label", t("Edit planning item"));
       const isNew = this.#newItem?.id === this.#editorId;
       const selected = isNew
         ? this.#newItem!
         : snapshot.items.find((item) => item.id === this.#editorId)!;
-      const header = document.createElement("header"),
-        title = document.createElement("h2");
-      title.textContent = selected.title;
+      const formId = `${this.#flowMarkerId}-details`;
+      const draftKey = isNew ? `new-item:${selected.id}` : `planning_items:${selected.id}`;
       const closeEditor = (): void => {
         if (isNew) this.#cancelCreation();
         else this.#closeEditor();
       };
       const close = actionButton(
         document,
-        isNew ? this.#t("Cancel creation") : this.#t("Close editor"),
+        isNew ? t("Cancel creation") : t("Close editor"),
         closeEditor,
       );
       close.dataset["viewAction"] = "";
-      const reload = actionButton(document, this.#t("Reload planner"), () => void this.#reload());
-      reload.dataset["viewAction"] = "";
-      const saveItem = actionButton(document, this.#t("Save item"), () => undefined, "primary");
+      const saveItem = actionButton(document, t("Save item"), () => undefined, "primary");
       saveItem.type = "submit";
-      saveItem.setAttribute("form", `${this.#flowMarkerId}-details`);
-      header.append(title, saveItem, close);
-      dialog.append(header);
+      saveItem.title = t("Ctrl+S saves");
+      saveItem.setAttribute("form", formId);
+      const reload = actionButton(document, t("Reload planner"), () => void this.#reload());
+      reload.dataset["viewAction"] = "";
+
+      // The head: title, status chips and save; the section bar; the field legend.
+      const head = document.createElement("header");
+      head.className = "dm-form-head";
+      const heading = document.createElement("div"),
+        title = document.createElement("h2"),
+        chips = document.createElement("span"),
+        headActions = document.createElement("div");
+      heading.className = "dm-form-title";
+      title.textContent = selected.title;
+      chips.className = "dm-form-chips";
+      headActions.className = "dm-form-head-actions";
+      headActions.append(saveItem, reload, close);
+      heading.append(title, chips, headActions);
+      const nav = document.createElement("nav");
+      nav.className = "dm-form-nav";
+      nav.setAttribute("aria-label", t("Sections"));
+      const legend = document.createElement("p");
+      legend.className = "dm-form-legend";
+      for (const text of [
+        t("▾ pick from a list"),
+        t("✎ type freely"),
+        t("↳ shown because of the choice above"),
+      ]) {
+        const entry = document.createElement("span");
+        entry.textContent = text;
+        legend.append(entry);
+      }
+      head.append(heading, nav, legend);
+      dialog.append(head);
       configurePlannerDialog(dialog, closeEditor);
-      const tabs = document.createElement("div");
-      tabs.className = "dm-dialog-tabs";
-      tabs.setAttribute("role", "tablist");
-      tabs.dataset["uiTabs"] = "";
-      tabs.setAttribute("aria-label", this.#t("Item sections"));
-      dialog.append(tabs);
+
       const body = document.createElement("div");
       body.className = "dm-planner-dialog-body";
       dialog.append(body);
-      body.append(reload);
       if (this.#message) body.append(messageBlock(document, this.#message, this.#messageKind));
       if (this.#needsReload)
         body.append(
           messageBlock(
             document,
-            this.#t(
+            t(
               "Reload the planner before making another change. Your edits are retained; review the saved data before retrying.",
             ),
             "alert",
           ),
         );
       this.#removedDrafts(document, body, snapshot);
-      const panels = new Map<string, HTMLElement>();
-      const activate = (id: string): void => {
-        if (isNew && id !== "details") return;
-        if (this.#dialogTab !== id) {
-          dialog.scrollTop = 0;
-          body.scrollTop = 0;
-        }
-        this.#dialogTab = id;
-        for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) {
-          const active = button.dataset["tab"] === id;
-          button.setAttribute("aria-selected", String(active));
-          button.tabIndex = active ? 0 : -1;
-        }
-        for (const [key, panel] of panels) panel.hidden = key !== id;
-      };
-      for (const [id, label] of [
-        ["details", this.#t("Details")],
-        ["links", this.#t("Links")],
-        ["notes", this.#t("Notes")],
-      ] as const) {
-        const panel = document.createElement("section");
-        panel.setAttribute("role", "tabpanel");
-        panel.id = `${this.#flowMarkerId}-${id}-panel`;
-        panels.set(id, panel);
-        body.append(panel);
-        const button = actionButton(document, label, () => activate(id));
-        button.setAttribute("role", "tab");
-        button.dataset["tab"] = id;
-        button.id = `${this.#flowMarkerId}-${id}-tab`;
-        button.setAttribute("aria-controls", panel.id);
-        panel.setAttribute("aria-labelledby", button.id);
-        tabs.append(button);
-        if (isNew && id !== "details") {
-          button.dataset["unavailable"] = "";
-          button.disabled = true;
-        }
-      }
-      const aside = panels.get("details")!;
+
+      // The item's own fields: sections, with Settings beside them on wide dialogs.
+      const layout = document.createElement("div");
+      layout.className = "dm-form";
+      body.append(layout);
       const form = document.createElement("form");
+      form.className = "dm-form-details";
+      form.id = formId;
+      form.setAttribute("aria-label", t("Planning item details"));
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         void this.#saveItem(selected, form);
       });
-      form.id = `${this.#flowMarkerId}-details`;
-      form.setAttribute("aria-label", this.#t("Planning item details"));
+      const details = (id: string, label: string, ...children: HTMLElement[]): HTMLElement => {
+        const section = formSection(document, id, label, ...children);
+        section.dataset["editorTab"] = "details";
+        return section;
+      };
+      const settings = document.createElement("section");
+      settings.className = "dm-form-settings";
+      settings.dataset["editorTab"] = "details";
+      const settingsTitle = document.createElement("h3");
+      settingsTitle.textContent = t("Settings");
+      settingsTitle.id = `${this.#flowMarkerId}-settings`;
+      settings.setAttribute("aria-labelledby", settingsTitle.id);
+      settings.append(settingsTitle);
       const refreshStructure = appendItemStructure(
         document,
-        form,
+        settings,
         selected,
         snapshot.items,
-        this.#t,
+        t,
+        !isNew,
       );
-      form.append(
-        textField(document, this.#t("Title"), "title", selected.title, 160),
-        textArea(document, this.#t("Summary"), "summary", selected.summary, 3, 2000),
-        textArea(document, this.#t("Objective"), "objective", selected.objective, 3, 10000),
-        textArea(document, this.#t("Body"), "body", selected.body, 7, 80000),
-        textArea(document, this.#t("Setup"), "setup", selected.setup, 5, 30000),
-        textArea(document, this.#t("Resolution"), "resolution", selected.resolution, 5, 30000),
+      settings.append(
         // Up to 40 tags of 60 characters, comma separated.
-        textField(document, this.#t("Tags"), "tags", selected.tags.join(", "), 2440),
+        textField(
+          document,
+          t("Tags"),
+          "tags",
+          selected.tags.join(", "),
+          2440,
+          t("Separate tags with commas."),
+        ),
       );
+      const side = document.createElement("aside");
+      side.className = "dm-form-side";
+      side.append(settings);
+      const actions = document.createElement("div");
+      actions.className = "dm-form-actions";
+      form.append(
+        details(
+          "basics",
+          t("Basics"),
+          textField(document, t("Title"), "title", selected.title, 160),
+          textArea(document, t("Summary"), "summary", selected.summary, 3, 2000),
+        ),
+        details(
+          "story",
+          t("Story"),
+          textArea(document, t("Objective"), "objective", selected.objective, 3, 10000),
+          textArea(document, t("Body"), "body", selected.body, 7, 80000),
+        ),
+        details(
+          "table",
+          t("Setup and resolution"),
+          textArea(document, t("Setup"), "setup", selected.setup, 5, 30000),
+          textArea(document, t("Resolution"), "resolution", selected.resolution, 5, 30000),
+        ),
+        side,
+        actions,
+      );
+      layout.append(form);
       this.#bindDraft(
         form,
-        isNew ? `new-item:${selected.id}` : `planning_items:${selected.id}`,
+        draftKey,
         isNew ? 0 : snapshot.revisions.get(`planning_items:${selected.id}`),
+        actions,
       );
       refreshStructure();
-      const save = actionButton(document, this.#t("Save details"), () => undefined, "primary");
-      save.type = "submit";
-      form.append(save);
-      aside.append(form);
-      if (isNew)
-        aside.prepend(
-          messageBlock(
-            document,
-            this.#t(
-              "This item is not saved yet. Save it before adding links or notes; Cancel creation leaves the campaign unchanged.",
-            ),
-            "status",
-          ),
-        );
-      else {
-        if (selected.kind === "plotline" || selected.kind === "quest")
-          aside.append(
-            actionButton(document, this.#t("Enter this canvas"), () =>
-              this.#openCanvas(selected.id),
-            ),
-          );
-        panels
-          .get("links")!
-          .append(
-            this.#flowEditor(document, snapshot, selected),
-            this.#annotations(document, snapshot, selected),
-          );
-        panels.get("notes")!.append(this.#notes(document, snapshot, selected));
-        aside.append(
+      if (!isNew) {
+        actions.prepend(
           actionButton(
             document,
-            this.#t("Delete item and subtree"),
+            t("Delete item and subtree"),
             () => void this.#delete(selected),
             "danger",
           ),
         );
+        if (selected.kind === "plotline" || selected.kind === "quest")
+          actions.append(
+            actionButton(document, t("Enter this canvas"), () => this.#openCanvas(selected.id)),
+          );
       }
-      activate(this.#dialogTab);
+      const save = actionButton(document, t("Save details"), () => undefined, "primary");
+      save.type = "submit";
+      actions.append(save);
+
+      // Links and notes belong to a saved item; a new one says why they wait.
+      const links = formSection(document, "links", t("Links"));
+      links.dataset["editorTab"] = "links";
+      const notes = formSection(document, "notes", t("Notes"));
+      notes.dataset["editorTab"] = "notes";
+      if (isNew) {
+        unavailableSection(
+          document,
+          links,
+          t("Save the item first to add story flow, references and consequences."),
+        );
+        unavailableSection(document, notes, t("Save the item first to add DM notes."));
+      } else {
+        links.append(
+          this.#flowEditor(document, snapshot, selected),
+          this.#annotations(document, snapshot, selected),
+        );
+        notes.append(this.#notes(document, snapshot, selected));
+      }
+      layout.append(links, notes);
+
+      for (const section of layout.querySelectorAll<HTMLElement>("[data-form-section]")) {
+        const label = section.querySelector(":scope > h3")?.textContent ?? "";
+        // Buttons, not links: the page's address belongs to the host.
+        const button = actionButton(document, label, () => showFormSection(section));
+        button.dataset["uiVariant"] = "quiet";
+        button.dataset["viewAction"] = "";
+        nav.append(button);
+      }
+      const paintChips = (): void => {
+        const kind = (choiceValue(form, "kind") || selected.kind) as PlanningKind;
+        chips.replaceChildren(
+          formChip(document, kindLabel(kind, t)),
+          ...(isNew
+            ? [formChip(document, t("Not saved yet"), "accent")]
+            : this.#drafts.has(draftKey) && !this.#committedDrafts.has(draftKey)
+              ? [formChip(document, t("Unsaved changes"), "accent")]
+              : []),
+        );
+      };
+      paintChips();
+      form.addEventListener("input", paintChips);
+      form.addEventListener("change", paintChips);
+      dialog.addEventListener("focusin", (event) => {
+        const tab =
+          event.target instanceof Element
+            ? event.target.closest<HTMLElement>("[data-editor-tab]")?.dataset["editorTab"]
+            : undefined;
+        if (tab) this.#dialogTab = tab;
+      });
+      // Ctrl+S (Cmd+S) saves the form being edited, or else the item's details.
+      dialog.addEventListener("keydown", (event) => {
+        if (event.key.toLowerCase() !== "s" || !(event.ctrlKey || event.metaKey) || event.altKey)
+          return;
+        event.preventDefault();
+        const current = event.target instanceof Element ? event.target.closest("form") : null;
+        (current && dialog.contains(current) ? current : form).requestSubmit();
+      });
       return dialog;
+    }
+
+    /** Brings an editor tab (details, links or notes) into view, as issues and recovery ask. */
+    #showEditorTab(tab: string): void {
+      const dialog = this.querySelector<HTMLDialogElement>("dialog.dm-planner-editor");
+      if (!dialog) return;
+      if (tab === "details") {
+        dialog.querySelector<HTMLElement>('input[name="title"]')?.focus();
+        return;
+      }
+      const section = dialog.querySelector<HTMLElement>(
+        `[data-form-section][data-editor-tab="${CSS.escape(tab)}"]`,
+      );
+      if (section) showFormSection(section, false);
     }
 
     #flowEditor(
@@ -1304,8 +1400,9 @@ export function definePlannerElement(generation?: string): string {
       snapshot: PlanningSnapshot,
       selected: PlanningItem,
     ): HTMLElement {
-      const section = document.createElement("section");
-      const title = document.createElement("h3");
+      const section = document.createElement("div");
+      section.className = "dm-form-subsection";
+      const title = document.createElement("h4");
       title.textContent = this.#t("Story flow");
       const siblings = planningChoices(
         directChildren(snapshot.items, this.#scopeId).filter((item) => item.id !== selected.id),
@@ -1401,8 +1498,9 @@ export function definePlannerElement(generation?: string): string {
       snapshot: PlanningSnapshot,
       selected: PlanningItem,
     ): HTMLElement {
-      const section = document.createElement("section");
-      const title = document.createElement("h3");
+      const section = document.createElement("div");
+      section.className = "dm-form-subsection";
+      const title = document.createElement("h4");
       title.textContent = this.#t("Planning annotations");
       section.append(title);
       const core = coreReferences(this.#contribution?.host);
@@ -1617,7 +1715,8 @@ export function definePlannerElement(generation?: string): string {
       return section;
     }
     #notes(document: Document, snapshot: PlanningSnapshot, selected: PlanningItem): HTMLElement {
-      const section = document.createElement("section");
+      const section = document.createElement("div");
+      section.className = "dm-form-stack";
       section.append(
         actionButton(document, this.#t("Add DM note"), () => void this.#addNote(selected)),
       );
@@ -2225,7 +2324,12 @@ export function definePlannerElement(generation?: string): string {
       this.#render();
     }
 
-    #bindDraft(form: HTMLFormElement, key: string, revision: number | undefined): void {
+    #bindDraft(
+      form: HTMLFormElement,
+      key: string,
+      revision: number | undefined,
+      actions: HTMLElement = form,
+    ): void {
       this.#drafts.bind(form, key, revision, this.#t);
       const discard = actionButton(this.ownerDocument, this.#t("Discard edits"), () => {
         this.#drafts.clear(key);
@@ -2233,7 +2337,7 @@ export function definePlannerElement(generation?: string): string {
       });
       discard.dataset["viewAction"] = "";
       discard.hidden = !this.#drafts.has(key);
-      form.append(discard);
+      actions.append(discard);
       const update = (): void => {
         discard.hidden = !this.#drafts.has(key);
       };
@@ -2434,10 +2538,8 @@ export function definePlannerElement(generation?: string): string {
       this.#messageKind = "status";
       this.#syncEdits();
       this.#render();
-      (
-        this.querySelector<HTMLElement>("dialog input, dialog textarea") ??
-        this.querySelector<HTMLElement>(".dm-planner-viewport")
-      )?.focus();
+      if (this.#editorId) this.#showEditorTab(this.#dialogTab);
+      else this.querySelector<HTMLElement>(".dm-planner-viewport")?.focus();
     }
 
     #syncEdits(): void {
@@ -2529,21 +2631,43 @@ export function definePlannerElement(generation?: string): string {
   return tag;
 }
 
+/**
+ * The Settings fields that place an item: its kind, the type its kind asks
+ * for, and its parent. Returns a refresh that shows the groups the current
+ * choices reveal; `existing` items explain what moving them keeps.
+ */
 function appendItemStructure(
   document: Document,
-  form: HTMLFormElement,
+  container: HTMLElement,
   item: PlanningItem,
   items: readonly PlanningItem[],
-  t: PlannerTranslator = plannerTranslator(),
+  t: PlannerTranslator,
+  existing: boolean,
 ): () => void {
-  const row = document.createElement("div");
-  row.className = "dm-planner-form-row";
-  const kind = selectField(document, t("Kind"), "kind", item.kind, [
+  const kind = choiceField(document, t("Kind"), "kind", item.kind, [
     ["plotline", t("Plotline")],
     ["quest", t("Quest")],
     ["event", t("Event")],
     ["branch", t("Branch")],
   ]);
+  const event = dependentGroup(
+    document,
+    t("Because it is an event"),
+    choiceField(document, t("Event type"), "eventType", item.eventType ?? "story", [
+      ["story", t("Story")],
+      ["encounter", t("Encounter")],
+      ["puzzle", t("Puzzle")],
+    ]),
+  );
+  const branch = dependentGroup(
+    document,
+    t("Because it is a branch"),
+    choiceField(document, t("Branch type"), "branchType", item.branchType ?? "decision", [
+      ["decision", t("Decision")],
+      ["condition", t("Condition")],
+      ["random", t("Random")],
+    ]),
+  );
   const parents = availableParents(items, item.id).map(
     (parent) =>
       [
@@ -2553,41 +2677,66 @@ function appendItemStructure(
           .join(" / "),
       ] as const,
   );
-  row.append(
-    kind,
-    selectField(document, t("Parent"), "parentId", item.parentId ?? "", [
-      ["", t("Campaign")],
-      ...parents,
-    ]),
+  const parent = selectField(document, t("Parent"), "parentId", item.parentId ?? "", [
+    ["", t("Campaign")],
+    ...parents,
+  ]);
+  const moved = dependentGroup(
+    document,
+    t("Because you chose a different parent"),
+    fieldHelp(
+      document,
+      t(
+        "Moving an item keeps its children and annotations. Connected story flows must stay on the same canvas.",
+      ),
+    ),
   );
-  const event = document.createElement("div"),
-    branch = document.createElement("div");
-  event.append(
-    selectField(document, t("Event type"), "eventType", item.eventType ?? "story", [
-      ["story", t("Story")],
-      ["encounter", t("Encounter")],
-      ["puzzle", t("Puzzle")],
-    ]),
-  );
-  branch.append(
-    selectField(document, t("Branch type"), "branchType", item.branchType ?? "decision", [
-      ["decision", t("Decision")],
-      ["condition", t("Condition")],
-      ["random", t("Random")],
-    ]),
-  );
-  const help = document.createElement("small");
-  help.textContent = t(
-    "Moving an item keeps its children and annotations. Connected story flows must stay on the same canvas.",
-  );
-  form.append(row, event, branch, help);
+  container.append(kind, event, branch, parent, moved);
+  const parentSelect = parent.querySelector("select")!;
   const refresh = (): void => {
-    const value = kind.querySelector("select")!.value;
+    const value = choiceValue(kind, "kind");
     event.hidden = value !== "event";
     branch.hidden = value !== "branch";
+    moved.hidden = !existing || parentSelect.value === (item.parentId ?? "");
   };
-  kind.addEventListener("change", refresh);
+  container.addEventListener("change", refresh);
   return refresh;
+}
+
+/** A section that waits for something, saying why instead of showing its fields. */
+function unavailableSection(document: Document, section: HTMLElement, why: string): void {
+  section.classList.add("dm-form-section-unavailable");
+  section.setAttribute("aria-disabled", "true");
+  const reason = document.createElement("p");
+  reason.className = "dm-form-section-why";
+  reason.textContent = why;
+  section.append(reason);
+}
+
+/** Scrolls an editor section into view and moves focus to its first field or heading. */
+function showFormSection(section: HTMLElement, smooth = true): void {
+  const reduced = section.ownerDocument.defaultView?.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  section.scrollIntoView({ block: "start", behavior: smooth && !reduced ? "smooth" : "auto" });
+  (
+    section.querySelector<HTMLElement>(
+      "input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled)",
+    ) ?? section.querySelector<HTMLElement>(":scope > h3")
+  )?.focus({ preventScroll: true });
+}
+
+function kindLabel(kind: PlanningKind, t: PlannerTranslator): string {
+  switch (kind) {
+    case "plotline":
+      return t("Plotline");
+    case "quest":
+      return t("Quest");
+    case "event":
+      return t("Event");
+    case "branch":
+      return t("Branch");
+  }
 }
 
 function orthogonalPath(

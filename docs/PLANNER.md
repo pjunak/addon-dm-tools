@@ -65,13 +65,24 @@ branches open this reader; links to plotlines and quests open their canvases.
 The read-only planning list on a map location uses the same links.
 
 Choose **Edit item** from the reader, or double-click a card on the canvas.
-The editor has **Details**, **Links** and **Notes** tabs, with **Save item** in
-its header. On phones it appears as a bottom sheet; actions wrap at their
-natural width and the whole dialog scrolls, keeping enlarged text and content
-reachable. Saved updates preserve the scroll position within the updated
-content. Closing or switching tabs retains existing-record drafts; closing an unsaved new-card editor cancels
-that creation. Closing the editor returns to saved content if the reader is
-open. Closing the reader restores focus and the canvas view.
+The editor is one page, like the site's record forms: **Basics**, **Story**,
+**Setup and resolution**, **Links** and **Notes** sections, linked from the
+section bar in its header, with **Settings** (kind, parent and tags) beside
+them on wide screens. Lists to pick from are raised, free text is sunken, and
+fields that a choice reveals sit in a "↳ Because …" group: the event type for
+an event, the branch type for a branch, and what a move keeps once you choose
+another parent. Chips beside the title show the kind and unsaved changes.
+**Save item**, **Save details** or Ctrl+S (Command+S) saves the item; Ctrl+S
+inside a flow, reference or note form saves that form instead. Until a new card
+is saved, Links and Notes say why they wait.
+
+On phones the editor appears as a bottom sheet that scrolls as a whole, with
+Settings after the item's sections; actions wrap at their natural width,
+keeping enlarged text and content reachable. Saved updates preserve the scroll
+position within the updated content. Closing retains existing-record drafts;
+closing an unsaved new-card editor cancels that creation. Closing the editor
+returns to saved content if the reader is open. Closing the reader restores
+focus and the canvas view.
 
 Use objective for what the characters can accomplish, setup for preparation,
 body for detailed material, and resolution for possible outcomes. Event and
@@ -100,7 +111,7 @@ then choose a result with the keyboard or pointer; typing alone never changes
 the selected target. Repeated planning titles show their ownership path, with
 the record ID added when the path is also identical.
 
-Change **Kind** or **Parent** in item details to reorganize the tree. Only
+Change **Kind** or **Parent** in the editor's **Settings** to reorganize the tree. Only
 plotlines and quests are valid parents, and an item cannot become its own
 ancestor. Moving a container keeps its children, their internal flow and
 annotations. After saving, the editor follows the item to its destination.

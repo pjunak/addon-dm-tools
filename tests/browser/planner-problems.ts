@@ -253,12 +253,12 @@ globalThis.runRenderingContract = async () => {
   rows()[1]?.querySelectorAll("button")[1]?.click();
   const dialog = planner.querySelector("dialog");
   check(
-    "Edit item opens the owning item on the matching tab",
+    "Edit item opens the owning item at the matching section",
     [
       dialog?.getAttribute("aria-label"),
-      dialog?.querySelector('[aria-selected="true"]')?.textContent,
+      document.activeElement?.closest("[data-form-section]")?.getAttribute("data-form-section"),
     ],
-    ["Edit planning item", "Notes"],
+    ["Edit planning item", "notes"],
   );
   return { name: "DM Tools planner problems", checks };
 };

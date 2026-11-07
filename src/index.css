@@ -197,8 +197,7 @@
   min-height: 680px;
   height: max(42rem, 75vh);
 }
-.dm-planner-atlas,
-.dm-planner-inspector {
+.dm-planner-atlas {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -326,12 +325,9 @@
   top: min(4rem, 5cqi);
   max-width: min(32rem, calc(100cqi - 2 * min(4rem, 5cqi)));
 }
-.dm-planner-inspector form,
-.dm-planner-inspector section {
+.dm-planner-inspector form:not(.dm-form-details) {
   display: grid;
   gap: 0.55rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid var(--border-subtle);
 }
 .dm-planner-inspector .dm-planner-annotation {
   margin-top: 0.25rem;
@@ -347,16 +343,11 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-.dm-planner-inspector label {
+.dm-planner-inspector label:not([data-ui="choices"] > label) {
   display: grid;
   gap: 0.25rem;
   color: var(--text-muted);
   font-size: var(--text-sm);
-}
-.dm-planner-form-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
 }
 .dm-planner-note-anchors {
   min-width: 0;
@@ -407,9 +398,6 @@
   .dm-planner-atlas h2,
   .dm-planner-atlas p {
     min-width: 100%;
-  }
-  .dm-planner-inspector {
-    max-height: none;
   }
   .dm-planner-shell > header {
     display: grid;
@@ -940,28 +928,220 @@
   overflow-wrap: anywhere;
   color: var(--text-parchment);
 }
-.dm-dialog-tabs {
-  display: flex;
-  gap: 0.25rem;
-  padding-inline: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
 .dm-planner-dialog-body {
   min-height: 0;
   overflow: auto;
   padding: 1rem;
   overscroll-behavior: contain;
 }
-.dm-planner-dialog [role="tabpanel"][hidden] {
+/* The item editor follows the host's record form: a head with the title,
+   status chips and a section bar; the fields in sections; and Settings
+   beside them once the dialog is wide enough. */
+.dm-planner-editor {
+  width: min(68rem, calc(100% - 2rem));
+}
+.dm-planner-editor > .dm-form-head {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--chrome-field-border);
+  background: var(--bg-raised);
+}
+.dm-form-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.dm-planner-editor > .dm-form-head h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dm-form-chips,
+.dm-form-nav,
+.dm-form-legend,
+.dm-form-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+.dm-form-head-actions {
+  margin-inline-start: auto;
+}
+.dm-form-chip {
+  padding: 0.1rem var(--space-2);
+  border: 1px solid var(--chrome-field-border);
+  border-radius: var(--radius-pill);
+  color: var(--text-light);
+  font: 600 var(--text-xs) / 1.6 var(--font-ui);
+}
+.dm-form-chip[data-tone="accent"] {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+.dm-planner-editor > .dm-form-head .dm-form-nav button {
+  flex: 0 0 auto;
+  min-height: 2rem;
+  font-size: var(--text-sm);
+}
+.dm-form-legend {
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--text-muted);
+  font: var(--text-xs) var(--font-ui);
+}
+.dm-planner-editor .dm-planner-dialog-body {
+  container-type: inline-size;
+}
+.dm-planner-editor [hidden] {
   display: none;
 }
-.dm-planner-dialog [role="tabpanel"] {
-  border: 0;
-  padding-top: 0;
+.dm-form,
+.dm-form-details {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }
-.dm-planner-dialog [role="tabpanel"] > form:first-child {
-  border: 0;
-  padding-top: 0;
+.dm-form-section,
+.dm-form-settings {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  scroll-margin-top: var(--space-4);
+}
+.dm-form-section > h3,
+.dm-form-settings > h3 {
+  margin: 0;
+  color: var(--accent-gold);
+  font: 600 var(--text-md) var(--font-title);
+}
+.dm-form-settings {
+  border-color: var(--accent-gold-dim);
+  background: var(--bg-raised);
+}
+.dm-form-side,
+.dm-form-stack {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+.dm-form-subsection {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.dm-form-subsection + .dm-form-subsection {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.dm-form-subsection > h4 {
+  margin: 0;
+  color: var(--text-light);
+  font: 800 var(--text-xs) / 1.5 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* A section that waits for a saved item says why instead of showing fields. */
+.dm-form-section-unavailable {
+  border-style: dashed;
+  background: transparent;
+}
+.dm-form-section-unavailable > h3 {
+  color: var(--text-muted);
+}
+.dm-form-section-why,
+.dm-form-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.dm-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.dm-form-actions > [data-ui-variant="danger"] {
+  margin-inline-end: auto;
+}
+/* Fields shown because of a choice above them. */
+.dm-form-depends {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--accent-gold-dim);
+}
+.dm-form-depends-why {
+  margin: 0;
+  color: var(--accent-gold);
+  font: var(--text-sm) var(--font-ui);
+}
+.dm-planner-editor fieldset[data-ui="choices"] > legend {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.dm-form-settings fieldset[data-ui="choices"] > label {
+  padding-inline: var(--space-2);
+}
+/* Actions keep their natural width, as in the host's forms. */
+.dm-planner-editor :is(.dm-form-subsection, .dm-form-stack, form:not(.dm-form-details)) > button {
+  justify-self: start;
+}
+/* A list to pick from is raised; free text is sunken. */
+.dm-planner-editor select:not([multiple]),
+.dm-planner-editor .ui-combobox input {
+  background-color: var(--bg-raised);
+  box-shadow: var(--shadow-sm);
+}
+.dm-planner-editor
+  :is(input:not([type]), input[type="text"], input[type="number"], textarea):not(
+    .ui-combobox input,
+    .ui-chip-input
+  ) {
+  background-color: var(--surface-sunken);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 35%);
+}
+/* Wide: Settings beside the item's sections; links and notes keep their column. */
+@container (min-width: 46rem) {
+  .dm-form {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 21rem);
+  }
+  .dm-form > *,
+  .dm-form-details > * {
+    grid-column: 1;
+  }
+  .dm-form > .dm-form-details {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+  .dm-form-details > .dm-form-side {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    position: sticky;
+    top: 0;
+  }
+}
+@media (max-width: 600px) {
+  .dm-planner-editor > .dm-form-head {
+    padding: var(--space-3);
+  }
+  .dm-planner-editor > .dm-form-head h2 {
+    flex-basis: 100%;
+  }
+  .dm-form-head-actions {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+  }
 }
 .dm-plan-card .dm-flow-port {
   position: absolute;
@@ -1030,12 +1210,15 @@
   }
 }
 @media (max-width: 600px) {
+  /* A bottom sheet that scrolls as a whole. */
   .dm-planner-dialog[data-ui-dialog] {
     margin: auto 0 0;
     width: 100%;
     max-width: 100%;
     max-height: 92dvh;
     border-radius: 0.75rem 0.75rem 0 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .dm-planner-dialog[open] {
     display: block;
