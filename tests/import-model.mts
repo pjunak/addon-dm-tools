@@ -9,6 +9,8 @@ import {
   parseImportSource,
   parseSavedReceipt,
   previewFailure,
+  previewWarning,
+  providerText,
   selectAdapter,
 } from "#web/import-model";
 import type { AdapterDescription } from "../src/import-model.ts";
@@ -136,5 +138,59 @@ void test("a rejected preview shows the importer's own problem as plain text", (
   assert.deepEqual(previewFailure(new ImportProblem("tooLarge")), {
     key: "tooLarge",
     params: {},
+  });
+});
+
+void test("providers' labels, warnings and rejections carry keys into their own catalogs", () => {
+  const provider = { addonId: "homebrew" };
+  const keyed = parseAdapterDescription({
+    ...description,
+    labelKey: "adapter.label",
+    descriptionKey: "adapter.description",
+  });
+  assert.deepEqual(providerText(keyed.label, keyed.labelKey, provider), {
+    text: "Stories",
+    key: "adapter.label",
+    addon: "homebrew",
+  });
+  assert.deepEqual(providerText("Stories", undefined, provider), { text: "Stories" });
+  for (const value of [{ labelKey: "" }, { labelKey: 3 }, { descriptionKey: "x".repeat(501) }])
+    assert.throws(() => parseAdapterDescription({ ...description, ...value }), ImportProblem);
+  const warned = parseImportPreview(
+    {
+      ...preview,
+      warnings: ["Imports write drafts.", "Plain."],
+      warningTexts: [
+        { text: "Imports write drafts.", key: "Imports write drafts." },
+        { text: "Plain." },
+      ],
+    },
+    "story-json",
+  );
+  assert.deepEqual(previewWarning(warned, 0, provider), {
+    text: "Imports write drafts.",
+    key: "Imports write drafts.",
+    addon: "homebrew",
+  });
+  assert.deepEqual(previewWarning(warned, 1, provider), { text: "Plain." });
+  assert.deepEqual(previewWarning({ ...warned, warningTexts: [] }, 0, provider), {
+    text: "Imports write drafts.",
+  });
+  // Warning texts must match the warnings and cannot name another catalog.
+  for (const warningTexts of [[], [{ text: "x", addon: "other" }], [{ key: "no text" }]])
+    assert.throws(
+      () => parseImportPreview({ ...preview, warnings: ["x"], warningTexts }, "story-json"),
+      ImportProblem,
+    );
+  const issueText = {
+    text: "items/a: bad",
+    key: "worker.staleUpdate",
+    args: { record: "items/a" },
+    addon: "dm-tools",
+  };
+  assert.deepEqual(previewFailure({ code: "INVALID_REQUEST", issue: "items/a: bad", issueText }), {
+    key: "previewRejected",
+    params: { issue: "items/a: bad" },
+    issue: issueText,
   });
 });

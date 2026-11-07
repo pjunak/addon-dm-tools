@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -98,16 +101,17 @@ func TestPreviewRejectionsCarryAnIssue(t *testing.T) {
 	for index := range 257 {
 		many = append(many, validItem(fmt.Sprintf("quest-%03d", index), nil))
 	}
+	english := importCatalog(t, "en")
 	for _, check := range []struct {
 		name         string
 		items, flows []any
-		issue        string
+		issue, key   string
 	}{
-		{"unparsable", []any{map[string]any{"operation": "create"}}, nil, "planning_items"},
-		{"record", []any{stale}, nil, "planning_items/quest-a: update has a missing or stale expectedUpdatedAt"},
+		{"unparsable", []any{map[string]any{"operation": "create"}}, nil, "planning_items", ""},
+		{"record", []any{stale}, nil, "planning_items/quest-a: update has a missing or stale expectedUpdatedAt", "worker.staleUpdate"},
 		{"invariants", []any{validItem(parentA, nil), validItem(parentB, nil), validEvent("event-a", parentA), validEvent("event-b", parentB)},
-			[]any{map[string]any{"operation": "create", "id": "cross", "schemaVersion": 3, "sourceId": "event-a", "targetId": "event-b", "kind": "continues", "label": ""}}, "cross"},
-		{"operation limit", many, nil, "the import has 257 operations; the limit is 256"},
+			[]any{map[string]any{"operation": "create", "id": "cross", "schemaVersion": 3, "sourceId": "event-a", "targetId": "event-b", "kind": "continues", "label": ""}}, "cross", ""},
+		{"operation limit", many, nil, "the import has 257 operations; the limit is 256", "worker.tooManyOperations"},
 	} {
 		t.Run(check.name, func(t *testing.T) {
 			handler, _ := New(&fakeData{documents: map[string][]workerrpc.AddonDataDocument{}})
@@ -121,11 +125,69 @@ func TestPreviewRejectionsCarryAnIssue(t *testing.T) {
 			}})
 			_, err := handler.HandleRPC(context.Background(), workerrpc.Request{Method: methodPrefix + "preview", Params: params, Meta: testMeta()})
 			var failure *workerrpc.RPCError
-			var details struct{ Issue string }
+			var details struct {
+				Issue     string
+				IssueKey  string
+				IssueArgs map[string]any
+			}
 			if !errors.As(err, &failure) || failure.Data == nil || json.Unmarshal(failure.Data.Details, &details) != nil || !strings.Contains(details.Issue, check.issue) {
 				t.Fatalf("error = %v, details = %s", err, failure.Data.Details)
 			}
+			// A fixed sentence carries its catalog key; its template with the
+			// arguments filled in is the English issue.
+			if details.IssueKey != check.key {
+				t.Fatalf("issue key = %q, want %q", details.IssueKey, check.key)
+			}
+			if check.key != "" {
+				filled := english[check.key]
+				for name, value := range details.IssueArgs {
+					filled = strings.ReplaceAll(filled, "{"+name+"}", fmt.Sprint(value))
+				}
+				if filled != details.Issue {
+					t.Fatalf("catalog %q fills to %q, issue is %q", check.key, filled, details.Issue)
+				}
+			}
 		})
+	}
+}
+
+// importCatalog reads the Import Center section of a message catalog.
+func importCatalog(t *testing.T, locale string) map[string]string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("..", "..", "locales", locale+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog struct {
+		Sections map[string]map[string]any `json:"sections"`
+	}
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	messages := map[string]string{}
+	for key, message := range catalog.Sections["import"] {
+		if text, ok := message.(string); ok {
+			messages[key] = text
+		}
+	}
+	return messages
+}
+
+// TestWorkerTextsAreCataloged keeps every key the worker sends in the catalog.
+func TestWorkerTextsAreCataloged(t *testing.T) {
+	source, err := os.ReadFile("handler.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	english := importCatalog(t, "en")
+	keys := regexp.MustCompile(`"((?:worker|adapter)\.[A-Za-z]+)"`).FindAllStringSubmatch(string(source), -1)
+	if len(keys) < 10 {
+		t.Fatalf("found %d worker keys", len(keys))
+	}
+	for _, key := range keys {
+		if english[key[1]] == "" {
+			t.Errorf("locales/en.json import section lacks %q", key[1])
+		}
 	}
 }
 

@@ -427,7 +427,17 @@
       "export.action": "Download planning data",
       "exporting": "Reading current planning…",
       "exported": "Downloaded {file}. It contains private DM planning; share it only with tools you trust.",
-      "exportFailed": "Could not read the current planning. Try again; nothing was downloaded."
+      "exportFailed": "Could not read the current planning. Try again; nothing was downloaded.",
+      "adapter.label": "DM Tools planning",
+      "adapter.description": "Nested story plans, local flow, references, consequences, and DM notes.",
+      "worker.replacementCreates": "{record}: replacement records must use create",
+      "worker.createConflict": "{record}: create conflicts with an existing planning record",
+      "worker.staleUpdate": "{record}: update has a missing or stale expectedUpdatedAt",
+      "worker.generatedAtOrder": "{record}: generatedAt must be later than the changed local record",
+      "worker.operation": "{record}: operation must be create or update",
+      "worker.tooManyOperations": "the import has {count} operations; the limit is 256",
+      "worker.revisionChanged": "planning collection revision is missing or changed; update the host and preview again",
+      "worker.storedViewInvalid": "{record}: stored planning view is invalid"
     }
   }
 }

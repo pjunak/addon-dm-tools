@@ -131,7 +131,10 @@ func (handler *Handler) HandleRPC(ctx context.Context, request workerrpc.Request
 		if err := decodeEmpty(request.Params); err != nil {
 			return nil, invalid("import adapter description request is invalid", nil)
 		}
-		return map[string]any{"contractVersion": "import-adapter-description.v1", "id": "planning-json", "label": "DM Tools planning", "description": "Nested story plans, local flow, references, consequences, and DM notes.", "formats": []string{"dm-tools-planning"}}, nil
+		return map[string]any{"contractVersion": "import-adapter-description.v1", "id": "planning-json",
+			"label": "DM Tools planning", "labelKey": "adapter.label",
+			"description": "Nested story plans, local flow, references, consequences, and DM notes.", "descriptionKey": "adapter.description",
+			"formats": []string{"dm-tools-planning"}}, nil
 	case methodPrefix + "preview":
 		var input previewRequest
 		if jsonexact.Decode(request.Params, &input) != nil || input.ContractVersion != "import-preview.v1" || input.Format != "dm-tools-planning" {
@@ -175,7 +178,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 		existing, exists := stored[collection][entry.Record.ID]
 		if document.Mode == "replace" {
 			if entry.Operation != "create" {
-				return nil, recordInvalid("replacement records must use create", collection, entry.Record.ID)
+				return nil, recordInvalid("worker.replacementCreates", "replacement records must use create", collection, entry.Record.ID)
 			}
 			if exists && equivalent(existing.normalized.Body, entry.Record.Body) {
 				result.Skips++
@@ -202,7 +205,7 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 					result.Skips++
 					continue
 				}
-				return nil, recordInvalid("create conflicts with an existing planning record", collection, entry.Record.ID)
+				return nil, recordInvalid("worker.createConflict", "create conflicts with an existing planning record", collection, entry.Record.ID)
 			}
 			result.Creates++
 			mutations = append(mutations, putMutation(collection, entry.Record, 0))
@@ -210,21 +213,21 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 			apply(dataset, entry.Record)
 		case "update":
 			if !exists || entry.ExpectedUpdatedAt == nil || *entry.ExpectedUpdatedAt != existing.normalized.UpdatedAt {
-				return nil, recordInvalid("update has a missing or stale expectedUpdatedAt", collection, entry.Record.ID)
+				return nil, recordInvalid("worker.staleUpdate", "update has a missing or stale expectedUpdatedAt", collection, entry.Record.ID)
 			}
 			if equivalent(existing.normalized.Body, entry.Record.Body) {
 				result.Skips++
 				continue
 			}
 			if entry.Record.UpdatedAt <= existing.normalized.UpdatedAt {
-				return nil, recordInvalid("generatedAt must be later than the changed local record", collection, entry.Record.ID)
+				return nil, recordInvalid("worker.generatedAtOrder", "generatedAt must be later than the changed local record", collection, entry.Record.ID)
 			}
 			result.Updates++
 			mutations = append(mutations, putMutation(collection, entry.Record, existing.revision))
 			changes = append(changes, change{collection, entry.Record.ID, "update", label(entry.Record)})
 			apply(dataset, entry.Record)
 		default:
-			return nil, recordInvalid("operation must be create or update", collection, entry.Record.ID)
+			return nil, recordInvalid("worker.operation", "operation must be create or update", collection, entry.Record.ID)
 		}
 	}
 	if document.Mode == "replace" {
@@ -256,7 +259,9 @@ func (handler *Handler) preview(ctx context.Context, meta *workerrpc.Meta, body 
 		return nil, invalid("planning import violates dataset invariants", map[string]any{"issue": issue, "issues": issues[:min(20, len(issues))]})
 	}
 	if len(mutations) > 256 {
-		return nil, invalid("planning import exceeds the 256-operation limit", map[string]any{"operations": len(mutations), "issue": fmt.Sprintf("the import has %d operations; the limit is 256", len(mutations))})
+		details := workerrpc.IssueDetails(workerrpc.Localized("worker.tooManyOperations", fmt.Sprintf("the import has %d operations; the limit is 256", len(mutations)), map[string]any{"count": len(mutations)}))
+		details["operations"] = len(mutations)
+		return nil, invalid("planning import exceeds the 256-operation limit", details)
 	}
 	sort.Slice(changes, func(i, j int) bool {
 		if changes[i].Collection == changes[j].Collection {
@@ -425,14 +430,14 @@ func (handler *Handler) read(ctx context.Context, meta *workerrpc.Meta) (storedP
 			}
 			if page.DataRevision == nil || *page.DataRevision < 0 || (revision != nil && *revision != *page.DataRevision) {
 				message := "planning collection revision is missing or changed; update the host and preview again"
-				return storedPlanning{}, invalid(message, map[string]any{"issue": message})
+				return storedPlanning{}, invalid(message, workerrpc.IssueDetails(workerrpc.Localized("worker.revisionChanged", message, nil)))
 			}
 			revision = page.DataRevision
 			for _, document := range page.Documents {
 				if collection == "planning_views" {
 					var view planning.View
 					if jsonexact.Decode(document.Value, &view) != nil || view.SchemaVersion != planning.SchemaVersion {
-						return storedPlanning{}, recordInvalid("stored planning view is invalid", collection, document.Key)
+						return storedPlanning{}, recordInvalid("worker.storedViewInvalid", "stored planning view is invalid", collection, document.Key)
 					}
 					normalized := planning.Normalized{Collection: collection, ID: view.ID, Label: "Saved canvas layout", UpdatedAt: view.UpdatedAt, Value: &view, Body: document.Value}
 					stored[collection][document.Key] = storedDocument{normalized, document.Revision}
@@ -550,9 +555,12 @@ func invalid(message string, details any) error {
 }
 
 // recordInvalid names the record in details.issue, the text the Import Center
-// shows the DM.
-func recordInvalid(message, collection, id string) error {
-	return invalid(message, map[string]any{"collection": collection, "id": id, "issue": collection + "/" + id + ": " + message})
+// shows the DM; key is its "{record}: …" template in this add-on's catalog.
+func recordInvalid(key, message, collection, id string) error {
+	record := collection + "/" + id
+	details := workerrpc.IssueDetails(workerrpc.Localized(key, record+": "+message, map[string]any{"record": record}))
+	details["collection"], details["id"] = collection, id
+	return invalid(message, details)
 }
 func unavailable(message string) error {
 	return workerrpc.NewRPCError(workerrpc.JSONRPCApplication, workerrpc.KindUnavailable, message, true, nil)

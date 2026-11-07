@@ -167,7 +167,11 @@ one.
 
 Leaving the page cancels local work and discards its visible review. Unchanged
 host context and language-only changes preserve it. Controls use English/Czech
-catalogs; provider descriptions and authored content retain their own language.
+catalogs. A provider's label, description, warnings and rejection reason show in
+the reader's language when the provider keys them in its own catalog
+(`labelKey`, `descriptionKey`, `warningTexts`, `ServiceError.issueText`); the
+planning worker keys its fixed sentences. Authored content keeps its own
+language.
 
 The [service schemas](../contracts/import-adapter.service.json),
 [worker](../internal/importer/handler.go) and

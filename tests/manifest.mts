@@ -21,7 +21,7 @@ const manifest = JSON.parse(
 ) as Manifest;
 void test("manifest declares TypeScript UI, Go worker, and exact planning contracts", () => {
   assert.equal(manifest.packageFormat, 1);
-  assert.equal(manifest.version, "3.2.0");
+  assert.equal(manifest.version, "3.3.0");
   assert.equal(manifest.runtime.ui.entry, "web/index.js");
   assert.equal(manifest.runtime.worker.type, "native");
   assert.equal(Object.keys(manifest.runtime.worker.entrypoints).length, 3);

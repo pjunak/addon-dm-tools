@@ -1,11 +1,15 @@
-import type { ServiceProvider } from "./sdk.js";
+import type { LocalizedText, ServiceProvider } from "./sdk.js";
 import type { ImportMessage, ImportParams } from "./messages.js";
 
 export interface AdapterDescription {
   readonly contractVersion: "import-adapter-description.v1";
   readonly id: string;
   readonly label: string;
+  /** `label`'s key in the provider's message catalog. */
+  readonly labelKey?: string;
   readonly description: string;
+  /** `description`'s key in the provider's message catalog. */
+  readonly descriptionKey?: string;
   readonly formats: readonly string[];
   readonly features?: readonly string[];
 }
@@ -25,6 +29,8 @@ export interface ImportPreview {
     readonly deletes: number;
   };
   readonly warnings: readonly string[];
+  /** The warnings in order, keyed in the provider's message catalog. */
+  readonly warningTexts?: readonly LocalizedText[];
   readonly changes: readonly {
     readonly collection: string;
     readonly id: string;
@@ -52,12 +58,14 @@ export class ImportProblem extends Error {
 }
 /**
  * The notice for a failed preview. An importer that rejects the document may
- * name the problem (the host's ServiceError.issue); it is plain text from the
- * provider and must only ever be shown as text.
+ * name the problem (the host's ServiceError.issue, and issueText with its key
+ * in the provider's catalog); it is plain text from the provider and must
+ * only ever be shown as text.
  */
 export function previewFailure(error: unknown): {
   readonly key: ImportMessage;
   readonly params: ImportParams;
+  readonly issue?: LocalizedText;
 } {
   if (error instanceof ImportProblem) return { key: error.key, params: error.params };
   if (
@@ -66,9 +74,54 @@ export function previewFailure(error: unknown): {
     typeof error["issue"] === "string" &&
     error["issue"] !== ""
   ) {
-    return { key: "previewRejected", params: { issue: error["issue"] } };
+    const issue = error["issueText"];
+    return {
+      key: "previewRejected",
+      params: { issue: error["issue"] },
+      ...(localizedText(issue) ? { issue } : {}),
+    };
   }
   return { key: "previewFailed", params: {} };
+}
+/** A provider's text keyed in its own catalog; without a key it is the text itself. */
+export function providerText(
+  text: string,
+  key: string | undefined,
+  provider: Pick<ServiceProvider, "addonId">,
+): LocalizedText {
+  return key === undefined ? { text } : { text, key, addon: provider.addonId };
+}
+/** The warning at `index` with its key in the provider's catalog when it sent one. */
+export function previewWarning(
+  preview: ImportPreview,
+  index: number,
+  provider: Pick<ServiceProvider, "addonId">,
+): LocalizedText {
+  const keyed = preview.warningTexts?.[index];
+  return keyed?.key === undefined
+    ? { text: preview.warnings[index] ?? "" }
+    : { ...keyed, addon: provider.addonId };
+}
+function localizedText(value: unknown): value is LocalizedText {
+  const args = isRecord(value) ? value["args"] : undefined;
+  return (
+    isRecord(value) &&
+    typeof value["text"] === "string" &&
+    value["text"].length <= 500 &&
+    (value["key"] === undefined ||
+      (typeof value["key"] === "string" &&
+        value["key"].length > 0 &&
+        value["key"].length <= 500)) &&
+    (args === undefined ||
+      (isRecord(args) &&
+        Object.keys(args).length <= 16 &&
+        Object.values(args).every(
+          (arg) =>
+            (typeof arg === "string" && arg.length <= 300) ||
+            (typeof arg === "number" && Number.isFinite(arg)),
+        ))) &&
+    (value["addon"] === undefined || typeof value["addon"] === "string")
+  );
 }
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -144,6 +197,12 @@ export function parseAdapterDescription(value: unknown): AdapterDescription {
       !value["features"].every((feature) => typeof feature === "string" && feature.length < 100))
   )
     throw new ImportProblem("invalidResponse");
+  for (const name of ["labelKey", "descriptionKey"])
+    if (
+      value[name] !== undefined &&
+      (typeof value[name] !== "string" || !value[name] || value[name].length > 500)
+    )
+      throw new ImportProblem("invalidResponse");
   return value as unknown as AdapterDescription;
 }
 export function parseImportPreview(value: unknown, format: string): ImportPreview {
@@ -185,6 +244,15 @@ export function parseImportPreview(value: unknown, format: string): ImportPrevie
           text(ref["ref"], 100) &&
           text(ref["collection"], 100) &&
           text(ref["id"], 1024),
+      ))
+  )
+    throw new ImportProblem("invalidResponse");
+  if (
+    value["warningTexts"] !== undefined &&
+    (!Array.isArray(value["warningTexts"]) ||
+      value["warningTexts"].length !== value["warnings"].length ||
+      !value["warningTexts"].every(
+        (warning) => localizedText(warning) && warning.addon === undefined,
       ))
   )
     throw new ImportProblem("invalidResponse");

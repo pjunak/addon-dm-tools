@@ -438,7 +438,17 @@
       "export.action": "Stáhnout data plánování",
       "exporting": "Načítá se aktuální plánování…",
       "exported": "Staženo: {file}. Obsahuje soukromé plánování PJ; sdílejte jej jen s nástroji, kterým důvěřujete.",
-      "exportFailed": "Aktuální plánování se nepodařilo načíst. Zkuste to znovu; nic nebylo staženo."
+      "exportFailed": "Aktuální plánování se nepodařilo načíst. Zkuste to znovu; nic nebylo staženo.",
+      "adapter.label": "Plánování DM Tools",
+      "adapter.description": "Vnořené plány příběhu, místní tok, odkazy, důsledky a poznámky PJ.",
+      "worker.replacementCreates": "{record}: záznamy při nahrazení musí používat create",
+      "worker.createConflict": "{record}: create koliduje s existujícím záznamem plánování",
+      "worker.staleUpdate": "{record}: update nemá expectedUpdatedAt, nebo je zastaralé",
+      "worker.generatedAtOrder": "{record}: generatedAt musí být pozdější než změněný místní záznam",
+      "worker.operation": "{record}: operation musí být create nebo update",
+      "worker.tooManyOperations": "import má {count} operací; limit je 256",
+      "worker.revisionChanged": "revize kolekce plánování chybí nebo se změnila; aktualizujte server a znovu zobrazte náhled",
+      "worker.storedViewInvalid": "{record}: uložené rozvržení plánování je neplatné"
     }
   }
 }

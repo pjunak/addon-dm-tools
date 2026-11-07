@@ -422,5 +422,15 @@ export interface MessageKeys {
     | "export.action"
     | "exporting"
     | "exported"
-    | "exportFailed";
+    | "exportFailed"
+    | "adapter.label"
+    | "adapter.description"
+    | "worker.replacementCreates"
+    | "worker.createConflict"
+    | "worker.staleUpdate"
+    | "worker.generatedAtOrder"
+    | "worker.operation"
+    | "worker.tooManyOperations"
+    | "worker.revisionChanged"
+    | "worker.storedViewInvalid";
 }

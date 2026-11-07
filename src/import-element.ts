@@ -1,6 +1,6 @@
 import { actionButton, messageBlock } from "./planner-fields.js";
 import { liveI18n, runtimeFor, type DmToolsRuntime } from "./runtime.js";
-import type { ContributionContext } from "./sdk.js";
+import type { ContributionContext, LocalizedText } from "./sdk.js";
 import { hostLocale, importText, type ImportMessage, type ImportParams } from "./messages.js";
 import { downloadFile } from "./download.js";
 import { planningExport, planningExportName } from "./planning-export.js";
@@ -12,6 +12,8 @@ import {
   parseImportSource,
   parseSavedReceipt,
   previewFailure,
+  previewWarning,
+  providerText,
   selectAdapter,
   type Adapter,
   type ImportPreview,
@@ -38,6 +40,8 @@ export function defineImportElement(generation?: string): string {
     #phase: Phase = "idle";
     #message: ImportMessage | undefined;
     #params: ImportParams = {};
+    /** The provider's issue behind a `previewRejected` notice, translated when shown. */
+    #issue: LocalizedText | undefined;
     #messageKind: "status" | "alert" = "status";
     #request: AbortController | undefined;
 
@@ -69,6 +73,15 @@ export function defineImportElement(generation?: string): string {
       const i18n = liveI18n(this.#runtime);
       return i18n ? importText(i18n, key, params) : key;
     }
+    /** A provider's text in the reader's language. */
+    #provided(text: LocalizedText): string {
+      return liveI18n(this.#runtime)?.message(text) ?? text.text;
+    }
+    #label(adapter: Adapter): string {
+      return this.#provided(
+        providerText(adapter.description.label, adapter.description.labelKey, adapter.provider),
+      );
+    }
     #startRequest(): AbortController {
       this.#request?.abort();
       const request = new AbortController();
@@ -90,10 +103,12 @@ export function defineImportElement(generation?: string): string {
       key: ImportMessage | undefined,
       kind: "status" | "alert" = "status",
       params: ImportParams = {},
+      issue?: LocalizedText,
     ): void {
       this.#message = key;
       this.#messageKind = kind;
       this.#params = params;
+      this.#issue = issue;
     }
     #setPhase(phase: Phase): void {
       this.#phase = phase;
@@ -184,7 +199,14 @@ export function defineImportElement(generation?: string): string {
       root.append(heading);
       if (this.#message)
         root.append(
-          messageBlock(document, this.#t(this.#message, this.#params), this.#messageKind),
+          messageBlock(
+            document,
+            this.#t(
+              this.#message,
+              this.#issue ? { ...this.#params, issue: this.#provided(this.#issue) } : this.#params,
+            ),
+            this.#messageKind,
+          ),
         );
       if (this.#outcome) {
         const retry = actionButton(
@@ -207,7 +229,7 @@ export function defineImportElement(generation?: string): string {
         );
         owner.append(
           node(document, "span", "dm-import-meta", this.#t("center.handledBy")),
-          node(document, "strong", "", this.#selected.description.label),
+          node(document, "strong", "", this.#label(this.#selected)),
         );
         const arrow = node(document, "span", "", "→");
         arrow.setAttribute("aria-hidden", "true");
@@ -295,17 +317,25 @@ export function defineImportElement(generation?: string): string {
         supported.append(empty);
       }
       for (const adapter of [...this.#adapters].sort((a, b) =>
-        a.description.label.localeCompare(
-          b.description.label,
-          hostLocale(this.#contribution?.host),
-        ),
+        this.#label(a).localeCompare(this.#label(b), hostLocale(this.#contribution?.host)),
       )) {
         const card = node(document, "article", "dm-import-adapter"),
           description = node(document),
           formats = node(document, "div", "dm-import-formats");
         description.append(
-          node(document, "h3", "", adapter.description.label),
-          node(document, "p", "dm-import-hint", adapter.description.description),
+          node(document, "h3", "", this.#label(adapter)),
+          node(
+            document,
+            "p",
+            "dm-import-hint",
+            this.#provided(
+              providerText(
+                adapter.description.description,
+                adapter.description.descriptionKey,
+                adapter.provider,
+              ),
+            ),
+          ),
         );
         for (const format of adapter.description.formats)
           formats.append(node(document, "code", "dm-import-badge", format));
@@ -360,7 +390,7 @@ export function defineImportElement(generation?: string): string {
         document,
         "h2",
         "",
-        this.#t("previewTitle", { label: adapter.description.label }),
+        this.#t("previewTitle", { label: this.#label(adapter) }),
       );
       title.tabIndex = -1;
       head.append(title, node(document, "span", "dm-import-badge", this.#t(preview.mode)));
@@ -387,8 +417,15 @@ export function defineImportElement(generation?: string): string {
       if (preview.warnings.length) {
         const warnings = node(document, "section", "dm-import-review-section");
         warnings.append(node(document, "h3", "", this.#t("warnings")));
-        for (const warning of preview.warnings)
-          warnings.append(messageBlock(document, warning, "alert"));
+        preview.warnings.forEach((_, index) =>
+          warnings.append(
+            messageBlock(
+              document,
+              this.#provided(previewWarning(preview, index, adapter.provider)),
+              "alert",
+            ),
+          ),
+        );
         section.append(warnings);
       }
       if (adapter.description.features?.includes("record-views")) {
@@ -566,7 +603,7 @@ export function defineImportElement(generation?: string): string {
         if (this.#current(runtime, request)) {
           const failure = previewFailure(error);
           this.#selected = undefined;
-          this.#notice(failure.key, "alert", failure.params);
+          this.#notice(failure.key, "alert", failure.params, failure.issue);
         }
       } finally {
         if (this.#current(runtime, request)) {

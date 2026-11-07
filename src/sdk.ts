@@ -10,6 +10,7 @@ export type {
   DataMutation,
   DataSetRevision,
   Disposable,
+  LocalizedText,
   QueryResult,
   ServiceHandle,
   ServiceProvider,
