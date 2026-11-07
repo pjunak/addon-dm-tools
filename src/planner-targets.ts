@@ -50,7 +50,7 @@ export function coreReferences(host: unknown): CoreReferences {
       typeof entry.label !== "string" ||
       entry.label.length > 200 ||
       typeof entry.href !== "string" ||
-      entry.href !== `#/${entry.collection}/${encodeURIComponent(entry.id)}`
+      entry.href !== `/${entry.collection}/${encodeURIComponent(entry.id)}`
     )
       continue;
     records.push({
@@ -241,7 +241,7 @@ export function targetLink(
   const label = targetLabel(target, items, core, t);
   const href =
     target["scope"] === "planning" && items.some((item) => item.id === target["itemId"])
-      ? `#/addons/${encodeURIComponent(addonId)}/planner?item=${encodeURIComponent(scalarText(target["itemId"]))}`
+      ? `/addons/${encodeURIComponent(addonId)}/planner?item=${encodeURIComponent(scalarText(target["itemId"]))}`
       : target["scope"] === "core"
         ? core.records.find(
             (record) => record.collection === target["collection"] && record.id === target["id"],

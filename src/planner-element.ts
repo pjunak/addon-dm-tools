@@ -439,10 +439,10 @@ export function definePlannerElement(generation?: string): string {
     }
     #openCanvas(id?: string): void {
       const addonId = this.#contribution?.addon.id;
-      if (!addonId) return;
+      if (!addonId || !this.#runtime) return;
       this.#editorId = undefined;
       this.#readerId = undefined;
-      this.ownerDocument.defaultView!.location.hash = plannerLink(addonId, id);
+      this.#runtime.ui.navigate(plannerLink(addonId, id));
     }
 
     #selectOnly(id?: string): void {

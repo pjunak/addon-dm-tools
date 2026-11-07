@@ -164,6 +164,7 @@ const ui: AddonContext["ui"] = {
     return { refresh() {}, dispose() {} };
   },
   async showRuleDetails() {},
+  navigate: () => true,
   declarations: () => [],
   bind(_id, binding) {
     void binding;

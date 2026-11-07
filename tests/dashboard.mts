@@ -73,7 +73,7 @@ void test("planner links open containers or select leaf records in their parent 
     item("scene", "event", 1, "quest"),
     item("branch", "branch"),
   ];
-  assert.equal(plannerLink("dm-tools", "scene"), "#/addons/dm-tools/planner?item=scene");
+  assert.equal(plannerLink("dm-tools", "scene"), "/addons/dm-tools/planner?item=scene");
   assert.equal(plannerTarget(route([["item", "scene"]])), "scene");
   assert.equal(plannerTarget(route([])), undefined);
   assert.equal(plannerTarget(undefined), undefined);

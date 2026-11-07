@@ -3,11 +3,11 @@
   "packageFormat": 1,
   "id": "dm-tools",
   "name": "DM Tools",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "DM-only nested story planning and reviewed planning imports.",
   "license": "MIT",
   "compatibility": {
-    "host": ">=2.0.0 <3.0.0",
+    "host": ">=2.1.0 <3.0.0",
     "addonApi": "^3.0.0",
     "workerProtocol": "^1.0.0"
   },

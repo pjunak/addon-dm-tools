@@ -168,7 +168,7 @@ export function defineDashboardElement(generation: string): string {
       nav.setAttribute("aria-label", t("dashboard.workflow.label"));
       for (const [kind, href] of [
         ["planning", plannerLink(addonId)],
-        ["import", `#/addons/${encodeURIComponent(addonId)}/imports`],
+        ["import", `/addons/${encodeURIComponent(addonId)}/imports`],
       ] as const) {
         const link = document.createElement("a");
         link.href = href;

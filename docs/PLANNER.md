@@ -265,7 +265,7 @@ explicitly discarded; it is never silently applied or erased.
 
 ## Share a link with another DM view
 
-Planner links use `#/addons/dm-tools/planner?item=<id>`. Containers open their
+Planner links use `/addons/dm-tools/planner?item=<id>`. Containers open their
 own canvas. Events and branches select the item on its parent canvas and open
 the reader. Reload, a new tab and browser Back retain that target; the link
 does not grant access to private DM data.

@@ -226,6 +226,12 @@ export interface ServiceError extends Error {
    * language. Show it as text only (`textContent`), never as HTML or Markdown.
    */
   readonly issue?: string;
+  /**
+   * `issue` with the catalog key the provider attached, if any, and `addon`
+   * naming the provider; `i18n.message(issueText)` shows it in the reader's
+   * language and falls back to `issue`.
+   */
+  readonly issueText?: LocalizedText;
 }
 
 export interface ServiceHandle {
@@ -319,8 +325,55 @@ export interface UIAPI {
   enhance(root: HTMLElement): UIControlsHandle;
   /** Requires ui.rule-details. Settles when the panel closes. */
   showRuleDetails(details: RuleDetails): Promise<void>;
+  /**
+   * Opens an app page such as `/addons/<addon-id>/<path>?item=x`, asking about
+   * unsaved edits first. With `replace`, only the query of the page that is
+   * showing changes, without reopening it. Returns false when the host refused.
+   * Host 2.1.0 and later.
+   */
+  navigate(href: string, options?: { readonly replace?: boolean }): boolean;
   declarations(): readonly ContributionDeclaration[];
   bind(contributionId: string, binding: ContributionBinding): ContributionHandle;
+}
+
+// --- Languages ---------------------------------------------------------------
+
+/**
+ * English text with an optional key into an add-on's message catalog. Workers
+ * send these for user-facing messages; `message` shows the translation when
+ * the reader's language has one and `text` otherwise.
+ */
+export interface LocalizedText {
+  readonly text: string;
+  readonly key?: string;
+  /** Fills the catalog message's `{name}` placeholders; `text` is already filled. */
+  readonly args?: Readonly<Record<string, string | number>>;
+  /** The add-on whose catalog holds `key`; the calling add-on by default. */
+  readonly addon?: string;
+}
+
+/**
+ * Requires ui.i18n. The reader's interface language and the message catalogs
+ * of the active add-ons. Catalogs are loaded before `activate` runs, so these
+ * calls answer synchronously.
+ */
+export interface I18nAPI {
+  /** The reader's interface language, a canonical BCP 47 tag such as "cs". */
+  readonly locale: string;
+  /**
+   * This add-on's message `key` in the reader's language, falling back through
+   * base languages to English; the key itself when no catalog has it.
+   */
+  t(key: string, args?: Readonly<Record<string, string | number>>): string;
+  /** A plural message for `count`, which also fills `{n}`. */
+  plural(key: string, count: number, args?: Readonly<Record<string, string | number>>): string;
+  /** `text` translated through its add-on's catalog, or its English `text`. */
+  message(text: LocalizedText): string;
+  /**
+   * Calls `listener` after the language changes or more catalogs load. It
+   * stops with this generation or `options.signal`; the result stops it too.
+   */
+  onChange(listener: () => void, options?: { readonly signal?: AbortSignal }): () => void;
 }
 
 // --- Activation ------------------------------------------------------------
@@ -346,6 +399,8 @@ export interface AddonContext {
   readonly content: ContentAPI;
   readonly services: ServiceAPI;
   readonly ui: UIAPI;
+  /** Requires ui.i18n. */
+  readonly i18n: I18nAPI;
 }
 
 export interface Disposable {

@@ -63,8 +63,8 @@ the brief.
 | Identity | Source |
 | --- | --- |
 | Planning item, flow, reference, consequence or note | The planning export |
-| A planning item's ID, without an export | The planner link `#/addons/dm-tools/planner?item=<id>` |
-| A core character, faction, location, mystery, artifact or event | The record page's address, `#/<collection>/<id>` |
+| A planning item's ID, without an export | The planner link `/addons/dm-tools/planner?item=<id>` |
+| A core character, faction, location, mystery, artifact or event | The record page's address, `/<collection>/<id>` |
 | An external add-on record | That add-on's own documentation or export |
 
 If a required identity or update baseline is missing, say what is needed and

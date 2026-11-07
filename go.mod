@@ -2,7 +2,7 @@ module github.com/pjunak/addon-dm-tools
 
 go 1.27.3
 
-require github.com/pjunak/ttrpg-codex v0.0.0-20261102202637-0878bcc86853
+require github.com/pjunak/ttrpg-codex v0.0.0-20261107032804-46e760f47e05
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect

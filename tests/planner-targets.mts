@@ -4,7 +4,7 @@ import { coreReferences, targetFromForm } from "#web/planner-targets";
 import { noteAnchors } from "#web/planner-note-anchors";
 
 const items = [{ id: "quest", title: "Quest" }];
-const record = { collection: "events", id: "arrival", label: "Arrival", href: "#/events/arrival" };
+const record = { collection: "events", id: "arrival", label: "Arrival", href: "/events/arrival" };
 const core = { records: [record], ready: true, truncated: false };
 const form = (values: Record<string, string>) => {
   const data = new FormData();
@@ -20,6 +20,7 @@ void test("target choices reject malformed host catalogs and unsafe record links
         ...core,
         records: [
           { ...record, href: "javascript:alert(1)" },
+          { ...record, href: "//elsewhere.example/events/arrival" },
           { ...record, collection: "settings" },
         ],
       },

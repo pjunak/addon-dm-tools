@@ -55,7 +55,7 @@ export function summarizePlanning(snapshot: DashboardPlanning, locale: Dashboard
   };
 }
 export function plannerLink(addonId: string, itemId?: string): string {
-  return `#/addons/${encodeURIComponent(addonId)}/planner${itemId === undefined ? "" : `?item=${encodeURIComponent(itemId)}`}`;
+  return `/addons/${encodeURIComponent(addonId)}/planner${itemId === undefined ? "" : `?item=${encodeURIComponent(itemId)}`}`;
 }
 export function plannerTarget(host: unknown): string | undefined {
   if (
