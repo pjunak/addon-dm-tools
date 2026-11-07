@@ -147,7 +147,8 @@ export function defineDashboardElement(generation: string): string {
       // Planning changes refresh the overview live; a manual retry is only for failures.
       if (this.#status === "error") {
         const retry = document.createElement("button");
-        retry.className = "dm-dashboard-refresh";
+        retry.type = "button";
+        retry.className = "ui-action dm-dashboard-refresh";
         retry.textContent = t("dashboard.refresh");
         retry.addEventListener("click", () => void this.#load());
         overview.append(retry);
@@ -186,7 +187,7 @@ export function defineDashboardElement(generation: string): string {
         if (!summary.recent.length) {
           recent.append(element("p", t("dashboard.empty.body")));
           const link = document.createElement("a");
-          link.className = "dm-dashboard-refresh";
+          link.className = "ui-action dm-dashboard-refresh";
           link.href = plannerLink(addonId);
           link.textContent = t("dashboard.empty.action");
           recent.append(link);

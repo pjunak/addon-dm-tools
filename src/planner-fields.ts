@@ -175,6 +175,17 @@ export function actionButton(
   button.addEventListener("click", action);
   return button;
 }
+/** The host's compact action (`.ui-action`) for toolbars, trails and panels. */
+export function compactAction(
+  document: Document,
+  label: string,
+  action: () => void,
+  variant?: "primary" | "danger" | "quiet",
+): HTMLButtonElement {
+  const button = actionButton(document, label, action, "ui-action");
+  if (variant) button.dataset["uiVariant"] = variant;
+  return button;
+}
 export function formText(data: FormData, name: string): string {
   const value = data.get(name);
   return typeof value === "string" ? value : "";

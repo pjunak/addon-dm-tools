@@ -25,6 +25,7 @@ import { appendNoteAnchors, noteAnchors, type NoteAnchorFilter } from "./planner
 import { planningChoices } from "./planner-choices.js";
 import {
   actionButton,
+  compactAction,
   choiceField,
   choiceValue,
   dependentGroup,
@@ -701,24 +702,34 @@ export function definePlannerElement(generation?: string): string {
       const nav = document.createElement("nav");
       nav.className = "dm-planner-breadcrumbs";
       nav.setAttribute("aria-label", this.#t("Planner scope"));
-      nav.append(
-        actionButton(
-          document,
-          this.#t("Campaign"),
-          () => this.#openCanvas(),
-          this.#scopeId === null ? "active" : undefined,
+      // The scope reads as a trail: Campaign › plotline › quest. The current
+      // scope is text; the scopes above it are actions.
+      const steps: readonly (readonly [string, string | undefined])[] = [
+        [this.#t("Campaign"), undefined],
+        ...scopeTrail(snapshot.items, this.#scopeId).map(
+          (item): readonly [string, string | undefined] => [item.title, item.id],
         ),
-      );
-      for (const item of scopeTrail(snapshot.items, this.#scopeId))
-        nav.append(
-          actionButton(
-            document,
-            item.title,
-            () => this.#openCanvas(item.id),
-            item.id === this.#scopeId ? "active" : undefined,
-          ),
-        );
-      for (const button of nav.querySelectorAll("button")) button.dataset["viewAction"] = "";
+      ];
+      steps.forEach(([label, id], index) => {
+        if (index > 0) {
+          const separator = document.createElement("span");
+          separator.className = "dm-planner-trail-separator";
+          separator.setAttribute("aria-hidden", "true");
+          separator.textContent = "›";
+          nav.append(separator);
+        }
+        if ((id ?? null) === this.#scopeId) {
+          const current = document.createElement("span");
+          current.className = "dm-planner-trail-current";
+          current.setAttribute("aria-current", "location");
+          current.textContent = label;
+          nav.append(current);
+          return;
+        }
+        const step = compactAction(document, label, () => this.#openCanvas(id), "quiet");
+        step.dataset["viewAction"] = "";
+        nav.append(step);
+      });
       return nav;
     }
 
@@ -733,11 +744,18 @@ export function definePlannerElement(generation?: string): string {
         ["quest", this.#t("Quest")],
         ["event", this.#t("Event")],
         ["branch", this.#t("Branch")],
-      ] as const)
-        aside.append(actionButton(document, `+ ${label}`, () => this.#create(kind), kind));
+      ] as const) {
+        const create = compactAction(document, `+ ${label}`, () => this.#create(kind));
+        // A small card outline in the kind's border marks what the action creates.
+        const mark = document.createElement("span");
+        mark.className = `dm-kind-mark ${kind}`;
+        mark.setAttribute("aria-hidden", "true");
+        create.prepend(mark);
+        aside.append(create);
+      }
       if (this.#newItem)
         aside.append(
-          actionButton(document, this.#t("Resume new item"), () =>
+          compactAction(document, this.#t("Resume new item"), () =>
             this.#create(this.#newItem!.kind),
           ),
         );
@@ -965,16 +983,23 @@ export function definePlannerElement(generation?: string): string {
       // card between the first and second clicks of a double-click.
       updateRead();
       toolbar.append(read);
-      for (const button of toolbar.querySelectorAll("button")) button.dataset["viewAction"] = "";
-      const help = actionButton(document, this.#t("Keyboard shortcuts"), () => this.#showHelp());
+      for (const button of toolbar.querySelectorAll("button")) {
+        button.classList.add("ui-action");
+        button.dataset["viewAction"] = "";
+      }
+      const help = compactAction(document, this.#t("Keyboard shortcuts"), () => this.#showHelp());
       help.dataset["viewAction"] = "";
       help.dataset["plannerShortcuts"] = "";
       toolbar.append(help);
-      const reset = actionButton(document, this.#t("Reset layout"), () => void this.#resetLayout());
+      const reset = compactAction(
+        document,
+        this.#t("Reset layout"),
+        () => void this.#resetLayout(),
+      );
       toolbar.append(reset);
       if (this.#undoDelete)
         toolbar.append(
-          actionButton(document, this.#t("Undo last deletion"), () => void this.#undoDeletion()),
+          compactAction(document, this.#t("Undo last deletion"), () => void this.#undoDeletion()),
         );
       const connection = mountCanvasConnections({
         viewport,
@@ -1095,17 +1120,19 @@ export function definePlannerElement(generation?: string): string {
           ? snapshot.items.find((value) => value.id === this.#selectedId)
           : undefined;
       if (item) {
-        toolbar.append(actionButton(document, this.#t("Edit selected"), () => this.#edit(item.id)));
+        toolbar.append(
+          compactAction(document, this.#t("Edit selected"), () => this.#edit(item.id)),
+        );
         if (item.kind === "plotline" || item.kind === "quest")
           toolbar.append(
-            actionButton(document, this.#t("Enter this canvas"), () => this.#openCanvas(item.id)),
+            compactAction(document, this.#t("Enter this canvas"), () => this.#openCanvas(item.id)),
           );
       }
       if (!this.#selection.items.size && this.#selection.flows.size === 1) {
         const flow = snapshot.flows.find((value) => this.#selection.flows.has(value.id));
         if (flow)
           toolbar.append(
-            actionButton(document, this.#t("Edit selected flow"), () => {
+            compactAction(document, this.#t("Edit selected flow"), () => {
               this.#edit(flow.sourceId, "links");
               const entry = this.querySelector<HTMLElement>(
                 `.dm-planner-flow-entry[data-flow-id="${CSS.escape(flow.id)}"]`,
@@ -1118,7 +1145,7 @@ export function definePlannerElement(generation?: string): string {
       }
       if (this.#selection.items.size === 2 && !this.#selection.flows.size)
         toolbar.append(
-          actionButton(document, this.#t("Connect selected"), () => {
+          compactAction(document, this.#t("Connect selected"), () => {
             const [source, target] = [...this.#selection.items];
             if (!source || !target) return;
             this.#edit(source, "links");
@@ -1138,7 +1165,7 @@ export function definePlannerElement(generation?: string): string {
         );
       if (count)
         toolbar.append(
-          actionButton(
+          compactAction(
             document,
             this.#t("Delete selection"),
             () => void this.#deleteSelection(),
@@ -1152,6 +1179,8 @@ export function definePlannerElement(generation?: string): string {
       const t = this.#t;
       const dialog = document.createElement("dialog");
       dialog.className = "dm-planner-dialog dm-planner-inspector dm-planner-editor";
+      // Lists to pick from are raised and free text sunken, as in the host's record form.
+      dialog.dataset["uiForm"] = "";
       dialog.setAttribute("aria-label", t("Edit planning item"));
       const isNew = this.#newItem?.id === this.#editorId;
       const selected = isNew
@@ -1344,8 +1373,7 @@ export function definePlannerElement(generation?: string): string {
       for (const section of layout.querySelectorAll<HTMLElement>("[data-form-section]")) {
         const label = section.querySelector(":scope > h3")?.textContent ?? "";
         // Buttons, not links: the page's address belongs to the host.
-        const button = actionButton(document, label, () => showFormSection(section));
-        button.dataset["uiVariant"] = "quiet";
+        const button = compactAction(document, label, () => showFormSection(section), "quiet");
         button.dataset["viewAction"] = "";
         nav.append(button);
       }

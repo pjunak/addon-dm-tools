@@ -263,13 +263,13 @@ export function defineImportElement(generation?: string): string {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "application/json,.json";
-      input.setAttribute("aria-label", this.#t("center.chooseFile"));
       input.disabled = this.#phase !== "idle" || !this.#adapters.length;
       input.addEventListener("change", () => {
         const file = input.files?.[0];
         if (file) void this.#open(file);
       });
-      const label = node(document, "label", "dm-import-file-button", this.#t("center.chooseFile"));
+      // The host's file field, named by its label.
+      const label = node(document, "label", "dm-import-file", this.#t("center.chooseFile"));
       label.append(input);
       dropzone.append(label);
       dropzone.addEventListener("dragover", (event) => {
