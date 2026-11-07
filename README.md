@@ -97,7 +97,7 @@ audit the committed npm lockfile for high-severity dependency findings.
 Inspect the built archive with the host's inspector:
 
 ```text
-go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-3.0.0.zip
+go tool -modfile=go.tools.mod codex-addon-inspect dist/dm-tools-<version>.zip
 ```
 
 Install through upload, inspection, permission review, approval and activation.
