@@ -1,6 +1,7 @@
 import { definePlannerElement } from "#web/planner-element";
 import { PlanningRepository, type PlanningRecord } from "#web/planning-repository";
 import { registerRuntime } from "#web/runtime";
+import { fakeI18n, type Catalog } from "../i18n-fake.ts";
 import type { PlanningItem } from "../../src/planning-model.js";
 import type {
   AddonContext,
@@ -172,7 +173,14 @@ const ui: AddonContext["ui"] = {
   },
 };
 const generation = "b".repeat(64);
-registerRuntime(generation, { ui, repository, adapters, signal });
+let locale = "en";
+const catalogs = await Promise.all(
+  ["en", "cs"].map(
+    async (tag) => (await (await fetch(`../../locales/${tag}.json`)).json()) as Catalog,
+  ),
+);
+const i18n = fakeI18n(catalogs, () => locale);
+registerRuntime(generation, { ui, repository, adapters, signal, i18n });
 const tag = definePlannerElement(generation);
 
 const planner = document.createElement(tag) as PlannerFixtureElement;

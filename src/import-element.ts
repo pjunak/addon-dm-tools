@@ -1,12 +1,11 @@
 import { actionButton, messageBlock } from "./planner-fields.js";
-import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
+import { liveI18n, runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
-import { dashboardLocale } from "./dashboard-model.js";
+import { hostLocale, importText, type ImportMessage, type ImportParams } from "./messages.js";
 import { downloadFile } from "./download.js";
 import { planningExport, planningExportName } from "./planning-export.js";
 import {
   ImportProblem,
-  importText,
   isRecord,
   parseAdapterDescription,
   parseImportPreview,
@@ -16,8 +15,6 @@ import {
   selectAdapter,
   type Adapter,
   type ImportPreview,
-  type ImportMessage,
-  type ImportParams,
 } from "./import-model.js";
 
 export const importElementTag = "dm-tools-import-center";
@@ -30,6 +27,7 @@ export function defineImportElement(generation?: string): string {
     #controls: ReturnType<DmToolsRuntime["ui"]["enhance"]> | undefined;
     #contribution: ContributionContext | undefined;
     #runtime: DmToolsRuntime | undefined;
+    #stopTexts: (() => void) | undefined;
     #adapters: readonly Adapter[] = [];
     #failedProviders: readonly string[] = [];
     #selected: Adapter | undefined;
@@ -48,7 +46,7 @@ export function defineImportElement(generation?: string): string {
       this.#contribution = value;
       if (!this.isConnected) return;
       if (previous?.addon.generation !== value.addon.generation) void this.#connect();
-      else if (dashboardLocale(previous.host) !== dashboardLocale(value.host)) this.#render();
+      else if (hostLocale(previous.host) !== hostLocale(value.host)) this.#render();
     }
     connectedCallback(): void {
       this.classList.add("dm-tools-import");
@@ -60,13 +58,16 @@ export function defineImportElement(generation?: string): string {
       this.#request?.abort();
       this.#request = undefined;
       this.#runtime = undefined;
+      this.#stopTexts?.();
+      this.#stopTexts = undefined;
       this.#outcome = undefined;
       this.#preview = undefined;
       this.#selected = undefined;
       this.#contribution?.edits?.set({ dirty: false, saving: false });
     }
     #t(key: ImportMessage, params: ImportParams = {}): string {
-      return importText(dashboardLocale(this.#contribution?.host), key, params);
+      const i18n = liveI18n(this.#runtime);
+      return i18n ? importText(i18n, key, params) : key;
     }
     #startRequest(): AbortController {
       this.#request?.abort();
@@ -112,6 +113,11 @@ export function defineImportElement(generation?: string): string {
       this.#controls?.dispose();
       this.#controls = runtime.ui.enhance(this);
       this.#runtime = runtime;
+      this.#stopTexts?.();
+      // Catalogs for a new language arrive after the switch.
+      this.#stopTexts = runtime.i18n.onChange(() => this.#render(), {
+        signal: AbortSignal.any([runtime.signal, contribution!.signal]),
+      });
       this.#adapters = [];
       this.#failedProviders = [];
       this.#preview = undefined;
@@ -166,7 +172,7 @@ export function defineImportElement(generation?: string): string {
     }
 
     #render(): void {
-      this.lang = dashboardLocale(this.#contribution?.host);
+      this.lang = hostLocale(this.#contribution?.host);
       const document = this.ownerDocument,
         root = node(document, "section", "dm-import-shell");
       root.setAttribute("aria-busy", String(this.#phase !== "idle"));
@@ -291,7 +297,7 @@ export function defineImportElement(generation?: string): string {
       for (const adapter of [...this.#adapters].sort((a, b) =>
         a.description.label.localeCompare(
           b.description.label,
-          dashboardLocale(this.#contribution?.host),
+          hostLocale(this.#contribution?.host),
         ),
       )) {
         const card = node(document, "article", "dm-import-adapter"),
@@ -369,7 +375,7 @@ export function defineImportElement(generation?: string): string {
             document,
             "strong",
             "",
-            new Intl.NumberFormat(dashboardLocale(this.#contribution?.host)).format(
+            new Intl.NumberFormat(hostLocale(this.#contribution?.host)).format(
               preview.summary[key],
             ),
           ),

@@ -11,6 +11,7 @@ export async function activate(context: AddonContext): Promise<Disposable> {
   context.capabilities.require("ui.contributions");
   context.capabilities.require("ui.markdown");
   context.capabilities.require("ui.controls.v1");
+  context.capabilities.require("ui.i18n");
   context.signal.throwIfAborted();
   const adapters = await context.services.connect("codex.import-adapter", {
     range: ">=2.0.0 <4.0.0",
@@ -23,6 +24,7 @@ export async function activate(context: AddonContext): Promise<Disposable> {
     adapters,
     signal: context.signal,
     ui: context.ui,
+    i18n: context.i18n,
   });
   const plannerElementTag = definePlannerElement(context.addon.generation),
     importElementTag = defineImportElement(context.addon.generation);

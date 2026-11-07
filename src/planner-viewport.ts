@@ -1,3 +1,4 @@
+import { canvasText, type CanvasMessage, type I18n } from "./messages.js";
 import type { PlanningItem, PlanningView } from "./planning-model.js";
 
 /** The preserved planner's fixed ladder always includes a native 100% stop. */
@@ -80,30 +81,26 @@ export function nativePixel(value: number, scale = globalThis.devicePixelRatio |
   return Math.round(value * scale) / scale;
 }
 
-const en = {
-  canvas: "Story canvas",
-  controls: "Canvas controls",
-  out: "Zoom out",
-  reset: "Reset zoom to 100%",
-  in: "Zoom in",
-  fit: "Fit",
-  focus: "Focus selected",
-  fullscreen: "Fullscreen",
-  exit: "Exit fullscreen",
-  help: "Drag empty canvas to select; middle-drag or Alt-drag pans. Ctrl + wheel or +/− zooms; 0 resets; F fits. Arrows move selected cards; Ctrl + arrows pans.",
-};
-const cs: typeof en = {
-  canvas: "Příběhové plátno",
-  controls: "Ovládání plátna",
-  out: "Oddálit",
-  reset: "Obnovit přiblížení na 100 %",
-  in: "Přiblížit",
-  fit: "Přizpůsobit",
-  focus: "Zaměřit výběr",
-  fullscreen: "Celá obrazovka",
-  exit: "Ukončit celou obrazovku",
-  help: "Tažením prázdného plátna vybíráte; prostřední tlačítko nebo Alt a tažení posouvá pohled. Ctrl + kolečko nebo +/− mění přiblížení; 0 obnoví měřítko; F přizpůsobí. Šipky přesouvají vybrané karty; Ctrl + šipky posouvají pohled.",
-};
-export function canvasLabels(host: unknown): typeof en {
-  return host && typeof host === "object" && "locale" in host && host.locale === "cs" ? cs : en;
+const canvasKeys = {
+  canvas: "canvas.canvas",
+  controls: "canvas.controls",
+  out: "canvas.out",
+  reset: "canvas.reset",
+  in: "canvas.in",
+  fit: "canvas.fit",
+  focus: "canvas.focus",
+  fullscreen: "canvas.fullscreen",
+  exit: "canvas.exit",
+  help: "canvas.help",
+} as const satisfies Record<string, CanvasMessage>;
+export type CanvasLabels = Readonly<Record<keyof typeof canvasKeys, string>>;
+/** The canvas controls' texts; the keys themselves before a translator exists. */
+export function canvasLabels(i18n: I18n | undefined): CanvasLabels {
+  const labels = {} as Record<keyof typeof canvasKeys, string>;
+  for (const [name, key] of Object.entries(canvasKeys) as [
+    keyof typeof canvasKeys,
+    CanvasMessage,
+  ][])
+    labels[name] = i18n ? canvasText(i18n, key) : key;
+  return labels;
 }

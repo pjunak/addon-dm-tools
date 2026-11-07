@@ -1,6 +1,7 @@
 import { definePlannerElement } from "#web/planner-element";
 import { PlanningRepository, type PlanningRecord } from "#web/planning-repository";
 import { registerRuntime } from "#web/runtime";
+import { fakeI18n, type Catalog } from "../i18n-fake.ts";
 import type { PlanningFlow, PlanningItem } from "../../src/planning-model.js";
 import type {
   AddonContext,
@@ -125,7 +126,14 @@ const ui: AddonContext["ui"] = {
   },
 };
 const generation = "a".repeat(64);
-registerRuntime(generation, { ui, repository, adapters, signal });
+let locale = "en";
+const catalogs = await Promise.all(
+  ["en", "cs"].map(
+    async (tag) => (await (await fetch(`../../locales/${tag}.json`)).json()) as Catalog,
+  ),
+);
+const i18n = fakeI18n(catalogs, () => locale);
+registerRuntime(generation, { ui, repository, adapters, signal, i18n });
 definePlannerElement();
 
 const planner = document.createElement("dm-tools-planner-page");
@@ -279,6 +287,7 @@ globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
   const titleInput = requiredElement(planner, 'dialog input[name="title"]', HTMLInputElement);
   titleInput.value = "Title {0} $&";
   titleInput.dispatchEvent(new Event("input", { bubbles: true }));
+  locale = "cs";
   planner.codexContribution = { ...contribution, host: { locale: "cs" } };
   check(
     "locale refresh retains the mounted planner",
@@ -314,6 +323,7 @@ globalThis.runRenderingContract = async ({ deviceScaleFactor }) => {
     localizedCardTitle.textContent,
     "The silver road",
   );
+  locale = "en";
   planner.codexContribution = contribution;
   const restoredDialog = requiredElement(planner, "dialog", HTMLDialogElement);
   check(

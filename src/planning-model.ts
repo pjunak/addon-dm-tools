@@ -3,7 +3,7 @@ import {
   type PlannerParameters,
   type PlannerTranslator,
   plannerTranslator,
-} from "./planner-catalogs.js";
+} from "./messages.js";
 const planningKinds = ["plotline", "quest", "event", "branch"] as const;
 export type PlanningKind = (typeof planningKinds)[number];
 export type EventType = "story" | "encounter" | "puzzle";

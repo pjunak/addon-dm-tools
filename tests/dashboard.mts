@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  dashboardLocale,
-  dashboardText,
   plannerLink,
   plannerSelection,
   plannerTarget,
   planningImportStatus,
   summarizePlanning,
 } from "#web/dashboard-model";
+import { dashboardText, hostLocale } from "#web/messages";
+import { catalogI18n } from "./catalog-i18n.ts";
 import type { EventType } from "#web/planning-model";
 
 type PlanningKind = "plotline" | "quest" | "event" | "branch";
@@ -100,11 +100,12 @@ void test("planner links open containers or select leaf records in their parent 
   }
 });
 
-void test("dashboard uses the selected English or Czech catalog", () => {
-  assert.equal(dashboardLocale({ locale: "cs" }), "cs");
-  assert.equal(dashboardLocale({ locale: "unknown" }), "en");
-  assert.equal(dashboardText("cs", "dashboard.title"), "Plánování kampaně");
-  assert.equal(dashboardText("en", "dashboard.title"), "Campaign Planning");
+void test("dashboard texts follow the reader's language", () => {
+  assert.equal(hostLocale({ locale: "cs" }), "cs");
+  assert.equal(hostLocale({ locale: "pt-BR" }), "pt-BR");
+  assert.equal(hostLocale(undefined), "en");
+  assert.equal(dashboardText(catalogI18n("cs"), "dashboard.title"), "Plánování kampaně");
+  assert.equal(dashboardText(catalogI18n("en"), "dashboard.title"), "Campaign Planning");
 });
 
 void test("planning import availability follows advertised formats and contains optional provider failures", async () => {

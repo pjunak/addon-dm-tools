@@ -1,4 +1,4 @@
-import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
+import { type PlannerTranslator, plannerTranslator } from "./messages.js";
 export interface PlannerDraft {
   readonly revision: number | undefined;
   readonly baseline: Record<string, string>;

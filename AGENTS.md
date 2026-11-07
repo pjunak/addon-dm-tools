@@ -84,6 +84,10 @@ JSON schemas under `contracts/` define activation and write boundaries.
   silently treating a defect as the intended contract.
 - Services exchange serializable, schema-validated values, never DOM, functions,
   host facades or raw HTML.
+- Interface texts live in `locales/*.json` (`message-catalog.v1`); English
+  defines the keys and Czech stays complete (a test checks it). After changing
+  `locales/en.json`, run `npm run sync:message-keys` to refresh the typed keys
+  in `src/message-keys.ts`.
 - Styles use the host's design tokens by name. `check:source` runs the host's
   style check from `tools/codex/` (`npm run sync:codex-sdk` refreshes it).
 

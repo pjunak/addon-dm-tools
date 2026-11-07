@@ -1,4 +1,4 @@
-import { PlannerError } from "./planner-catalogs.js";
+import { PlannerError } from "./messages.js";
 import type {
   AddonContext,
   AddonDocument,

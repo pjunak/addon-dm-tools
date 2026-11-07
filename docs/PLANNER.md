@@ -79,7 +79,7 @@ branch subtypes keep encounters, puzzles and different kinds of fork distinct.
 The [generation guide](AGENT_GENERATION.md#turn-the-story-into-records) gives
 more writing guidance.
 
-Controls follow the host's English or Czech language. Changing the language
+Controls follow the reader's interface language. Changing the language
 keeps the open draft; authored titles and prose remain in their original language.
 
 ## Connect and rearrange the story

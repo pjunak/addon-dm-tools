@@ -39,7 +39,13 @@ void test("compiled entry binds planner and import routes and disposes idempoten
       capabilities: {
         require: (id: string) =>
           assert.ok(
-            ["data.transactions", "ui.contributions", "ui.markdown", "ui.controls.v1"].includes(id),
+            [
+              "data.transactions",
+              "ui.contributions",
+              "ui.markdown",
+              "ui.controls.v1",
+              "ui.i18n",
+            ].includes(id),
           ),
       },
       data: {

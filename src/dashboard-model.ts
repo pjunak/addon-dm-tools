@@ -1,6 +1,5 @@
-import { PlannerError } from "./planner-catalogs.js";
+import { PlannerError } from "./messages.js";
 import { validPlanningId, type PlanningItem } from "./planning-model.js";
-import { en, cs } from "./dashboard-catalogs.js";
 
 type DashboardItem = Pick<
   PlanningItem,
@@ -23,17 +22,7 @@ interface ImportService {
   ): Promise<unknown>;
 }
 
-export type DashboardLocale = "en" | "cs";
-export type DashboardMessage = keyof typeof en;
-export function dashboardLocale(host: unknown): DashboardLocale {
-  return typeof host === "object" && host !== null && "locale" in host && host.locale === "cs"
-    ? "cs"
-    : "en";
-}
-export function dashboardText(locale: DashboardLocale, key: DashboardMessage): string {
-  return (locale === "cs" ? cs : en)[key];
-}
-export function summarizePlanning(snapshot: DashboardPlanning, locale: DashboardLocale) {
+export function summarizePlanning(snapshot: DashboardPlanning, locale: string) {
   return {
     counts: {
       total: snapshot.items.length,

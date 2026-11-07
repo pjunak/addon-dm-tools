@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { en, cs } from "#web/import-catalogs";
+import { importText } from "#web/messages";
+import { catalogI18n } from "./catalog-i18n.ts";
 import {
   ImportProblem,
-  importText,
   parseAdapterDescription,
   parseImportPreview,
   parseImportSource,
@@ -105,15 +105,10 @@ void test("a saved commit receipt keeps any token the import contract allows", (
   for (const stored of [null, "", "{", "[]", '"token"'])
     assert.equal(parseSavedReceipt(stored), undefined);
 });
-void test("English and Czech catalogs retain placeholders and literal imported labels", () => {
-  assert.deepEqual(Object.keys(en), Object.keys(cs));
-  for (const key of Object.keys(en) as Array<keyof typeof en>) {
-    assert.ok(cs[key].trim());
-    assert.deepEqual(en[key].match(/\{[^}]+\}/g) ?? [], cs[key].match(/\{[^}]+\}/g) ?? [], key);
-  }
-  assert.equal(importText("cs", "center.title"), "Centrum importu");
+void test("import texts translate and keep literal imported labels", () => {
+  assert.equal(importText(catalogI18n("cs"), "center.title"), "Centrum importu");
   assert.equal(
-    importText("en", "previewTitle", { label: "<b>{format}</b>" }),
+    importText(catalogI18n("en"), "previewTitle", { label: "<b>{format}</b>" }),
     "<b>{format}</b> preview",
   );
 });
@@ -122,11 +117,11 @@ void test("a rejected preview shows the importer's own problem as plain text", (
   const failure = previewFailure({ name: "AddonServiceHTTPError", code: "INVALID_REQUEST", issue });
   assert.deepEqual(failure, { key: "previewRejected", params: { issue } });
   assert.equal(
-    importText("en", failure.key, failure.params),
+    importText(catalogI18n("en"), failure.key, failure.params),
     `Fix this problem in the file, then choose it again: ${issue}`,
   );
   assert.equal(
-    importText("cs", "previewRejected", { issue: "{issue} {count}" }),
+    importText(catalogI18n("cs"), "previewRejected", { issue: "{issue} {count}" }),
     "Opravte v souboru tento problém a vyberte ho znovu: {issue} {count}",
   );
   for (const error of [

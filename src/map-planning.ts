@@ -1,7 +1,7 @@
 import type { PlanningDataset } from "./planning-model.js";
-import { dashboardLocale, plannerLink } from "./dashboard-model.js";
-import { plannerTranslator } from "./planner-catalogs.js";
-import { runtimeFor } from "./runtime.js";
+import { plannerLink } from "./dashboard-model.js";
+import { hostLocale, plannerTranslator } from "./messages.js";
+import { liveI18n, runtimeFor } from "./runtime.js";
 import { LiveRefresh } from "./live-refresh.js";
 import type { ContributionContext } from "./sdk.js";
 
@@ -86,7 +86,7 @@ export function defineMapPlanningElement(generation: string): string {
         locationId(previous?.host) !== locationId(value.host)
       )
         this.#connect();
-      else if (dashboardLocale(previous?.host) !== dashboardLocale(value.host)) this.#render();
+      else if (hostLocale(previous?.host) !== hostLocale(value.host)) this.#render();
     }
     connectedCallback(): void {
       this.classList.add("dm-map-planning");
@@ -108,11 +108,18 @@ export function defineMapPlanningElement(generation: string): string {
         () => this.#status !== "loading",
         () => void this.#load(),
       );
-      if (context && runtime)
-        this.#unsubscribe = runtime.repository.subscribe(
-          () => this.#live?.invalidate(),
-          context.signal,
-        );
+      if (context && runtime) {
+        const stopData = runtime.repository.subscribe(
+            () => this.#live?.invalidate(),
+            context.signal,
+          ),
+          // Catalogs for a new language arrive after the switch.
+          stopTexts = runtime.i18n.onChange(() => this.#render(), { signal: context.signal });
+        this.#unsubscribe = () => {
+          stopData();
+          stopTexts();
+        };
+      }
       void this.#load();
     }
     async #load(): Promise<void> {
@@ -144,7 +151,9 @@ export function defineMapPlanningElement(generation: string): string {
     }
     #render(): void {
       const document = this.ownerDocument,
-        t = plannerTranslator(dashboardLocale(this.#context?.host)),
+        t = plannerTranslator(
+          this.#context && liveI18n(runtimeFor(this.#context.addon.generation)),
+        ),
         root = document.createElement("div");
       root.setAttribute("aria-busy", String(this.#status === "loading"));
       // A live refresh keeps the current list on screen, marked busy, so the
@@ -175,7 +184,7 @@ export function defineMapPlanningElement(generation: string): string {
         const list = document.createElement("ul");
         for (const item of [...items].sort(
           (a, b) =>
-            a.title.localeCompare(b.title, dashboardLocale(this.#context?.host)) ||
+            a.title.localeCompare(b.title, hostLocale(this.#context?.host)) ||
             a.id.localeCompare(b.id),
         )) {
           const row = document.createElement("li"),

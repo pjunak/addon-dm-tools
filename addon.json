@@ -13,7 +13,7 @@
   },
   "capabilities": {
     "required": ["data.transactions", "ui.contributions",
-      "ui.controls.v1", "ui.markdown", "worker.native"],
+      "ui.controls.v1", "ui.i18n", "ui.markdown", "worker.native"],
     "optional": []
   },
   "runtime": {
@@ -30,12 +30,12 @@
   },
   "permissions": [{ "id": "core.data.read", "resources": ["characters", "factions", "locations", "mysteries", "artifacts", "events"], "reason": "Choose visible campaign records for planning references and consequence targets." }],
   "contributions": [
-    { "id": "map.planning", "surface": "slot", "label": "Related planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "map:pin:panel", "labels": { "cs": "Související plánování" } } },
-    { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard", "labels": { "cs": "Plánování kampaně" } } },
-    { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner", "labels": { "cs": "Plánovač příběhu" } } },
-    { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route", "labels": { "cs": "Plánovač příběhu" } } },
-    { "id": "imports.route", "surface": "route", "label": "Import Center", "roles": ["dm"], "config": { "path": "imports", "labels": { "cs": "Centrum importu" } } },
-    { "id": "imports.sidebar", "surface": "sidebar", "label": "Import Center", "roles": ["dm"], "order": 210, "config": { "route": "imports.route", "labels": { "cs": "Centrum importu" } } }
+    { "id": "map.planning", "surface": "slot", "label": "Related planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "map:pin:panel" } },
+    { "id": "dashboard.slot", "surface": "slot", "label": "Campaign Planning", "roles": ["dm"], "config": { "contractVersion": 1, "slot": "dm:dashboard" } },
+    { "id": "planner.route", "surface": "route", "label": "Story Planner", "roles": ["dm"], "config": { "path": "planner" } },
+    { "id": "planner.sidebar", "surface": "sidebar", "label": "Story Planner", "roles": ["dm"], "order": 200, "config": { "route": "planner.route" } },
+    { "id": "imports.route", "surface": "route", "label": "Import Center", "roles": ["dm"], "config": { "path": "imports" } },
+    { "id": "imports.sidebar", "surface": "sidebar", "label": "Import Center", "roles": ["dm"], "order": 210, "config": { "route": "imports.route" } }
   ],
   "collections": [
     { "id": "planning_items", "keyed": true, "visibility": "dm", "schema": "contracts/planning-item.schema.json", "schemaVersion": "3.0.0", "indexes": [{ "path": "/parentId" }, { "path": "/kind" }] },
@@ -48,5 +48,6 @@
   "services": {
     "provides": [{ "contract": "codex.import-adapter", "version": "2.0.0", "transport": "worker", "schema": "contracts/import-adapter.service.json" }, { "contract": "codex.campaign-bundle-contributor", "version": "1.0.0", "transport": "worker", "schema": "contracts/campaign-contributor.service.json" }],
     "consumes": [{ "contract": "codex.import-adapter", "range": ">=2.0.0 <4.0.0", "cardinality": "many", "required": false, "selection": "all-compatible" }]
-  }
+  },
+  "locales": { "en": "locales/en.json", "cs": "locales/cs.json" }
 }

@@ -1,4 +1,4 @@
-import { type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
+import { type PlannerTranslator, plannerTranslator } from "./messages.js";
 export function configurePlannerDialog(dialog: HTMLDialogElement, close: () => void): void {
   dialog.dataset["uiDialog"] = "";
   dialog.addEventListener("cancel", (event) => {

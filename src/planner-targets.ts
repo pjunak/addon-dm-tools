@@ -3,7 +3,7 @@ import {
   type PlannerTranslator,
   plannerTranslator,
   plannerLabel,
-} from "./planner-catalogs.js";
+} from "./messages.js";
 import { formText, messageBlock, scalarText, selectField, textField } from "./planner-fields.js";
 import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
 import { validPlanningId as validId } from "./planning-model.js";

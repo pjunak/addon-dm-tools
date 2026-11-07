@@ -1,9 +1,10 @@
 import {
+  hostLocale,
   type PlannerTranslator,
   plannerTranslator,
   plannerError,
   plannerLabel,
-} from "./planner-catalogs.js";
+} from "./messages.js";
 import {
   stepZoom,
   fittedZoom,
@@ -52,14 +53,9 @@ import {
   type PlanningReference,
 } from "./planning-model.js";
 import type { CollectionId, DeletionUndo, PlanningSnapshot } from "./planning-repository.js";
-import { runtimeFor, type DmToolsRuntime } from "./runtime.js";
+import { liveI18n, runtimeFor, type DmToolsRuntime } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
-import {
-  dashboardLocale,
-  plannerLink,
-  plannerSelection,
-  plannerTarget,
-} from "./dashboard-model.js";
+import { plannerLink, plannerSelection, plannerTarget } from "./dashboard-model.js";
 import { LiveRefresh } from "./live-refresh.js";
 import { PlannerDrafts } from "./planner-drafts.js";
 import { PlannerRecoveryStore, provisionalItem, type PlannerRecovery } from "./planner-recovery.js";
@@ -79,7 +75,7 @@ export function definePlannerElement(generation?: string): string {
   if (customElements.get(tag) !== undefined) return tag;
   class PlannerElement extends HTMLElement {
     readonly #t: PlannerTranslator = (key, parameters) =>
-      plannerTranslator(dashboardLocale(this.#contribution?.host))(key, parameters);
+      plannerTranslator(liveI18n(this.#runtime))(key, parameters);
     #controls: ReturnType<DmToolsRuntime["ui"]["enhance"]> | undefined;
     #contribution: ContributionContext | undefined;
     #runtime: DmToolsRuntime | undefined;
@@ -186,7 +182,7 @@ export function definePlannerElement(generation?: string): string {
       } catch (error) {
         this.#invalidLink(error);
       }
-      if (dashboardLocale(previous?.host) !== dashboardLocale(value.host)) {
+      if (hostLocale(previous?.host) !== hostLocale(value.host)) {
         this.#message = "";
         this.#render();
         this.#liveNotice();
@@ -294,10 +290,16 @@ export function definePlannerElement(generation?: string): string {
         () => void this.#reload(undefined, true),
         () => this.#liveNotice(),
       );
-      this.#unsubscribe = runtime.repository.subscribe(
-        () => this.#live?.invalidate(),
-        contribution.signal,
-      );
+      const stopData = runtime.repository.subscribe(
+          () => this.#live?.invalidate(),
+          contribution.signal,
+        ),
+        // Catalogs for a new language arrive after the switch.
+        stopTexts = runtime.i18n.onChange(() => this.#render(), { signal: contribution.signal });
+      this.#unsubscribe = () => {
+        stopData();
+        stopTexts();
+      };
       this.#recoveryStore = new PlannerRecoveryStore(
         () => this.ownerDocument.defaultView!.sessionStorage,
         contribution.addon.id,
@@ -507,7 +509,7 @@ export function definePlannerElement(generation?: string): string {
       if (captureViewport) this.#captureViewport();
       this.#disposeConnection?.();
       this.#disposeConnection = undefined;
-      this.lang = dashboardLocale(this.#contribution?.host);
+      this.lang = hostLocale(this.#contribution?.host);
       const oldDialog = this.querySelector<HTMLDialogElement>("dialog"),
         oldBody = oldDialog?.querySelector<HTMLElement>(".dm-planner-dialog-body");
       const dialogScroll = oldDialog?.scrollTop ?? 0,
@@ -746,7 +748,7 @@ export function definePlannerElement(generation?: string): string {
     }
 
     #canvas(document: Document, snapshot: PlanningSnapshot): HTMLElement {
-      const labels = canvasLabels(this.#contribution?.host);
+      const labels = canvasLabels(liveI18n(this.#runtime));
       const region = document.createElement("div");
       region.className = "dm-planner-canvas-region";
       const viewport = document.createElement("div");

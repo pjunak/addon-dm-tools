@@ -1,4 +1,4 @@
-import { plannerTranslator, type PlannerTranslator } from "./planner-catalogs.js";
+import { plannerTranslator, type PlannerTranslator } from "./messages.js";
 
 interface ConnectionOptions {
   t?: PlannerTranslator;

@@ -1,4 +1,4 @@
-import { PlannerError, type PlannerTranslator, plannerTranslator } from "./planner-catalogs.js";
+import { PlannerError, type PlannerTranslator, plannerTranslator } from "./messages.js";
 import { planningChoices, type PlanningChoiceItem } from "./planner-choices.js";
 
 type NoteAnchorItem = PlanningChoiceItem;

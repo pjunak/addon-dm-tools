@@ -1,15 +1,8 @@
-import {
-  dashboardLocale,
-  dashboardText,
-  plannerLink,
-  planningImportStatus,
-  summarizePlanning,
-  type DashboardLocale,
-  type DashboardMessage,
-} from "./dashboard-model.js";
+import { plannerLink, planningImportStatus, summarizePlanning } from "./dashboard-model.js";
+import { dashboardText, hostLocale, type DashboardMessage } from "./messages.js";
 import { planningIssues } from "./planning-model.js";
 import type { PlanningSnapshot } from "./planning-repository.js";
-import { runtimeFor } from "./runtime.js";
+import { liveI18n, runtimeFor } from "./runtime.js";
 import type { ContributionContext } from "./sdk.js";
 import { LiveRefresh } from "./live-refresh.js";
 
@@ -20,7 +13,7 @@ export function defineDashboardElement(generation: string): string {
     #context: ContributionContext | undefined;
     #request: AbortController | undefined;
     #snapshot: PlanningSnapshot | undefined;
-    #locale: DashboardLocale = "en";
+    #locale = "en";
     #status: "loading" | "ready" | "error" = "loading";
     #provider: "ready" | "missing" | "error" = "ready";
     #live: LiveRefresh | undefined;
@@ -28,7 +21,7 @@ export function defineDashboardElement(generation: string): string {
     set codexContribution(value: ContributionContext) {
       const previous = this.#context;
       this.#context = value;
-      const locale = dashboardLocale(value.host),
+      const locale = hostLocale(value.host),
         changed = locale !== this.#locale;
       this.#locale = locale;
       if (!this.isConnected) return;
@@ -54,11 +47,18 @@ export function defineDashboardElement(generation: string): string {
         () => this.#status !== "loading",
         () => void this.#load(),
       );
-      if (context && runtime)
-        this.#unsubscribe = runtime.repository.subscribe(
-          () => this.#live?.invalidate(),
-          context.signal,
-        );
+      if (context && runtime) {
+        const stopData = runtime.repository.subscribe(
+            () => this.#live?.invalidate(),
+            context.signal,
+          ),
+          // Catalogs for a new language arrive after the switch.
+          stopTexts = runtime.i18n.onChange(() => this.#render(), { signal: context.signal });
+        this.#unsubscribe = () => {
+          stopData();
+          stopTexts();
+        };
+      }
       void this.#load();
     }
     async #load(): Promise<void> {
@@ -96,7 +96,8 @@ export function defineDashboardElement(generation: string): string {
         root = document.createElement("div");
       root.className = "dm-dashboard-stack";
       root.setAttribute("aria-busy", String(this.#status === "loading"));
-      const t = (key: DashboardMessage) => dashboardText(this.#locale, key);
+      const i18n = this.#context && liveI18n(runtimeFor(this.#context.addon.generation));
+      const t = (key: DashboardMessage) => (i18n ? dashboardText(i18n, key) : key);
       const element = (tag: string, text: string, className = "") => {
         const node = document.createElement(tag);
         node.textContent = text;

@@ -6,7 +6,7 @@ import type {
   PlanningItem,
   PlanningReference,
 } from "./planning-model.js";
-import { plannerLabel, type PlannerTranslator } from "./planner-catalogs.js";
+import { plannerLabel, type PlannerTranslator } from "./messages.js";
 import { coreReferences, targetLink } from "./planner-targets.js";
 import { configurePlannerDialog } from "./planner-dialog.js";
 

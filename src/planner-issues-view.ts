@@ -1,4 +1,4 @@
-import type { PlannerTranslator } from "./planner-catalogs.js";
+import type { PlannerTranslator } from "./messages.js";
 import { actionButton } from "./planner-fields.js";
 import {
   planningRepair,

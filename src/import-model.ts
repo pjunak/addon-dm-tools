@@ -1,5 +1,5 @@
 import type { ServiceProvider } from "./sdk.js";
-import { en, cs } from "./import-catalogs.js";
+import type { ImportMessage, ImportParams } from "./messages.js";
 
 export interface AdapterDescription {
   readonly contractVersion: "import-adapter-description.v1";
@@ -39,17 +39,6 @@ export interface ImportPreview {
     readonly id: string;
   }[];
   readonly expiresAt?: string;
-}
-export type ImportMessage = keyof typeof en;
-export type ImportParams = Readonly<Record<string, string | number>>;
-export function importText(
-  locale: "en" | "cs",
-  key: ImportMessage,
-  params: ImportParams = {},
-): string {
-  return (locale === "cs" ? cs : en)[key].replace(/\{([a-z]+)\}/g, (placeholder, name: string) =>
-    String(params[name] ?? placeholder),
-  );
 }
 export class ImportProblem extends Error {
   readonly key: ImportMessage;

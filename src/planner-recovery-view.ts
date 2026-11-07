@@ -1,4 +1,4 @@
-import type { PlannerTranslator } from "./planner-catalogs.js";
+import type { PlannerTranslator } from "./messages.js";
 import { downloadFile } from "./download.js";
 import { messageBlock } from "./planner-fields.js";
 

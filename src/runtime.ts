@@ -5,6 +5,7 @@ export interface DmToolsRuntime {
   readonly adapters: ServiceHandle;
   readonly signal: AbortSignal;
   readonly ui: AddonContext["ui"];
+  readonly i18n: AddonContext["i18n"];
 }
 interface Registry {
   readonly generations: Map<string, DmToolsRuntime>;
@@ -16,6 +17,10 @@ export function registerRuntime(generation: string, runtime: DmToolsRuntime): ()
   return () => {
     if (registry.generations.get(generation) === runtime) registry.generations.delete(generation);
   };
+}
+/** The runtime's translator while its generation is open; a closed SDK session throws. */
+export function liveI18n(runtime: DmToolsRuntime | undefined): DmToolsRuntime["i18n"] | undefined {
+  return runtime && !runtime.signal.aborted ? runtime.i18n : undefined;
 }
 export function runtimeFor(generation: string): DmToolsRuntime | undefined {
   return getRegistry().generations.get(generation);
