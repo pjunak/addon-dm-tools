@@ -1,6 +1,6 @@
 module github.com/pjunak/addon-dm-tools
 
-go 1.27.3
+go 1.27.4
 
 require github.com/pjunak/ttrpg-codex v0.0.0-20261107032804-46e760f47e05
 
